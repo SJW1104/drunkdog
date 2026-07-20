@@ -4,6 +4,27 @@ import './App.css'
 
 const friends = ['지훈', '민수', '예린']
 
+const onboardingSlides = [
+  {
+    eyebrow: 'WELCOME TO DRUNKDOG',
+    title: '기억하지 못해도\n괜찮은 밤.',
+    description: 'DrunkDog이 오늘 밤의 작은 단서들을 모아\n내일의 기억으로 돌려드릴게요.',
+    visual: 'memory',
+  },
+  {
+    eyebrow: 'JUST ONE TAP',
+    title: '술자리는 즐기고,\n기록은 맡겨두세요.',
+    description: '위치와 시간은 자동으로 기록하고\n가끔 짧고 쉬운 기억 미션만 보내드려요.',
+    visual: 'orbit',
+  },
+  {
+    eyebrow: 'SAFE & PRIVATE',
+    title: '필요한 권한만\n안전하게 사용할게요.',
+    description: '위치, 알림, 카메라와 마이크는\n기억 복원과 안전 기능에만 사용해요.',
+    visual: 'shield',
+  },
+]
+
 function Icon({ children }) {
   return <span className="icon" aria-hidden="true">{children}</span>
 }
@@ -17,6 +38,43 @@ function Header({ onBack, dark = false, title }) {
       {title && <strong>{title}</strong>}
       <button className="icon-button" aria-label="설정">{title ? '•••' : '⚙'}</button>
     </header>
+  )
+}
+
+function Onboarding({ go }) {
+  const [step, setStep] = useState(0)
+  const slide = onboardingSlides[step]
+  const isLast = step === onboardingSlides.length - 1
+
+  return (
+    <section className="screen screen--dark onboarding-screen">
+      <div className="onboarding-top">
+        <span className="wordmark">DRUNKDOG</span>
+        {!isLast && <button onClick={() => go('home')}>건너뛰기</button>}
+      </div>
+      <div className={`onboarding-visual onboarding-visual--${slide.visual}`} aria-hidden="true">
+        <div className="visual-core">{step === 0 ? '✦' : step === 1 ? '●' : '✓'}</div>
+        <i /><i /><i />
+      </div>
+      <div className="onboarding-copy">
+        <p className="kicker">{slide.eyebrow}</p>
+        <h1>{slide.title.split('\n').map((line) => <span key={line}>{line}</span>)}</h1>
+        <p>{slide.description.split('\n').map((line) => <span key={line}>{line}</span>)}</p>
+      </div>
+      {isLast && (
+        <div className="permission-preview">
+          <span>⌖ 위치</span><span>♧ 알림</span><span>▣ 카메라</span><span>◉ 마이크</span>
+        </div>
+      )}
+      <div className="onboarding-footer">
+        <div className="page-dots" aria-label={`${step + 1} / ${onboardingSlides.length}`}>
+          {onboardingSlides.map((item, index) => <i className={index === step ? 'active' : ''} key={item.eyebrow} />)}
+        </div>
+        <button className="primary-button" onClick={() => isLast ? go('home') : setStep(step + 1)}>
+          {isLast ? '시작하기' : '다음'}
+        </button>
+      </div>
+    </section>
   )
 }
 
@@ -178,8 +236,8 @@ function Chat({ go }) {
 }
 
 function App() {
-  const [screen, setScreen] = useState('home')
-  const screens = { home: Home, setup: Setup, active: Active, mission: Mission, safety: Safety, summary: Summary, chat: Chat }
+  const [screen, setScreen] = useState('onboarding')
+  const screens = { onboarding: Onboarding, home: Home, setup: Setup, active: Active, mission: Mission, safety: Safety, summary: Summary, chat: Chat }
   const CurrentScreen = screens[screen]
   return (
     <main className="app-shell">
