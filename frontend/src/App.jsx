@@ -161,10 +161,24 @@ function ChatbotHub({ go }) {
   )
 }
 
-function Setup({ go, showPreDrink }) {
+function Setup({ go, showPreDrink, companions, setCompanions }) {
   const [tracking, setTracking] = useState(true)
   const [missions, setMissions] = useState(true)
   const [soundMode, setSoundMode] = useState(true)
+  const [addingFriend, setAddingFriend] = useState(false)
+  const [newFriend, setNewFriend] = useState('')
+  const [returnTime, setReturnTime] = useState('02:30')
+  const [showTimePicker, setShowTimePicker] = useState(false)
+  const [alarmInterval, setAlarmInterval] = useState(30)
+  const [showAlarmList, setShowAlarmList] = useState(false)
+  const addFriend = (event) => {
+    event.preventDefault()
+    const name = newFriend.trim()
+    if (!name || companions.includes(name)) return
+    setCompanions([...companions, name])
+    setNewFriend('')
+    setAddingFriend(false)
+  }
   return (
     <section className="screen">
       <Header onBack={() => go('home')} />
@@ -172,12 +186,15 @@ function Setup({ go, showPreDrink }) {
         <p className="step-label">시작 전 설정</p>
         <h2>오늘 밤,<br />누구와 함께하나요?</h2>
         <div className="friend-chips">
-          {friends.map((friend) => <button className="chip" key={friend}>{friend} <span>×</span></button>)}
-          <button className="chip chip--add" aria-label="친구 추가">＋</button>
+          {companions.map((friend) => <button className="chip" onClick={() => setCompanions(companions.filter((item) => item !== friend))} aria-label={`${friend} 삭제`} key={friend}>{friend} <span>×</span></button>)}
+          {!addingFriend && <button className="chip chip--add" onClick={() => setAddingFriend(true)} aria-label="친구 추가">＋</button>}
         </div>
+        {addingFriend && <form className="friend-add-form" onSubmit={addFriend}><input autoFocus value={newFriend} maxLength={12} onChange={(event) => setNewFriend(event.target.value)} placeholder="이름 입력" /><button type="submit">추가</button><button type="button" onClick={() => setAddingFriend(false)}>취소</button></form>}
         <div className="settings-card">
-          <button className="setting-row"><span>귀가 예정 시간</span><strong>오전 02:30 ›</strong></button>
-          <button className="setting-row"><span>알림 주기</span><strong>30분 ›</strong></button>
+          <button className="setting-row" onClick={() => setShowTimePicker(!showTimePicker)}><span>귀가 예정 시간</span><strong>{returnTime} {showTimePicker ? '⌃' : '›'}</strong></button>
+          {showTimePicker && <div className="setting-expand time-setting"><label><span>시간 직접 입력 또는 시계에서 선택</span><input type="time" value={returnTime} onChange={(event) => setReturnTime(event.target.value)} /></label><button onClick={() => setShowTimePicker(false)}>완료</button></div>}
+          <button className="setting-row" onClick={() => setShowAlarmList(!showAlarmList)}><span>알림 주기</span><strong>{alarmInterval}분 {showAlarmList ? '⌃' : '›'}</strong></button>
+          {showAlarmList && <div className="setting-expand alarm-options">{[15, 30, 60, 90].map((minutes) => <button className={alarmInterval === minutes ? 'selected' : ''} onClick={() => { setAlarmInterval(minutes); setShowAlarmList(false) }} key={minutes}>{minutes}분</button>)}</div>}
           <button className="setting-row" onClick={() => go('emergencyContactSetup')}><span>긴급 연락처</span><strong>민수 · 010-1234-5678 ›</strong></button>
           <label className="setting-row"><span>위치 추적</span><input type="checkbox" checked={tracking} onChange={() => setTracking(!tracking)} /></label>
           <label className="setting-row"><span>기억 미션</span><input type="checkbox" checked={missions} onChange={() => setMissions(!missions)} /></label>
@@ -324,8 +341,10 @@ function Settings({ go, customReminder, setCustomReminder, showPreDrink, setShow
   )
 }
 
-function Active({ go }) {
+function Active({ go, companions, setCompanions, sobrietyLevel }) {
   const [seconds, setSeconds] = useState(5025)
+  const [editingFriends, setEditingFriends] = useState(false)
+  const [newFriend, setNewFriend] = useState('')
   useEffect(() => {
     const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000)
     return () => window.clearInterval(timer)
@@ -336,35 +355,48 @@ function Active({ go }) {
       <Header dark />
       <div className="recording-status"><span className="live-dot" /> 위치 기록 중</div>
       <div className="timer">{time}</div>
-      <div className="sobriety"><span>취기 수준</span><strong>4<small>/10</small></strong></div>
-      <div className="active-friends"><span>함께하는 친구</span><div>{friends.map((friend) => <b key={friend}>{friend}</b>)}</div></div>
+      <div className="sobriety"><span>최근 취기 체크</span><strong>{sobrietyLevel}<small>/10</small></strong><button onClick={() => go('mission')}>기억 미션 하기 ›</button></div>
+      <div className="active-friends"><span>함께하는 친구 <button onClick={() => setEditingFriends(!editingFriends)}>{editingFriends ? '완료' : '수정'}</button></span><div>{companions.map((friend) => <button className="active-friend-chip" onClick={() => editingFriends && setCompanions(companions.filter((item) => item !== friend))} key={friend}>{friend}{editingFriends && ' ×'}</button>)}</div></div>
+      {editingFriends && <form className="active-friend-add" onSubmit={(event) => { event.preventDefault(); const name = newFriend.trim(); if (name && !companions.includes(name)) setCompanions([...companions, name]); setNewFriend('') }}><input value={newFriend} maxLength={12} onChange={(event) => setNewFriend(event.target.value)} placeholder="함께하는 사람 이름" /><button>추가</button></form>}
       <div className="quick-actions">
-        <button onClick={() => go('mission')}><Icon>▣</Icon><span>사진 남기기</span></button>
-        <button onClick={() => go('mission')}><Icon>◉</Icon><span>음성 메모</span></button>
+        <button onClick={() => go('photoCapture')}><Icon>▣</Icon><span>사진 남기기</span></button>
+        <button onClick={() => go('voiceCapture')}><Icon>◉</Icon><span>음성 메모</span></button>
       </div>
       <button className="text-button" onClick={() => go('safety')}>안전 · 귀가 지원</button>
     </section>
   )
 }
 
-function Mission({ go }) {
-  const [level, setLevel] = useState(4)
+function Mission({ go, sobrietyLevel, setSobrietyLevel }) {
   return (
     <section className="screen">
       <Header onBack={() => go('active')} />
       <div className="screen-body mission-body">
         <p className="step-label">기억 미션</p>
         <h2>지금 얼마나<br />취했나요?</h2>
-        <div className="level-grid" aria-label={`취기 수준 ${level}`}>
+        <div className="level-grid" aria-label={`취기 수준 ${sobrietyLevel}`}>
           {Array.from({ length: 10 }, (_, index) => index + 1).map((number) => (
-            <button className={level === number ? 'selected' : ''} onClick={() => setLevel(number)} key={number}>{number}</button>
+            <button className={sobrietyLevel === number ? 'selected' : ''} onClick={() => setSobrietyLevel(number)} key={number}>{number}</button>
           ))}
         </div>
         <div className="level-legend"><span>전혀 안 취함</span><span>매우 취함</span></div>
-        <button className="mission-card"><Icon>▣</Icon><span><strong>사진 미션</strong><small>지금 이 순간을 남겨보세요</small></span><b>›</b></button>
-        <button className="mission-card"><Icon>◉</Icon><span><strong>5초 음성 다이어리</strong><small>5초 동안 오늘의 한마디</small></span><b>›</b></button>
+        <div className="mission-complete-card"><span>✓</span><div><strong>컨디션을 기록할게요</strong><small>선택한 취기 수준은 이번 술자리 리포트에 저장돼요.</small></div></div>
       </div>
-      <button className="text-button bottom-skip" onClick={() => go('active')}>완료하고 돌아가기</button>
+      <button className="primary-button bottom-action" onClick={() => go('active')}>체크 완료</button>
+    </section>
+  )
+}
+
+function Capture({ go, type }) {
+  const isPhoto = type === 'photo'
+  const [saved, setSaved] = useState(false)
+  return (
+    <section className="screen capture-screen">
+      <Header title={isPhoto ? '사진 남기기' : '음성 메모'} onBack={() => go('active')} />
+      <div className="capture-body">
+        <div className={`capture-visual ${saved ? 'saved' : ''}`}><Icon>{saved ? '✓' : isPhoto ? '▣' : '◉'}</Icon><strong>{saved ? '기록했어요' : isPhoto ? '지금 순간을 남겨보세요' : '오늘의 한마디를 들려주세요'}</strong><small>{saved ? '이번 술자리 리포트에 저장됩니다.' : isPhoto ? '사진은 내일 기억을 찾는 단서가 돼요.' : '짧은 음성도 기억을 복원하는 데 도움이 돼요.'}</small></div>
+      </div>
+      <button className="primary-button bottom-action" onClick={() => saved ? go('active') : setSaved(true)}>{saved ? '실행 화면으로 돌아가기' : isPhoto ? '사진 촬영' : '녹음 시작'}</button>
     </section>
   )
 }
@@ -385,7 +417,7 @@ function Safety({ go }) {
   )
 }
 
-function Summary({ go }) {
+function Summary({ go, sobrietyLevel }) {
   return (
     <section className="screen">
       <Header onBack={() => go('home')} />
@@ -401,7 +433,7 @@ function Summary({ go }) {
           </div>
           <div className="map-art"><i /><i /><i /></div>
         </div>
-        <div className="summary-stats"><div><span>사진</span><strong>18<small>장</small></strong></div><div><span>음성 메모</span><strong>6<small>개</small></strong></div></div>
+        <div className="summary-stats"><div><span>사진</span><strong>18<small>장</small></strong></div><div><span>음성 메모</span><strong>6<small>개</small></strong></div><div><span>마지막 취기</span><strong>{sobrietyLevel}<small>/10</small></strong></div></div>
       </div>
       <button className="primary-button bottom-action" onClick={() => go('chat')}>AI와 기억 복원하기</button>
     </section>
@@ -434,7 +466,24 @@ function App() {
   const [screen, setScreen] = useState('onboarding')
   const [customReminder, setCustomReminder] = useState('')
   const [showPreDrink, setShowPreDrink] = useState(true)
-  const screens = { onboarding: Onboarding, home: Home, records: Records, chatbot: ChatbotHub, setup: Setup, missionSettings: MissionSettings, missionSettingsFromSettings: MissionSettings, emergencyContactSetup: EmergencyContact, emergencyContactSettings: EmergencyContact, preDrink: PreDrink, settings: Settings, active: Active, mission: Mission, safety: Safety, summary: Summary, chat: Chat }
+  const [sobrietyLevel, setSobrietyLevel] = useState(4)
+  const [companions, setCompanions] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('drunkdog-companions')
+      const parsed = saved ? JSON.parse(saved) : friends
+      return Array.isArray(parsed) ? parsed : friends
+    } catch {
+      return friends
+    }
+  })
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('drunkdog-companions', JSON.stringify(companions))
+    } catch {
+      // 저장소를 사용할 수 없는 환경에서도 현재 세션의 목록은 유지합니다.
+    }
+  }, [companions])
+  const screens = { onboarding: Onboarding, home: Home, records: Records, chatbot: ChatbotHub, setup: Setup, missionSettings: MissionSettings, missionSettingsFromSettings: MissionSettings, emergencyContactSetup: EmergencyContact, emergencyContactSettings: EmergencyContact, preDrink: PreDrink, settings: Settings, active: Active, mission: Mission, photoCapture: Capture, voiceCapture: Capture, safety: Safety, summary: Summary, chat: Chat }
   const CurrentScreen = screens[screen]
   return (
     <main className="app-shell">
@@ -448,6 +497,11 @@ function App() {
           setCustomReminder={setCustomReminder}
           showPreDrink={showPreDrink}
           setShowPreDrink={setShowPreDrink}
+          companions={companions}
+          setCompanions={setCompanions}
+          sobrietyLevel={sobrietyLevel}
+          setSobrietyLevel={setSobrietyLevel}
+          type={screen === 'photoCapture' ? 'photo' : 'voice'}
           backTo={screen === 'missionSettingsFromSettings' || screen === 'emergencyContactSettings' ? 'settings' : 'setup'}
         />
       </div>
