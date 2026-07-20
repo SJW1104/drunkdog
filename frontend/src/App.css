@@ -78,10 +78,10 @@ button { border: 0; cursor: pointer; color: inherit; }
 .page-dots { display: flex; gap: 6px; }.page-dots i { width: 6px; height: 6px; border-radius: 9px; background: rgba(255,255,255,.25); transition: .2s; }.page-dots i.active { width: 24px; background: var(--lime); }
 
 .home-screen { padding-bottom: 0; }
-.home-scroll { flex: 1; min-height: 0; padding-bottom: 96px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(201,244,91,.55) transparent; }
+.home-scroll { flex: 1; min-height: 0; margin-bottom: 72px; padding-bottom: 24px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(201,244,91,.72) transparent; }
 .home-scroll::-webkit-scrollbar { width: 4px; }
 .home-scroll::-webkit-scrollbar-track { background: transparent; }
-.home-scroll::-webkit-scrollbar-thumb { border-radius: 99px; background: rgba(201,244,91,.55); }
+.home-scroll::-webkit-scrollbar-thumb { border-radius: 99px; background: rgba(201,244,91,.72); }
 .home-copy { padding: 24px 26px 0; }
 .home-copy .kicker { color: var(--lime); }
 .home-copy h1 { margin: 0; font-size: 38px; line-height: 1.07; letter-spacing: -.065em; }
@@ -206,10 +206,9 @@ button { border: 0; cursor: pointer; color: inherit; }
 .bottom-nav button > span { font-size: 20px; line-height: 1; }
 .bottom-nav button small { font-size: 9px; font-weight: 700; }
 .bottom-nav button.active { color: var(--lime); }
-.tab-body { padding: 12px 18px 92px; }
+.tab-body { flex: 1; min-height: 0; margin-bottom: 72px; padding: 12px 18px 24px; }
 .records-heading { display: flex; align-items: end; justify-content: space-between; }
 .records-heading h2 { margin-bottom: 20px; }
-.calendar-button { width: 44px; height: 44px; margin-bottom: 22px; border: 1px solid var(--dark-line); border-radius: 13px; background: var(--dark-panel); color: var(--lime); font-size: 21px; }
 .month-row { display: flex; justify-content: space-between; align-items: center; margin: 4px 2px 10px; }
 .month-row strong { font-size: 12px; }.month-row span { color: var(--dark-muted); font-size: 9px; }
 .record-list { display: grid; gap: 9px; }
@@ -218,12 +217,28 @@ button { border: 0; cursor: pointer; color: inherit; }
 .record-date { color: var(--lime); font-size: 11px; font-weight: 800; }
 .record-copy { display: grid; gap: 5px; min-width: 0; }.record-copy strong { font-size: 12px; }.record-copy small { overflow: hidden; color: var(--dark-muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .record-score { display: grid; gap: 2px; color: var(--dark-muted); font-size: 9px; text-align: right; }.record-score b { color: var(--lime); font-size: 18px; }
-.chatbot-scroll { padding: 6px 15px 145px; overflow-y: auto; display: flex; flex-direction: column; gap: 13px; }
+.chatbot-scroll { flex: 1; min-height: 0; margin-bottom: 132px; padding: 6px 15px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 13px; }
 .latest-report { width: 100%; padding: 16px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(201,244,91,.32); border-radius: 17px; background: linear-gradient(135deg,rgba(201,244,91,.1),var(--dark-panel)); text-align: left; }
 .latest-report > span { display: grid; gap: 5px; }.latest-report span small,.latest-report span b { color: var(--dark-muted); font-size: 9px; font-weight: 500; }.latest-report span strong { font-size: 13px; }.latest-report em { color: var(--lime); font-size: 25px; font-style: normal; font-weight: 800; }.latest-report em small { font-size: 10px; }
 .chatbot-suggestions { margin-left: 35px; }
 .chatbot-scroll .user-message { max-width: 80%; }
 .chatbot-input { bottom: 80px; }
+
+.screen-body,
+.chat-body,
+.chatbot-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,244,91,.72) transparent;
+}
+.screen-body::-webkit-scrollbar,
+.chat-body::-webkit-scrollbar,
+.chatbot-scroll::-webkit-scrollbar { width: 4px; }
+.screen-body::-webkit-scrollbar-track,
+.chat-body::-webkit-scrollbar-track,
+.chatbot-scroll::-webkit-scrollbar-track { background: transparent; }
+.screen-body::-webkit-scrollbar-thumb,
+.chat-body::-webkit-scrollbar-thumb,
+.chatbot-scroll::-webkit-scrollbar-thumb { border-radius: 99px; background: rgba(201,244,91,.72); }
 
 @media (max-width: 480px) {
   .app-shell { padding: 0; display: block; }

@@ -117,7 +117,7 @@ function Records({ go }) {
     <section className="screen tab-screen">
       <Header title="지난 기록" onSettings={() => go('settings')} />
       <div className="screen-body tab-body">
-        <div className="records-heading"><div><p className="step-label">MY NIGHTS</p><h2>지나간 술자리를<br />모아봤어요.</h2></div><button className="calendar-button" aria-label="캘린더로 보기">▦</button></div>
+        <div className="records-heading"><div><p className="step-label">MY NIGHTS</p><h2>지나간 술자리를<br />모아봤어요.</h2></div></div>
         <div className="month-row"><strong>2024년 5월</strong><span>3개의 기록</span></div>
         <div className="record-list">
           {pastRecords.map((record, index) => (
