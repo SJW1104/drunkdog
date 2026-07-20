@@ -1,35 +1,22 @@
 :root {
-  font-family: Pretendard, Inter, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  color: #f7f7f7;
-  background: #111111;
+  font-family: Pretendard, "Noto Sans KR", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f7f7f2;
+  background: #101210;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  min-width: 320px;
-  background: #111111;
-}
-
+* { box-sizing: border-box; }
+html { min-width: 320px; background: #101210; }
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(255, 202, 98, 0.16), transparent 34%),
-    linear-gradient(145deg, #171717 0%, #0d0d0d 100%);
+    radial-gradient(circle at 50% -20%, rgba(201, 244, 91, .08), transparent 38%),
+    linear-gradient(145deg, #191c18 0%, #0b0d0b 100%);
 }
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
+button, input, textarea, select { font: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid #c9f45b; outline-offset: 2px; }
