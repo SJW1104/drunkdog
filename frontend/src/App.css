@@ -1481,3 +1481,89 @@ button {
 @keyframes skeleton {
   to { background-position: -200% 0; }
 }
+
+/* Figma readability pass */
+:root {
+  --muted: #687386;
+}
+
+.screen {
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.bell-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.point-text {
+  color: var(--blue);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.sponsor-card small,
+.survey-row small,
+.mini-card small,
+.survey-card small,
+.question-card small,
+.gift-card small {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.survey-row strong,
+.survey-title-row strong {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.section-header strong {
+  font-size: 13px;
+}
+
+.section-header strong small,
+.section-header button,
+.section-header > button,
+.survey-eyebrow,
+.survey-meta,
+.privacy-note,
+.foot-note,
+.rank-neighbor,
+.rank-tip,
+.notice-card small,
+.notice-card time {
+  font-size: 9px;
+}
+
+.point-pill {
+  min-width: 48px;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.gift-card > strong,
+.my-rank > strong,
+.transaction-list strong {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.icon-button:focus-visible,
+button:focus-visible {
+  outline: 2px solid rgba(23, 105, 255, 0.42);
+  outline-offset: 2px;
+}

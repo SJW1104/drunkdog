@@ -21,6 +21,14 @@ function IconButton({ children, label, onClick, badge }) {
   )
 }
 
+function BellIcon() {
+  return (
+    <svg className="bell-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+      <path d="M10 21h4" />
+    </svg>
+  )
+}
 function TopBar({ title, onBack, right, brand = false }) {
   return (
     <header className={'top-bar ' + (brand ? 'top-bar--brand' : '')}>
@@ -83,7 +91,7 @@ function HomeScreen({ navigate }) {
         right={
           <div className="top-actions">
             <IconButton label="검색">⌕</IconButton>
-            <IconButton label="알림" badge="3" onClick={() => navigate('notifications')}>♢</IconButton>
+            <IconButton label="알림" badge="3" onClick={() => navigate('notifications')}><BellIcon /></IconButton>
             <button className="avatar-button" type="button" onClick={() => navigate('profile')}>MY</button>
           </div>
         }
@@ -111,16 +119,16 @@ function HomeScreen({ navigate }) {
         <section>
           <SectionHeader icon="⏰" title="마감임박" count="4개" action="보상 1.5배" />
           <div className="grid-two">
-            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>캡스톤 협업 경험</b><small>2시간 남음 · +45P</small></button>
-            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>통학 만족도 조사</b><small>오늘 마감 · +30P</small></button>
+            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>캡스톤 협업 경험</b><small>2시간 남음 · <em className="point-text">+45P</em></small></button>
+            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>통학 만족도 조사</b><small>오늘 마감 · <em className="point-text">+30P</em></small></button>
           </div>
         </section>
 
         <section>
           <SectionHeader icon="✨" title="새로 올라온 설문" count="8개" action="더보기 ›" />
           <div className="grid-two">
-            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>데이트 비용 인식</b><small>방금 등록 · +10P</small></button>
-            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>공모전 참여 경험</b><small>5분 전 · +20P</small></button>
+            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>데이트 비용 인식</b><small>방금 등록 · <em className="point-text">+10P</em></small></button>
+            <button className="mini-card" type="button" onClick={() => navigate('participate')}><b>공모전 참여 경험</b><small>5분 전 · <em className="point-text">+20P</em></small></button>
           </div>
         </section>
 
@@ -160,7 +168,7 @@ function SurveyListScreen({ navigate, customSurveys = [] }) {
   })
   return (
     <div className="screen">
-      <TopBar title="설문 둘러보기" onBack={() => navigate('home')} right={<IconButton label="알림">♢</IconButton>} />
+      <TopBar title="설문 둘러보기" onBack={() => navigate('home')} right={<IconButton label="알림" onClick={() => navigate('notifications')}><BellIcon /></IconButton>} />
       <main className="screen-content list-content">
         <label className="search-box">
           <span>⌕</span>
