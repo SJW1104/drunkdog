@@ -95,7 +95,7 @@ function SectionHeader({ icon, title, count, action }) {
   return (
     <div className="section-header">
       <strong><span>{icon}</span> {title} <small>{count}</small></strong>
-      {action ? <button type="button">{action}</button> : null}
+      {action ? <button type="button" className={action.includes('1.5배') ? 'section-action is-boost' : 'section-action'}>{action}</button> : null}
     </div>
   )
 }
