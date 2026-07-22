@@ -251,7 +251,7 @@ function SurveyListScreen({ navigate, customSurveys = [] }) {
         <SectionHeader title="내게 맞는 설문" count="" action="추천순⌄" />
         {isLoading ? <div className="loading-state" aria-label="설문 불러오는 중"><i /><i /><i /></div> : null}
         {error ? <div className="empty-state"><b>설문을 불러오지 못했어요</b><p>{error.message}</p><button type="button" onClick={reload}>다시 시도</button></div> : null}
-        {!isLoading && !error && filteredSurveys.length === 0 ? <div className="empty-state"><b>조건에 맞는 설문이 없어요</b><p>검색어나 카테고리를 바꿔보세요.</p><button type="button" onClick={() => { setQuery(''); setCategory('전체') }}>필터 초기화</button></div> : null}
+        {!isLoading && !error && filteredSurveys.length === 0 ? <div className="empty-state"><b>조건에 맞는 설문이 없어요</b><p>검색어나 카테고리를 바꿔보세요.</p><button type="button" onClick={() => { setQuery(''); setCategory('전체'); setShowCategories(true) }}>필터 초기화</button></div> : null}
         <div className="survey-card-list">
           {!isLoading && !error && filteredSurveys.map((survey, index) => (
             <button className="survey-card" key={survey.title} type="button" onClick={() => navigate('participate')}>
