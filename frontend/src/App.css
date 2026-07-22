@@ -2150,3 +2150,18 @@ button:focus-visible {
 .comment-list article div { display: grid; gap: 3px; }
 .comment-list article b { font-size: 9px; }
 .comment-list article p { margin: 0; color: #586274; font-size: 9px; line-height: 1.45; }
+/* Daily attendance modal */
+.checkin-card.is-complete { background: #f4f8ff; border-color: #cfe0ff; }
+.modal-backdrop { position: absolute; z-index: 100; inset: 0; display: grid; align-items: end; padding: 16px; background: rgba(20,28,42,.5); backdrop-filter: blur(3px); }
+.checkin-modal { position: relative; display: grid; justify-items: center; padding: 27px 18px 20px; border-radius: 22px; background: #fff; text-align: center; box-shadow: 0 22px 60px rgba(20,28,42,.24); }
+.modal-close { position: absolute; top: 12px; right: 12px; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--surface); color: #768195; font-size: 18px; }
+.checkin-stamp { display: grid; width: 68px; height: 68px; place-items: center; border-radius: 22px; background: linear-gradient(135deg,#1769ff,#5794ff); color: #fff; font-size: 19px; font-weight: 900; box-shadow: 0 12px 26px rgba(23,105,255,.25); }
+.checkin-stamp.is-complete { border-radius: 50%; background: #22b573; }
+.checkin-modal h2 { margin: 16px 0 5px; font-size: 19px; }
+.checkin-modal > p { margin: 0; color: var(--muted); font-size: 10px; }
+.checkin-week { display: grid; width: 100%; grid-template-columns: repeat(7,1fr); gap: 5px; margin-top: 20px; }
+.checkin-week span { display: grid; gap: 4px; justify-items: center; }
+.checkin-week b { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--surface); color: #8a94a5; font-size: 9px; }
+.checkin-week .is-stamped b { background: var(--blue-soft); color: var(--blue); }
+.checkin-week small { color: var(--muted); font-size: 8px; }
+.checkin-modal .primary-button { margin-top: 18px; }

@@ -100,7 +100,8 @@ function SectionHeader({ icon, title, count, action }) {
   )
 }
 
-function HomeScreen({ navigate }) {
+function HomeScreen({ navigate, isCheckedIn, onCheckIn }) {
+  const [checkinOpen, setCheckinOpen] = useState(false)
   return (
     <div className="screen with-nav">
       <TopBar
@@ -116,9 +117,9 @@ function HomeScreen({ navigate }) {
       />
 
       <main className="screen-content home-content">
-        <button className="checkin-card" type="button">
-          <span>오늘도 반가워요 👋</span>
-          <b>출석체크 +10P</b>
+        <button className={isCheckedIn ? 'checkin-card is-complete' : 'checkin-card'} type="button" onClick={() => setCheckinOpen(true)}>
+          <span>{isCheckedIn ? '오늘 출석을 완료했어요' : '오늘도 반가워요 👋'}</span>
+          <b>{isCheckedIn ? '출석 완료 ✓' : '출석체크 +10P'}</b>
         </button>
 
         <div className="sponsor-card">
@@ -170,7 +171,18 @@ function HomeScreen({ navigate }) {
 
       <button className="fab" type="button" onClick={() => navigate('create')}>＋ 설문 등록</button>
       <BottomNav active="home" navigate={navigate} />
+      {checkinOpen ? <div className="modal-backdrop" role="presentation" onClick={() => setCheckinOpen(false)}>
+        <section className="checkin-modal" role="dialog" aria-modal="true" aria-labelledby="checkin-title" onClick={(event) => event.stopPropagation()}>
+          <button className="modal-close" type="button" aria-label="닫기" onClick={() => setCheckinOpen(false)}>×</button>
+          <div className={isCheckedIn ? 'checkin-stamp is-complete' : 'checkin-stamp'}>{isCheckedIn ? '✓' : '+10P'}</div>
+          <h2 id="checkin-title">{isCheckedIn ? '오늘 출석 완료!' : '오늘의 출석체크'}</h2>
+          <p>{isCheckedIn ? '내일 다시 방문하면 출석 포인트를 받을 수 있어요.' : '매일 한 번 출석하고 10P를 받아보세요.'}</p>
+          <div className="checkin-week">{['월', '화', '수', '목', '금', '토', '일'].map((day, index) => <span key={day} className={index < 3 || isCheckedIn && index === 3 ? 'is-stamped' : ''}><b>{index < 3 || isCheckedIn && index === 3 ? '✓' : day}</b><small>{day}</small></span>)}</div>
+          <button className="primary-button" type="button" disabled={isCheckedIn} onClick={() => { onCheckIn(); setCheckinOpen(false) }}>{isCheckedIn ? '오늘 출석 완료' : '출석하고 10P 받기'}</button>
+        </section>
+      </div> : null}
     </div>
+
   )
 }
 
@@ -710,6 +722,7 @@ function ProfileScreen({ navigate, points, hasDraft }) {
 
 function App() {
   const [screen, setScreen] = useState('home')
+  const [lastCheckin, setLastCheckin] = useState(() => localStorage.getItem('suniversity-last-checkin') || '')
   const [participationSource, setParticipationSource] = useState('surveys')
   const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
   const [adReward, setAdReward] = useState(() => {
@@ -766,6 +779,13 @@ function App() {
     setPublishedSurveys([survey, ...publishedSurveys])
   }
 
+  const checkInToday = () => {
+    const today = new Date().toISOString().slice(0, 10)
+    if (lastCheckin === today) return
+    setLastCheckin(today)
+    localStorage.setItem('suniversity-last-checkin', today)
+    earnPoints(10, '일일 출석체크')
+  }
   const watchAd = () => {
     if (adReward.amount >= 1000) return
     const nextReward = { date: new Date().toISOString().slice(0, 10), amount: Math.min(1000, adReward.amount + 10) }
@@ -782,7 +802,7 @@ function App() {
 
   const screens = {
     auth: <AuthScreen navigate={navigate} />,
-    home: <HomeScreen navigate={navigate} />,
+    home: <HomeScreen navigate={navigate} isCheckedIn={lastCheckin === new Date().toISOString().slice(0, 10)} onCheckIn={checkInToday} />,
     surveys: <SurveyListScreen navigate={navigate} customSurveys={publishedSurveys} />,
     participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} />,
     create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} />,
