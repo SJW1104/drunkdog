@@ -104,7 +104,8 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn }) {
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [notificationOpen, setNotificationOpen] = useState(false)
   const [readNotices, setReadNotices] = useState(() => JSON.parse(localStorage.getItem('suniversity-read-notices') || '[]'))
-  const { data: homeNotices = [], isLoading: noticesLoading } = useAsyncData(mockApi.getNotifications)
+  const { data: homeNoticeData, isLoading: noticesLoading } = useAsyncData(mockApi.getNotifications)
+  const homeNotices = homeNoticeData || []
   const unreadCount = homeNotices.filter((notice) => !readNotices.includes(notice.id)).length
   const openNotice = (notice) => { const next = [...new Set([...readNotices, notice.id])]; setReadNotices(next); localStorage.setItem('suniversity-read-notices', JSON.stringify(next)); setNotificationOpen(false); navigate(notice.target) }
   const readAllNotices = () => { const next = homeNotices.map((notice) => notice.id); setReadNotices(next); localStorage.setItem('suniversity-read-notices', JSON.stringify(next)) }
