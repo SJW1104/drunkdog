@@ -84,7 +84,7 @@ function HomeScreen({ navigate }) {
   return (
     <div className="screen with-nav">
       <TopBar
-        title="SURVY"
+        title="suniversity"
         brand
         right={
           <div className="top-actions">
@@ -324,7 +324,7 @@ function VerifyScreen({ navigate }) {
   const [phoneVerified, setPhoneVerified] = useState(true)
   return (
     <div className="screen">
-      <TopBar title="SURVY" brand onBack={() => navigate('home')} />
+      <TopBar title="suniversity" brand onBack={() => navigate('home')} />
       <main className="screen-content verify-content">
         <h1>대학생 인증을<br />완료해 주세요</h1>
         <p className="subtitle">신뢰할 수 있는 응답자 커뮤니티를 위해<br />전화번호와 재학 정보를 확인합니다.</p>
