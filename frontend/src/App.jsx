@@ -5,11 +5,11 @@ import mockApi from './services/mockApi.js'
 import './App.css'
 
 const navItems = [
-  { id: 'home', icon: '⌂', label: '홈' },
-  { id: 'surveys', icon: '▤', label: '설문' },
-  { id: 'balance', icon: '▥', label: '밸런스게임' },
-  { id: 'ranking', icon: '♛', label: '랭킹' },
-  { id: 'points', icon: '●', label: '포인트' },
+  { id: 'home', label: '홈' },
+  { id: 'surveys', label: '설문' },
+  { id: 'balance', label: '밸런스게임' },
+  { id: 'ranking', label: '랭킹' },
+  { id: 'points', label: '포인트' },
 ]
 
 function IconButton({ children, label, onClick, badge }) {
@@ -28,6 +28,27 @@ function BellIcon() {
       <path d="M10 21h4" />
     </svg>
   )
+}
+function BalanceScaleIcon() {
+  return (
+    <svg className="balance-scale-icon" viewBox="0 0 28 24" aria-hidden="true">
+      <path className="scale-beam" d="M5 7.5h18" />
+      <path d="M14 4v16M10 20h8" />
+      <path d="M7 7.5 3.5 14h7L7 7.5ZM21 7.5 17.5 14h7L21 7.5Z" />
+      <path className="scale-bowl" d="M3.5 14c.5 2.3 2 3.5 3.5 3.5s3-1.2 3.5-3.5M17.5 14c.5 2.3 2 3.5 3.5 3.5s3-1.2 3.5-3.5" />
+      <circle cx="14" cy="5" r="1.7" />
+    </svg>
+  )
+}
+function BottomNavIcon({ name }) {
+  if (name === 'balance') return <BalanceScaleIcon />
+  const paths = {
+    home: <><path d="m4 11 8-6.5 8 6.5" /><path d="M6.5 10v9h11v-9M10 19v-5h4v5" /></>,
+    surveys: <><rect x="5" y="3.5" width="14" height="17" rx="2.5" /><path d="M9 3.5v-1h6v1M9 8h6M9 12h6M9 16h4" /><path d="m7.5 8 .6.6 1.1-1.2" /></>,
+    ranking: <><path d="M7 4h10v3.5c0 3.2-2.1 5.5-5 5.5s-5-2.3-5-5.5V4Z" /><path d="M7 6H4.5v1.5c0 2 1.2 3.4 3.2 3.6M17 6h2.5v1.5c0 2-1.2 3.4-3.2 3.6M12 13v4M8.5 20h7M9.5 17h5" /></>,
+    points: <><circle cx="12" cy="12" r="8.5" /><path d="M9 8.5h3.8a2.7 2.7 0 0 1 0 5.4H9V7M9 17v-3.1" /></>,
+  }
+  return <svg className="bottom-nav-svg" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>
 }
 function UiIcon({ name }) {
   const paths = {
@@ -67,7 +88,7 @@ function BottomNav({ active, navigate }) {
           className={active === item.id ? 'nav-item is-active' : 'nav-item'}
           onClick={() => navigate(item.id)}
         >
-          <span className="nav-icon">{item.icon}</span>
+          <span className="nav-icon"><BottomNavIcon name={item.id} /></span>
           <span>{item.label}</span>
         </button>
       ))}
@@ -622,25 +643,28 @@ function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, o
 }
 
 function RankingScreen({ navigate }) {
-  const leaders = [
-    ['1', '설문요정 · 고려대', '18,920P'],
-    ['2', '응답왕 · 홍익대', '17,480P'],
-    ['3', '과제구조대 · 연세대', '16,210P'],
-    ['4', '통계실어 · 중앙대', '14,870P'],
-    ['5', '논문졸업 · 성균관대', '13,550P'],
-  ]
+  const [rankingFilter, setRankingFilter] = useState('all')
+  const names = ['설문요정', '응답왕', '과제구조대', '통계마스터', '논문졸업', '척척응답', '리서치캣', '데이터덕', '마감수호대', '표본장인', '인사이트', '응답부자', '캠퍼스픽', '분석너드', '질문대장', '설문홀릭', '답변척척', '포인트왕', '논문한줄', '통계요정', '리서치룸', '표본천재', '응답착착', '데이터숲', '설문러버', '분석한입', '캠퍼스톡', '과제탈출', '질문봇', '응답완료']
+  const schools = ['고려대학교', '홍익대학교', '연세대학교', '중앙대학교', '성균관대학교', '고려대학교', '한양대학교', '서울대학교', '고려대학교', '건국대학교', '이화여자대학교', '고려대학교', '경희대학교', '서강대학교', '고려대학교', '숙명여자대학교', '건국대학교', '고려대학교', '성균관대학교', '국민대학교', '고려대학교', '숭실대학교', '동국대학교', '고려대학교', '서울시립대학교', '한국외국어대학교', '고려대학교', '광운대학교', '세종대학교', '고려대학교']
+  const allLeaders = names.map((name, index) => ({ id: index + 1, rank: index + 1, name, school: schools[index], points: 18920 - (index * 430) - (index > 2 ? index * 35 : 0) }))
+  const visibleLeaders = (rankingFilter === 'school' ? allLeaders.filter((leader) => leader.school === '고려대학교') : allLeaders).map((leader, index) => ({ ...leader, displayRank: index + 1 }))
+  const myRank = rankingFilter === 'school' ? 7 : 18
+  const neighbors = rankingFilter === 'school'
+    ? [{ rank: 6, name: '캠퍼스픽', school: '고려대학교', points: '5,710P' }, { rank: 8, name: '리서치룸', school: '고려대학교', points: '5,390P' }]
+    : [{ rank: 17, name: '답변척척', school: '건국대학교', points: '5,620P' }, { rank: 19, name: '논문한줄', school: '성균관대학교', points: '5,430P' }]
   return (
     <div className="screen with-nav">
       <TopBar title="응답자 랭킹" onBack={() => navigate('home')} right={<IconButton label="정보">i</IconButton>} />
       <main className="screen-content ranking-content">
-        <div className="chips"><button className="chip is-active" type="button">전체</button><button className="chip" type="button">우리 학교</button><button className="chip" type="button">이번 달</button></div>
-        <div className="rank-neighbor muted"><span>17위 답변척척 · 건국대</span><b>5,620P</b></div>
-        <div className="my-rank"><span className="rank-circle">18</span><span><b>나 · LEVEL 7</b><small>다음 레벨까지 460P</small></span><strong>5,540P</strong></div>
-        <div className="rank-neighbor muted"><span>19위 논문한줄 · 성균관대</span><b>5,430P</b></div>
-        <p className="rank-tip">✨ 내 주변 순위를 더 확인해 보세요</p>
-        <SectionHeader title="명예의 전당" count="" action="TOP 30" />
+        <div className="chips ranking-tabs"><button className={rankingFilter === 'all' ? 'chip is-active' : 'chip'} type="button" onClick={() => setRankingFilter('all')}>전체</button><button className={rankingFilter === 'school' ? 'chip is-active' : 'chip'} type="button" onClick={() => setRankingFilter('school')}>우리 학교</button></div>
+        <div className="rank-stack">
+          <div className="rank-neighbor rank-neighbor--previous"><span className="neighbor-rank">{neighbors[0].rank}</span><span><b>{neighbors[0].name}</b><small>{neighbors[0].school}</small></span><strong>{neighbors[0].points}</strong></div>
+          <div className="my-rank"><span className="my-rank-label">MY RANK</span><span className="rank-circle">{myRank}</span><span><b>나 · LEVEL 7</b><small>다음 레벨까지 460P</small></span><strong>5,540P</strong></div>
+          <div className="rank-neighbor rank-neighbor--next"><span className="neighbor-rank">{neighbors[1].rank}</span><span><b>{neighbors[1].name}</b><small>{neighbors[1].school}</small></span><strong>{neighbors[1].points}</strong></div>
+        </div>
+        <div className="hall-heading"><span>HALL OF FAME</span><h2>{rankingFilter === 'school' ? '고려대학교 명예의 전당' : '명예의 전당'}</h2><small>{rankingFilter === 'school' ? '인증된 고려대학교 학생 랭킹' : '이번 시즌 가장 활발한 응답자 30명'}</small></div>
         <div className="leader-list">
-          {leaders.map(([rank, name, point]) => <div key={rank}><b>{rank}</b><span>{name}</span><strong>{point}</strong></div>)}
+          {visibleLeaders.map((leader) => <div className={leader.displayRank <= 3 ? `leader-row leader-row--top leader-row--${leader.displayRank}` : 'leader-row'} key={leader.id}><b>{leader.displayRank <= 3 ? ['🥇', '🥈', '🥉'][leader.displayRank - 1] : leader.displayRank}</b><span><strong>{leader.name}</strong><small>{leader.school}</small></span><em>{leader.points.toLocaleString()}P</em></div>)}
         </div>
         <div className="weekly-card"><b>이번 주 도전</b><p>설문 3개 더 참여하고 레벨업 보상 100P를 받아보세요.</p></div>
       </main>
