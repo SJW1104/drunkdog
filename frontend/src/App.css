@@ -2303,6 +2303,11 @@ button:focus-visible {
 .notification-popover-list { max-height: 390px; overflow-y: auto; }.notification-popover-list > button { display: grid; width: 100%; grid-template-columns: 7px 1fr auto; gap: 10px; padding: 14px 17px; border-bottom: 1px solid var(--line); background: #f8fbff; text-align: left; }.notification-popover-list > button.is-read { background: #fff; opacity: .68; }.notification-popover-list i { width: 7px; height: 7px; margin-top: 3px; border-radius: 50%; background: var(--blue); }.notification-popover-list .is-read i { background: #c7cfda; }.notification-popover-list span { display: grid; gap: 4px; }.notification-popover-list b { font-size: 9px; }.notification-popover-list small { color: var(--muted); font-size: 8px; line-height: 1.45; }.notification-popover-list time { color: #929cad; font-size: 7px; }.notification-close { width: 100%; padding: 13px; color: #667287; font-size: 9px; font-weight: 800; }
 /* Completed survey state */
 .survey-card { position: relative; }
-.survey-card.is-completed { background: #f7f9fc; opacity: .72; }
-.survey-card.is-completed .point-pill { background: #edf0f5; color: #8b95a5; }
-.completed-label { position: absolute; top: 12px; right: 12px; padding: 5px 8px; border-radius: 99px; background: #e8f7ef; color: #17915b; font-size: 8px; font-weight: 900; }
+.survey-card.is-completed { border-color: #d9dde4; background: #eef0f3; color: #8b929e; filter: grayscale(1); opacity: .78; box-shadow: none; }
+.survey-card.is-completed * { color: #8b929e !important; }
+.survey-card.is-completed .survey-eyebrow,
+.survey-card.is-completed .point-pill,
+.survey-card.is-completed .completed-label { background: #dfe2e7 !important; color: #777f8b !important; }
+.survey-card.is-completed .progress-line { background: #d8dce2; }
+.survey-card.is-completed .progress-line span { background: #969da8; }
+.completed-label { position: absolute; top: 12px; right: 12px; padding: 5px 8px; border-radius: 99px; background: #dfe2e7; color: #777f8b; font-size: 8px; font-weight: 900; }
