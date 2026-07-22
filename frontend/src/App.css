@@ -1,3 +1,10 @@
+@font-face {
+  font-family: Pretendard;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: local("Pretendard Variable"), local("Pretendard"), url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/woff2/PretendardVariable.woff2") format("woff2-variations");
+}
 :root {
   --blue: #1769ff;
   --blue-soft: #eef5ff;
@@ -1491,6 +1498,9 @@ button {
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  font-weight: 450;
+  letter-spacing: -0.015em;
 }
 
 button,
@@ -1566,4 +1576,198 @@ select {
 button:focus-visible {
   outline: 2px solid rgba(23, 105, 255, 0.42);
   outline-offset: 2px;
+}
+/* Functional survey editor */
+.question-editor {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.question-editor-head,
+.question-settings,
+.question-move,
+.option-editor > div {
+  display: flex;
+  align-items: center;
+}
+
+.question-editor-head {
+  justify-content: space-between;
+}
+
+.question-editor-head > b {
+  color: var(--blue);
+  font-size: 11px;
+}
+
+.question-move {
+  gap: 4px;
+}
+
+.question-move button,
+.option-editor > div > button {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--surface);
+  color: #747f91;
+  font-size: 11px;
+}
+
+.question-move button:disabled,
+.option-editor > div > button:disabled {
+  opacity: 0.3;
+}
+
+.question-move .delete-question {
+  color: #e14c5a;
+}
+
+.question-title-input,
+.option-editor input,
+.question-settings select {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  color: var(--ink);
+}
+
+.question-title-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.question-title-input:focus,
+.option-editor input:focus,
+.question-settings select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(23, 105, 255, 0.08);
+}
+
+.question-settings {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.question-settings select {
+  height: 34px;
+  flex: 1;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+.question-settings label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #596273;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.question-settings input {
+  accent-color: var(--blue);
+}
+
+.option-editor {
+  display: grid;
+  gap: 7px;
+}
+
+.option-editor > div {
+  gap: 7px;
+}
+
+.option-editor > div > span {
+  color: #8b95a5;
+  font-size: 13px;
+}
+
+.option-editor input {
+  height: 34px;
+  flex: 1;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+.option-editor .add-option {
+  justify-self: start;
+  padding: 5px 0;
+  background: transparent;
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.text-answer-preview {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.question-meta {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.field-error,
+.publish-error {
+  color: #dd4050;
+  font-size: 9px;
+}
+
+.publish-error {
+  margin: 12px 0 -8px;
+  text-align: center;
+}
+
+.question-type-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.question-type-actions button {
+  min-height: 38px;
+  border-radius: 9px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.review-questions span {
+  display: grid;
+  gap: 3px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-questions span:last-child {
+  border-bottom: 0;
+}
+
+.review-questions span b {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.review-questions span em {
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
 }

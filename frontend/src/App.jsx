@@ -247,47 +247,132 @@ function ParticipateScreen({ navigate, onComplete }) {
   )
 }
 function CreateScreen({ navigate, onPublish }) {
+  const [savedDraft] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('suniversity-survey-draft')) || {}
+    } catch {
+      return {}
+    }
+  })
   const [step, setStep] = useState(1)
-  const [title, setTitle] = useState('대학생의 AI 활용 경험 조사')
-  const [category, setCategory] = useState('취업')
-  const [targetCount, setTargetCount] = useState(100)
-  const [reward, setReward] = useState(20)
-  const [isPublic, setIsPublic] = useState(true)
-  const [questions, setQuestions] = useState([
-    ['Q1. 현재 학년을 선택해 주세요', '객관식 · 필수'],
-    ['Q2. AI 도구 사용 빈도는?', '단일 선택 · 필수'],
-    ['Q3. 가장 유용했던 기능은?', '복수 선택 · 선택'],
+  const [title, setTitle] = useState(savedDraft.title || '대학생의 AI 활용 경험 조사')
+  const [category, setCategory] = useState(savedDraft.category || '취업')
+  const [targetCount, setTargetCount] = useState(savedDraft.targetCount || 100)
+  const [reward, setReward] = useState(savedDraft.reward || 20)
+  const [isPublic, setIsPublic] = useState(savedDraft.isPublic ?? true)
+  const [saveLabel, setSaveLabel] = useState('임시저장')
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [publishError, setPublishError] = useState('')
+  const [questions, setQuestions] = useState(savedDraft.questions || [
+    { id: 'q1', title: '현재 학년을 선택해 주세요', type: 'single', required: true, options: ['1학년', '2학년', '3학년', '4학년 이상'] },
+    { id: 'q2', title: 'AI 도구 사용 빈도는?', type: 'single', required: true, options: ['거의 사용하지 않음', '주 1~2회', '주 3회 이상'] },
+    { id: 'q3', title: '가장 유용했던 기능은?', type: 'multiple', required: false, options: ['자료 조사', '글쓰기', '코딩', '아이디어 발상'] },
   ])
 
-  const publish = () => {
-    onPublish({ title, category, targetCount, reward, questionCount: questions.length, isPublic })
-    navigate('surveys')
+  const typeLabels = { single: '객관식', multiple: '복수 선택', text: '주관식' }
+  const updateQuestion = (id, changes) => setQuestions(questions.map((question) => question.id === id ? { ...question, ...changes } : question))
+  const addQuestion = (type = 'single') => {
+    const nextNumber = questions.length + 1
+    setQuestions([...questions, {
+      id: `q-${Date.now()}`,
+      title: `새로운 질문 ${nextNumber}`,
+      type,
+      required: false,
+      options: type === 'text' ? [] : ['선택지 1', '선택지 2'],
+    }])
+  }
+  const moveQuestion = (index, direction) => {
+    const nextIndex = index + direction
+    if (nextIndex < 0 || nextIndex >= questions.length) return
+    const next = [...questions]
+    ;[next[index], next[nextIndex]] = [next[nextIndex], next[index]]
+    setQuestions(next)
+  }
+  const updateOption = (question, optionIndex, value) => {
+    const options = [...question.options]
+    options[optionIndex] = value
+    updateQuestion(question.id, { options })
+  }
+  const removeOption = (question, optionIndex) => updateQuestion(question.id, { options: question.options.filter((_, index) => index !== optionIndex) })
+  const isQuestionValid = (question) => question.title.trim() && (question.type === 'text' || (question.options.length >= 2 && question.options.every((option) => option.trim())))
+  const canContinue = title.trim() && questions.length > 0 && questions.every(isQuestionValid)
+
+  const saveDraft = () => {
+    localStorage.setItem('suniversity-survey-draft', JSON.stringify({ title, category, targetCount, reward, isPublic, questions }))
+    setSaveLabel('저장 완료')
+    window.setTimeout(() => setSaveLabel('임시저장'), 1400)
+  }
+
+  const publish = async () => {
+    setIsPublishing(true)
+    setPublishError('')
+    try {
+      const survey = await mockApi.createSurvey({ title: title.trim(), category, targetCount, reward, questionCount: questions.length, questions, isPublic })
+      onPublish({ ...survey, eyebrow: `새 설문 · ${category}`, meta: `${questions.length}문항 · 약 ${Math.max(1, Math.ceil(questions.length * 0.6))}분`, count: `0 / ${targetCount}`, point: reward, tone: 'blue' })
+      localStorage.removeItem('suniversity-survey-draft')
+      navigate('surveys')
+    } catch (error) {
+      setPublishError(error.message)
+    } finally {
+      setIsPublishing(false)
+    }
   }
 
   return (
     <div className="screen">
-      <TopBar title="새 설문 만들기" onBack={() => step > 1 ? setStep(step - 1) : navigate('home')} right={<button className="text-action" type="button">임시저장</button>} />
+      <TopBar title="새 설문 만들기" onBack={() => step > 1 ? setStep(step - 1) : navigate('home')} right={<button className="text-action" type="button" onClick={saveDraft}>{saveLabel}</button>} />
       <div className="step-progress"><span /><span className={step >= 2 ? '' : 'pending'} /><span className={step >= 3 ? '' : 'pending'} /></div>
       <main className="screen-content create-content">
         {step === 1 ? <>
           <h1>질문을 구성해 주세요</h1>
-          <p className="subtitle">직접 만들거나 AI에게 추천받을 수 있어요.</p>
-          <label className="builder-field">설문 제목<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+          <p className="subtitle">문항 유형과 선택지를 직접 편집할 수 있어요.</p>
+          <label className="builder-field">설문 제목<input value={title} maxLength={80} onChange={(event) => setTitle(event.target.value)} /></label>
           <div className="ai-helper">
             <b>✦ AI 문항 도우미</b>
-            <small>주제와 대상을 분석해 중복 없는 질문, 예상 소요시간, 응답률을 제안해요.</small>
-            <button type="button" onClick={() => setQuestions([...questions, ['Q' + (questions.length + 1) + '. AI 추천 문항', '단일 선택 · 필수']])}>AI로 문항 추천 · 20P</button>
+            <small>주제와 대상을 분석해 중복 없는 질문과 예상 소요시간을 제안해요.</small>
+            <button type="button" onClick={() => setQuestions([...questions, { id: `ai-${Date.now()}`, title: 'AI 사용이 학업 효율에 얼마나 도움이 되었나요?', type: 'single', required: true, options: ['매우 도움 됨', '도움 됨', '보통', '도움 되지 않음'] }])}>AI로 문항 추천 · 20P</button>
           </div>
           <div className="question-list">
-            {questions.map(([questionTitle, meta], index) => (
-              <div className="question-card" key={questionTitle}>
-                <span><b>{questionTitle}</b><small>{meta}</small></span>
-                <button type="button" aria-label="질문 삭제" onClick={() => setQuestions(questions.filter((_, itemIndex) => itemIndex !== index))}>×</button>
-              </div>
+            {questions.map((question, index) => (
+              <article className="question-editor" key={question.id}>
+                <div className="question-editor-head">
+                  <b>Q{index + 1}</b>
+                  <div className="question-move">
+                    <button type="button" disabled={index === 0} aria-label="문항 위로 이동" onClick={() => moveQuestion(index, -1)}>↑</button>
+                    <button type="button" disabled={index === questions.length - 1} aria-label="문항 아래로 이동" onClick={() => moveQuestion(index, 1)}>↓</button>
+                    <button type="button" className="delete-question" aria-label="문항 삭제" onClick={() => setQuestions(questions.filter((item) => item.id !== question.id))}>×</button>
+                  </div>
+                </div>
+                <input className="question-title-input" value={question.title} onChange={(event) => updateQuestion(question.id, { title: event.target.value })} aria-label={`Q${index + 1} 질문`} />
+                <div className="question-settings">
+                  <select value={question.type} onChange={(event) => {
+                    const type = event.target.value
+                    updateQuestion(question.id, { type, options: type === 'text' ? [] : (question.options.length ? question.options : ['선택지 1', '선택지 2']) })
+                  }}>
+                    <option value="single">객관식</option>
+                    <option value="multiple">복수 선택</option>
+                    <option value="text">주관식</option>
+                  </select>
+                  <label><input type="checkbox" checked={question.required} onChange={(event) => updateQuestion(question.id, { required: event.target.checked })} /> 필수</label>
+                </div>
+                {question.type !== 'text' ? <div className="option-editor">
+                  {question.options.map((option, optionIndex) => <div key={`${question.id}-${optionIndex}`}>
+                    <span>{question.type === 'multiple' ? '□' : '○'}</span>
+                    <input value={option} aria-label={`선택지 ${optionIndex + 1}`} onChange={(event) => updateOption(question, optionIndex, event.target.value)} />
+                    <button type="button" disabled={question.options.length <= 2} aria-label="선택지 삭제" onClick={() => removeOption(question, optionIndex)}>×</button>
+                  </div>)}
+                  <button type="button" className="add-option" onClick={() => updateQuestion(question.id, { options: [...question.options, `선택지 ${question.options.length + 1}`] })}>＋ 선택지 추가</button>
+                </div> : <div className="text-answer-preview">응답자가 자유롭게 내용을 입력합니다.</div>}
+                {!isQuestionValid(question) ? <small className="field-error">질문과 선택지를 모두 입력해 주세요.</small> : <small className="question-meta">{typeLabels[question.type]} · {question.required ? '필수' : '선택'}</small>}
+              </article>
             ))}
           </div>
-          <button className="soft-button" type="button" onClick={() => setQuestions([...questions, ['Q' + (questions.length + 1) + '. 새로운 질문', '객관식 · 선택']])}>＋ 질문 직접 추가</button>
-          <button className="primary-button" disabled={!title || questions.length < 1} type="button" onClick={() => setStep(2)}>다음 · 대상 및 보상 설정</button>
+          <div className="question-type-actions">
+            <button type="button" onClick={() => addQuestion('single')}>＋ 객관식</button>
+            <button type="button" onClick={() => addQuestion('multiple')}>＋ 복수 선택</button>
+            <button type="button" onClick={() => addQuestion('text')}>＋ 주관식</button>
+          </div>
+          <button className="primary-button" disabled={!canContinue} type="button" onClick={() => setStep(2)}>다음 · 대상 및 보상 설정</button>
         </> : null}
 
         {step === 2 ? <>
@@ -303,18 +388,18 @@ function CreateScreen({ navigate, onPublish }) {
 
         {step === 3 ? <>
           <h1>등록 전에<br />확인해 주세요</h1>
-          <p className="subtitle">설문을 등록한 후에도 마감 전까지 일부 정보를 수정할 수 있어요.</p>
+          <p className="subtitle">등록 후 검수를 거쳐 설문 목록에 공개됩니다.</p>
           <div className="review-card"><small>설문 제목</small><b>{title}</b></div>
           <div className="review-grid"><div><small>카테고리</small><b>{category}</b></div><div><small>문항 수</small><b>{questions.length}개</b></div><div><small>목표 응답</small><b>{targetCount}명</b></div><div><small>참여 보상</small><b>{reward}P</b></div></div>
+          <div className="review-card review-questions"><small>문항 구성</small>{questions.map((question, index) => <span key={question.id}><b>Q{index + 1}. {question.title}</b><em>{typeLabels[question.type]} · {question.required ? '필수' : '선택'}</em></span>)}</div>
           <div className="review-card"><small>결과 공개</small><b>{isPublic ? '커뮤니티 공개' : '작성자만 보기'}</b></div>
-          <button className="primary-button" type="button" onClick={publish}>설문 등록하기</button>
-          <p className="privacy-note">등록 후 검수 과정을 거쳐 설문 목록에 공개됩니다.</p>
+          {publishError ? <p className="publish-error">{publishError}</p> : null}
+          <button className="primary-button" disabled={isPublishing} type="button" onClick={publish}>{isPublishing ? '등록 중...' : '설문 등록하기'}</button>
         </> : null}
       </main>
     </div>
   )
 }
-
 function BalanceGameScreen({ navigate, onVote }) {
   const [selected, setSelected] = useState(null)
   const [voted, setVoted] = useState(false)
