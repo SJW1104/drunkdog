@@ -45,7 +45,7 @@ function BottomNav({ active, navigate }) {
           key={item.id}
           type="button"
           className={active === item.id ? 'nav-item is-active' : 'nav-item'}
-          onClick={() => navigate(item.id === 'balance' ? 'surveys' : item.id)}
+          onClick={() => navigate(item.id)}
         >
           <span className="nav-icon">{item.icon}</span>
           <span>{item.label}</span>
@@ -154,10 +154,11 @@ function HomeScreen({ navigate }) {
   )
 }
 
-function SurveyListScreen({ navigate }) {
+function SurveyListScreen({ navigate, customSurveys = [] }) {
   const [category, setCategory] = useState('전체')
   const [query, setQuery] = useState('')
-  const filteredSurveys = surveys.filter((survey) => {
+  const allSurveys = [...customSurveys, ...surveys]
+  const filteredSurveys = allSurveys.filter((survey) => {
     const matchesQuery = survey.title.toLowerCase().includes(query.toLowerCase())
     const matchesCategory = category === '전체' || survey.eyebrow.includes(category)
     return matchesQuery && matchesCategory
@@ -192,69 +193,149 @@ function SurveyListScreen({ navigate }) {
 }
 
 function ParticipateScreen({ navigate, onComplete }) {
-  const [selected, setSelected] = useState(2)
-  const options = ['거의 사용하지 않아요', '월 1~2회 사용해요', '주 1~2회 사용해요', '거의 매일 사용해요']
+  const questions = [
+    { title: '과제나 프로젝트에 AI 도구를 얼마나 자주 활용하나요?', options: ['거의 사용하지 않아요', '월 1~2회 사용해요', '주 1~2회 사용해요', '거의 매일 사용해요'] },
+    { title: '가장 자주 사용하는 AI 도구는 무엇인가요?', options: ['ChatGPT', 'Claude', 'Gemini', '기타 도구'] },
+    { title: 'AI를 주로 어떤 목적으로 사용하나요?', options: ['자료 조사', '글쓰기·요약', '코딩·분석', '아이디어 발상'] },
+    { title: 'AI 활용이 과제 수행에 도움이 되었나요?', options: ['매우 도움 됨', '도움 됨', '보통', '도움 되지 않음'] },
+    { title: '학교에서 AI 활용 교육이 필요하다고 생각하나요?', options: ['매우 필요함', '필요함', '잘 모르겠음', '필요하지 않음'] },
+  ]
+  const [questionIndex, setQuestionIndex] = useState(0)
+  const [answers, setAnswers] = useState({})
+  const selected = answers[questionIndex]
+  const question = questions[questionIndex]
+  const isLast = questionIndex === questions.length - 1
+
+  const selectAnswer = (index) => setAnswers({ ...answers, [questionIndex]: index })
+  const goNext = () => {
+    if (selected === undefined) return
+    if (isLast) onComplete(30)
+    else setQuestionIndex(questionIndex + 1)
+  }
+
   return (
     <div className="screen">
-      <TopBar title="설문 참여" onBack={() => navigate('surveys')} right={<IconButton label="더보기">•••</IconButton>} />
+      <TopBar title="설문 참여" onBack={() => questionIndex ? setQuestionIndex(questionIndex - 1) : navigate('surveys')} right={<IconButton label="더보기">•••</IconButton>} />
       <main className="screen-content participate-content">
-        <div className="survey-progress-label"><span>질문 3 / 10</span><span>약 2분 남음</span></div>
-        <div className="survey-progress"><span /></div>
+        <div className="survey-progress-label"><span>질문 {questionIndex + 1} / {questions.length}</span><span>약 {questions.length - questionIndex}분 남음</span></div>
+        <div className="survey-progress"><span style={{ width: ((questionIndex + 1) / questions.length * 100) + '%' }} /></div>
         <p className="required-label">필수 질문</p>
-        <h1 className="question-title">과제나 프로젝트에 AI 도구를 얼마나 자주 활용하나요?</h1>
+        <h1 className="question-title">{question.title}</h1>
         <div className="option-list">
-          {options.map((option, index) => (
+          {question.options.map((option, index) => (
             <button
               type="button"
               key={option}
               className={selected === index ? 'answer-option is-selected' : 'answer-option'}
-              onClick={() => setSelected(index)}
+              onClick={() => selectAnswer(index)}
             >
               {option}{selected === index ? ' ✓' : ''}
             </button>
           ))}
         </div>
         <div className="reward-banner"><strong>30P</strong><span>끝까지 응답하면<br /><b>포인트가 바로 지급돼요</b></span></div>
-        <button className="primary-button" type="button" onClick={() => onComplete(30)}>응답 완료하고 30P 받기</button>
+        <button className="primary-button" disabled={selected === undefined} type="button" onClick={goNext}>{isLast ? '응답 완료하고 30P 받기' : '다음 질문'}</button>
         <p className="privacy-note">응답은 익명으로 안전하게 저장됩니다.</p>
       </main>
     </div>
   )
 }
-
-function CreateScreen({ navigate }) {
+function CreateScreen({ navigate, onPublish }) {
+  const [step, setStep] = useState(1)
+  const [title, setTitle] = useState('대학생의 AI 활용 경험 조사')
+  const [category, setCategory] = useState('취업')
+  const [targetCount, setTargetCount] = useState(100)
+  const [reward, setReward] = useState(20)
+  const [isPublic, setIsPublic] = useState(true)
   const [questions, setQuestions] = useState([
     ['Q1. 현재 학년을 선택해 주세요', '객관식 · 필수'],
     ['Q2. AI 도구 사용 빈도는?', '단일 선택 · 필수'],
     ['Q3. 가장 유용했던 기능은?', '복수 선택 · 선택'],
   ])
+
+  const publish = () => {
+    onPublish({ title, category, targetCount, reward, questionCount: questions.length, isPublic })
+    navigate('surveys')
+  }
+
   return (
     <div className="screen">
-      <TopBar title="새 설문 만들기" onBack={() => navigate('home')} right={<button className="text-action" type="button">임시저장</button>} />
-      <div className="step-progress"><span /><span /><i /><i /></div>
+      <TopBar title="새 설문 만들기" onBack={() => step > 1 ? setStep(step - 1) : navigate('home')} right={<button className="text-action" type="button">임시저장</button>} />
+      <div className="step-progress"><span /><span className={step >= 2 ? '' : 'pending'} /><span className={step >= 3 ? '' : 'pending'} /></div>
       <main className="screen-content create-content">
-        <h1>질문을 구성해 주세요</h1>
-        <p className="subtitle">직접 만들거나 AI에게 추천받을 수 있어요.</p>
-        <div className="ai-helper">
-          <b>✦ AI 문항 도우미</b>
-          <small>주제와 대상을 분석해 중복 없는 질문, 예상 소요시간, 응답률을 제안해요.</small>
-          <button type="button" onClick={() => setQuestions([...questions, ['Q' + (questions.length + 1) + '. AI 추천 문항', '단일 선택 · 필수']])}>AI로 문항 추천 · 20P</button>
-        </div>
-        <div className="question-list">
-          {questions.map(([title, meta]) => (
-            <button className="question-card" type="button" key={title}>
-              <b>{title}</b><small>{meta}</small>
-            </button>
-          ))}
-        </div>
-        <button className="soft-button" type="button" onClick={() => setQuestions([...questions, ['Q' + (questions.length + 1) + '. 새로운 질문', '객관식 · 선택']])}>＋ 질문 직접 추가</button>
-        <button className="primary-button" type="button" onClick={() => navigate('surveys')}>다음 · 대상 및 보상 설정</button>
+        {step === 1 ? <>
+          <h1>질문을 구성해 주세요</h1>
+          <p className="subtitle">직접 만들거나 AI에게 추천받을 수 있어요.</p>
+          <label className="builder-field">설문 제목<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+          <div className="ai-helper">
+            <b>✦ AI 문항 도우미</b>
+            <small>주제와 대상을 분석해 중복 없는 질문, 예상 소요시간, 응답률을 제안해요.</small>
+            <button type="button" onClick={() => setQuestions([...questions, ['Q' + (questions.length + 1) + '. AI 추천 문항', '단일 선택 · 필수']])}>AI로 문항 추천 · 20P</button>
+          </div>
+          <div className="question-list">
+            {questions.map(([questionTitle, meta], index) => (
+              <div className="question-card" key={questionTitle}>
+                <span><b>{questionTitle}</b><small>{meta}</small></span>
+                <button type="button" aria-label="질문 삭제" onClick={() => setQuestions(questions.filter((_, itemIndex) => itemIndex !== index))}>×</button>
+              </div>
+            ))}
+          </div>
+          <button className="soft-button" type="button" onClick={() => setQuestions([...questions, ['Q' + (questions.length + 1) + '. 새로운 질문', '객관식 · 선택']])}>＋ 질문 직접 추가</button>
+          <button className="primary-button" disabled={!title || questions.length < 1} type="button" onClick={() => setStep(2)}>다음 · 대상 및 보상 설정</button>
+        </> : null}
+
+        {step === 2 ? <>
+          <h1>대상과 보상을<br />설정해 주세요</h1>
+          <p className="subtitle">원하는 응답자와 모집 규모를 정할 수 있어요.</p>
+          <label className="builder-field">카테고리<select value={category} onChange={(event) => setCategory(event.target.value)}><option>취업</option><option>소비</option><option>학교생활</option><option>MBTI</option><option>연애</option></select></label>
+          <label className="builder-field">목표 응답자 수<input type="number" min="10" max="1000" value={targetCount} onChange={(event) => setTargetCount(Number(event.target.value))} /></label>
+          <label className="builder-field">1인당 참여 보상<input type="range" min="5" max="40" step="5" value={reward} onChange={(event) => setReward(Number(event.target.value))} /><strong>{reward}P</strong></label>
+          <label className="toggle-row"><span><b>결과 공개</b><small>공개하면 커뮤니티 포인트 혜택을 받아요.</small></span><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} /></label>
+          <div className="budget-card"><span>예상 필요 포인트</span><strong>{(targetCount * reward).toLocaleString()}P</strong><small>목표 응답자 수 × 참여 보상</small></div>
+          <button className="primary-button" type="button" onClick={() => setStep(3)}>다음 · 등록 내용 검토</button>
+        </> : null}
+
+        {step === 3 ? <>
+          <h1>등록 전에<br />확인해 주세요</h1>
+          <p className="subtitle">설문을 등록한 후에도 마감 전까지 일부 정보를 수정할 수 있어요.</p>
+          <div className="review-card"><small>설문 제목</small><b>{title}</b></div>
+          <div className="review-grid"><div><small>카테고리</small><b>{category}</b></div><div><small>문항 수</small><b>{questions.length}개</b></div><div><small>목표 응답</small><b>{targetCount}명</b></div><div><small>참여 보상</small><b>{reward}P</b></div></div>
+          <div className="review-card"><small>결과 공개</small><b>{isPublic ? '커뮤니티 공개' : '작성자만 보기'}</b></div>
+          <button className="primary-button" type="button" onClick={publish}>설문 등록하기</button>
+          <p className="privacy-note">등록 후 검수 과정을 거쳐 설문 목록에 공개됩니다.</p>
+        </> : null}
       </main>
     </div>
   )
 }
 
-function ResultScreen({ navigate }) {
+function BalanceGameScreen({ navigate, onVote }) {
+  const [selected, setSelected] = useState(null)
+  const [voted, setVoted] = useState(false)
+  const vote = (choice) => {
+    if (voted) return
+    setSelected(choice)
+    setVoted(true)
+    onVote()
+  }
+  return (
+    <div className="screen with-nav">
+      <TopBar title="밸런스게임" onBack={() => navigate('home')} />
+      <main className="screen-content balance-content">
+        <p className="required-label">오늘의 밸런스 · 학교생활</p>
+        <h1 className="question-title">팀플에서 더 힘든 상황은?</h1>
+        <div className="balance-options">
+          <button type="button" className={selected === 'A' ? 'is-selected' : ''} onClick={() => vote('A')}><small>A</small><b>회의에는 오지만<br />아무것도 안 하는 팀원</b>{voted ? <strong>58%</strong> : null}</button>
+          <span>VS</span>
+          <button type="button" className={selected === 'B' ? 'is-selected' : ''} onClick={() => vote('B')}><small>B</small><b>연락은 없지만<br />결과물은 잘 내는 팀원</b>{voted ? <strong>42%</strong> : null}</button>
+        </div>
+        {voted ? <div className="insight-card"><b>투표 완료 · +2P</b><p>1,284명의 대학생이 참여했어요. 댓글에서 선택 이유를 나눠보세요.</p></div> : <p className="privacy-note">투표하면 바로 결과를 확인하고 2P를 받아요.</p>}
+      </main>
+      <BottomNav active="balance" navigate={navigate} />
+    </div>
+  )
+}
+function ResultScreen({ navigate, spendPoints }) {
   return (
     <div className="screen">
       <TopBar title="설문 결과" onBack={() => navigate('home')} right={<IconButton label="공유">↗</IconButton>} />
@@ -273,8 +354,8 @@ function ResultScreen({ navigate }) {
           ))}
         </div>
         <div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>응답자의 68%가 주 1회 이상 AI를 활용하며, 취업 준비 집단에서 활용 빈도가 더 높아요.</p></div>
-        <button className="primary-button" type="button">심층 분석 보기 · 200P</button>
-        <button className="soft-button" type="button">PPT 자동 생성 · 400P</button>
+        <button className="primary-button" type="button" onClick={() => spendPoints(200, 'AI 심층 분석')}>심층 분석 보기 · 200P</button>
+        <button className="soft-button" type="button" onClick={() => spendPoints(400, 'PPT 자동 생성')}>PPT 자동 생성 · 400P</button>
       </main>
     </div>
   )
@@ -432,6 +513,7 @@ function ProfileScreen({ navigate, points }) {
 function App() {
   const [screen, setScreen] = useState('home')
   const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
+  const [publishedSurveys, setPublishedSurveys] = useState([])
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('suniversity-transactions')
     return saved ? JSON.parse(saved) : [
@@ -470,6 +552,12 @@ function App() {
     navigate('result')
   }
 
+  const publishSurvey = (survey) => {
+    setPublishedSurveys([survey, ...publishedSurveys])
+  }
+
+  const voteBalance = () => earnPoints(2, '밸런스게임 참여')
+
   const completeVerification = () => {
     earnPoints(2500, '학교 인증 가입 보상')
     navigate('home')
@@ -478,12 +566,13 @@ function App() {
   const screens = {
     auth: <AuthScreen navigate={navigate} />,
     home: <HomeScreen navigate={navigate} />,
-    surveys: <SurveyListScreen navigate={navigate} />,
+    surveys: <SurveyListScreen navigate={navigate} customSurveys={publishedSurveys} />,
     participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} />,
-    create: <CreateScreen navigate={navigate} />,
-    result: <ResultScreen navigate={navigate} />,
+    create: <CreateScreen navigate={navigate} onPublish={publishSurvey} />,
+    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} />,
     points: <PointsScreen navigate={navigate} points={points} transactions={transactions} earnPoints={earnPoints} spendPoints={spendPoints} />,
     ranking: <RankingScreen navigate={navigate} />,
+    balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
     verify: <VerifyScreen navigate={navigate} onVerify={completeVerification} />,
     notifications: <NotificationsScreen navigate={navigate} />,
     profile: <ProfileScreen navigate={navigate} points={points} />,

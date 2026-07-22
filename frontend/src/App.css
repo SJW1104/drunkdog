@@ -1253,3 +1253,198 @@ button {
   color: #9098a7;
   font-size: 9px;
 }
+.step-progress .pending {
+  background: #e7eaf0;
+}
+
+.builder-field {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  color: #4a5362;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.builder-field input:not([type="range"]),
+.builder-field select {
+  width: 100%;
+  height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.builder-field input:focus,
+.builder-field select:focus {
+  border-color: var(--blue);
+}
+
+.builder-field input[type="range"] {
+  width: calc(100% - 45px);
+  accent-color: var(--blue);
+}
+
+.builder-field > strong {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  color: var(--blue);
+  font-size: 12px;
+}
+
+.question-card {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.question-card > span {
+  display: grid;
+  gap: 5px;
+}
+
+.question-card > button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface);
+  color: #9aa1ae;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.toggle-row > span {
+  display: grid;
+  gap: 5px;
+}
+
+.toggle-row b {
+  font-size: 10px;
+}
+
+.toggle-row small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.toggle-row input {
+  width: 34px;
+  height: 18px;
+  accent-color: var(--blue);
+}
+
+.budget-card,
+.review-card {
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.budget-card span,
+.budget-card small,
+.review-card small,
+.review-grid small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.budget-card strong {
+  color: var(--blue);
+  font-size: 20px;
+}
+
+.review-card {
+  margin-top: 12px;
+}
+
+.review-card b {
+  font-size: 12px;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.review-grid div {
+  display: grid;
+  gap: 6px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.review-grid b {
+  font-size: 11px;
+}
+
+.balance-content {
+  padding-top: 32px;
+}
+
+.balance-options {
+  display: grid;
+  grid-template-columns: 1fr 30px 1fr;
+  align-items: center;
+  gap: 7px;
+  margin-top: 28px;
+}
+
+.balance-options > span {
+  color: #8992a2;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.balance-options button {
+  display: grid;
+  min-height: 190px;
+  align-content: center;
+  gap: 13px;
+  padding: 16px 10px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.balance-options button.is-selected {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.balance-options button small {
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.balance-options button b {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.balance-options button strong {
+  color: var(--blue);
+  font-size: 22px;
+}
