@@ -1,0 +1,21 @@
+:root {
+  /* Temporary tokens. Replace values after reviewing the Figma file. */
+  --color-background: #ffffff;
+  --color-surface: #f6f7f9;
+  --color-text-primary: #17191c;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --app-max-width: 30rem;
+}
