@@ -669,7 +669,13 @@ function App() {
 
   return (
     <div className="prototype-stage">
-      <div className="phone-frame">{screens[screen] || screens.home}</div>
+      <div className="device-shell">
+        <span className="device-speaker" aria-hidden="true" />
+        <span className="device-camera" aria-hidden="true" />
+        <span className="device-button device-button--volume" aria-hidden="true" />
+        <span className="device-button device-button--power" aria-hidden="true" />
+        <div className="phone-frame">{screens[screen] || screens.home}</div>
+      </div>
     </div>
   )
 }

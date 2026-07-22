@@ -1771,3 +1771,99 @@ button:focus-visible {
   font-size: 9px;
   font-style: normal;
 }
+/* Desktop phone hardware */
+.device-shell {
+  position: relative;
+  width: min(100%, 448px);
+  min-height: calc(100vh - 72px);
+  margin: 0 auto;
+  padding: 12px;
+  border: 2px solid #303744;
+  border-radius: 43px;
+  background: linear-gradient(145deg, #171c25, #07090d);
+  box-shadow:
+    0 38px 90px rgba(24, 34, 51, 0.22),
+    0 8px 22px rgba(24, 34, 51, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.device-shell .phone-frame {
+  width: 100%;
+  min-height: calc(100vh - 100px);
+  border-radius: 31px;
+  box-shadow: none;
+}
+
+.device-shell .screen {
+  min-height: calc(100vh - 100px);
+}
+
+.device-speaker,
+.device-camera {
+  position: absolute;
+  z-index: 50;
+  top: 6px;
+  pointer-events: none;
+}
+
+.device-speaker {
+  left: 50%;
+  width: 52px;
+  height: 4px;
+  border-radius: 99px;
+  background: #343b47;
+  transform: translateX(-50%);
+}
+
+.device-camera {
+  left: calc(50% + 37px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #152a43;
+  box-shadow: inset 0 0 0 1px #354a62;
+}
+
+.device-button {
+  position: absolute;
+  width: 4px;
+  border-radius: 3px 0 0 3px;
+  background: #252c37;
+}
+
+.device-button--volume {
+  top: 125px;
+  left: -6px;
+  height: 72px;
+}
+
+.device-button--power {
+  top: 148px;
+  right: -6px;
+  height: 82px;
+  border-radius: 0 3px 3px 0;
+}
+
+@media (max-width: 480px) {
+  .device-shell {
+    width: 100%;
+    min-height: 100vh;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .device-shell .phone-frame,
+  .device-shell .screen {
+    min-height: 100vh;
+    border-radius: 0;
+  }
+
+  .device-speaker,
+  .device-camera,
+  .device-button {
+    display: none;
+  }
+}
