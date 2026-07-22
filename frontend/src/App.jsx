@@ -102,6 +102,12 @@ function SectionHeader({ icon, title, count, action }) {
 
 function HomeScreen({ navigate, isCheckedIn, onCheckIn }) {
   const [checkinOpen, setCheckinOpen] = useState(false)
+  const [notificationOpen, setNotificationOpen] = useState(false)
+  const [readNotices, setReadNotices] = useState(() => JSON.parse(localStorage.getItem('suniversity-read-notices') || '[]'))
+  const { data: homeNotices = [], isLoading: noticesLoading } = useAsyncData(mockApi.getNotifications)
+  const unreadCount = homeNotices.filter((notice) => !readNotices.includes(notice.id)).length
+  const openNotice = (notice) => { const next = [...new Set([...readNotices, notice.id])]; setReadNotices(next); localStorage.setItem('suniversity-read-notices', JSON.stringify(next)); setNotificationOpen(false); navigate(notice.target) }
+  const readAllNotices = () => { const next = homeNotices.map((notice) => notice.id); setReadNotices(next); localStorage.setItem('suniversity-read-notices', JSON.stringify(next)) }
   return (
     <div className="screen with-nav">
       <TopBar
@@ -110,7 +116,7 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn }) {
         right={
           <div className="top-actions">
             <IconButton label="검색">⌕</IconButton>
-            <IconButton label="알림" badge="3" onClick={() => navigate('notifications')}><BellIcon /></IconButton>
+            <IconButton label="알림" badge={unreadCount || null} onClick={() => setNotificationOpen(true)}><BellIcon /></IconButton>
             <button className="avatar-button" type="button" onClick={() => navigate('profile')}>MY</button>
           </div>
         }
@@ -171,6 +177,7 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn }) {
 
       <button className="fab" type="button" onClick={() => navigate('create')}>＋ 설문 등록</button>
       <BottomNav active="home" navigate={navigate} />
+      {notificationOpen ? <div className="notification-popover-backdrop" role="presentation" onClick={() => setNotificationOpen(false)}><section className="notification-popover" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><div className="notification-popover-head"><span><b>알림</b><small>새 소식을 빠르게 확인해 보세요.</small></span><button type="button" onClick={readAllNotices}>모두 읽음</button></div>{noticesLoading ? <div className="loading-state"><i /><i /><i /></div> : <div className="notification-popover-list">{homeNotices.map((notice) => <button type="button" key={notice.id} className={readNotices.includes(notice.id) ? 'is-read' : ''} onClick={() => openNotice(notice)}><i /><span><b>{notice.title}</b><small>{notice.body}</small></span><time>{notice.time}</time></button>)}</div>}<button className="notification-close" type="button" onClick={() => setNotificationOpen(false)}>닫기</button></section></div> : null}
       {checkinOpen ? <div className="modal-backdrop" role="presentation" onClick={() => setCheckinOpen(false)}>
         <section className="checkin-modal" role="dialog" aria-modal="true" aria-labelledby="checkin-title" onClick={(event) => event.stopPropagation()}>
           <button className="modal-close" type="button" aria-label="닫기" onClick={() => setCheckinOpen(false)}>×</button>
