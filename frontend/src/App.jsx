@@ -167,7 +167,7 @@ function SurveyListScreen({ navigate, customSurveys = [] }) {
     return matchesQuery && matchesCategory
   })
   return (
-    <div className="screen">
+    <div className="screen with-nav">
       <TopBar title="설문 둘러보기" onBack={() => navigate('home')} right={<IconButton label="알림" onClick={() => navigate('notifications')}><BellIcon /></IconButton>} />
       <main className="screen-content list-content">
         <label className="search-box">
@@ -194,6 +194,7 @@ function SurveyListScreen({ navigate, customSurveys = [] }) {
           ))}
         </div>
       </main>
+      <BottomNav active="surveys" navigate={navigate} />
     </div>
   )
 }

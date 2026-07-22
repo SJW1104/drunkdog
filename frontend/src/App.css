@@ -1794,6 +1794,13 @@ button:focus-visible {
   box-shadow: none;
 }
 
+.device-shell .bottom-nav {
+  bottom: 50px;
+}
+
+.device-shell .fab {
+  bottom: 130px;
+}
 .device-shell .screen {
   min-height: calc(100vh - 100px);
 }
@@ -1855,6 +1862,13 @@ button:focus-visible {
     box-shadow: none;
   }
 
+  .device-shell .bottom-nav {
+    bottom: 0;
+  }
+
+  .device-shell .fab {
+    bottom: 80px;
+  }
   .device-shell .phone-frame,
   .device-shell .screen {
     min-height: 100vh;
