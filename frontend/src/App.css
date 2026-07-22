@@ -1972,3 +1972,68 @@ button:focus-visible {
 .result-lock-card button:disabled {
   opacity: 0.45;
 }
+/* Attached device navigation fix */
+.device-shell {
+  height: calc(100vh - 72px);
+  min-height: 620px;
+}
+
+.device-shell .phone-frame {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.device-shell .screen {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.device-shell .top-bar,
+.device-shell .step-progress {
+  flex: 0 0 auto;
+}
+
+.device-shell .screen-content {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d9dee8 transparent;
+}
+
+.device-shell .screen.with-nav {
+  padding-bottom: 0;
+}
+
+.device-shell .bottom-nav {
+  position: static;
+  width: 100%;
+  height: 68px;
+  flex: 0 0 68px;
+  margin: 0;
+}
+
+.device-shell .fab {
+  position: absolute;
+  right: 18px;
+  bottom: 80px;
+}
+
+@media (max-width: 480px) {
+  .device-shell {
+    height: 100vh;
+    min-height: 100vh;
+  }
+
+  .device-shell .phone-frame,
+  .device-shell .screen {
+    height: 100vh;
+    min-height: 0;
+  }
+}
