@@ -1,14 +1,8 @@
 /* eslint-disable react/prop-types */
 import { useState } from 'react'
+import { useAsyncData } from './hooks/useAsyncData.js'
+import mockApi from './services/mockApi.js'
 import './App.css'
-
-const surveys = [
-  { eyebrow: '관심사 일치 92%', title: 'Z세대의 구독 서비스 이용 행태', meta: '고려대 세종 · 약 4분', count: '64 / 120', point: 30, tone: 'blue' },
-  { eyebrow: '🔥 HOT · 소비', title: '대학생 배달앱 선택 기준 조사', meta: '익명 · 약 2분', count: '211명 참여', point: 15, tone: 'orange' },
-  { eyebrow: '⏳ 마감 임박', title: '캡스톤 팀 프로젝트 협업 경험', meta: '1.5배 보상 적용', count: '2시간 남음', point: 45, tone: 'purple' },
-  { eyebrow: '새 친구 · 연애', title: '대학생의 데이트 비용 인식', meta: '약 1분', count: '12 / 80', point: 10, tone: 'blue' },
-  { eyebrow: '학교생활 · 수업', title: '통학 시간과 캠퍼스 만족도', meta: '약 3분', count: '38 / 100', point: 20, tone: 'blue' },
-]
 
 const navItems = [
   { id: 'home', icon: '⌂', label: '홈' },
@@ -157,7 +151,8 @@ function HomeScreen({ navigate }) {
 function SurveyListScreen({ navigate, customSurveys = [] }) {
   const [category, setCategory] = useState('전체')
   const [query, setQuery] = useState('')
-  const allSurveys = [...customSurveys, ...surveys]
+  const { data: fetchedSurveys, isLoading, error, reload } = useAsyncData(mockApi.getSurveys)
+  const allSurveys = [...customSurveys, ...(fetchedSurveys || [])]
   const filteredSurveys = allSurveys.filter((survey) => {
     const matchesQuery = survey.title.toLowerCase().includes(query.toLowerCase())
     const matchesCategory = category === '전체' || survey.eyebrow.includes(category)
@@ -177,8 +172,11 @@ function SurveyListScreen({ navigate, customSurveys = [] }) {
           ))}
         </div>
         <SectionHeader title="내게 맞는 설문" count="" action="추천순⌄" />
+        {isLoading ? <div className="loading-state" aria-label="설문 불러오는 중"><i /><i /><i /></div> : null}
+        {error ? <div className="empty-state"><b>설문을 불러오지 못했어요</b><p>{error.message}</p><button type="button" onClick={reload}>다시 시도</button></div> : null}
+        {!isLoading && !error && filteredSurveys.length === 0 ? <div className="empty-state"><b>조건에 맞는 설문이 없어요</b><p>검색어나 카테고리를 바꿔보세요.</p><button type="button" onClick={() => { setQuery(''); setCategory('전체') }}>필터 초기화</button></div> : null}
         <div className="survey-card-list">
-          {filteredSurveys.map((survey, index) => (
+          {!isLoading && !error && filteredSurveys.map((survey, index) => (
             <button className="survey-card" key={survey.title} type="button" onClick={() => navigate('participate')}>
               <span className={'survey-eyebrow ' + survey.tone}>{survey.eyebrow}</span>
               <div className="survey-title-row"><strong>{survey.title}</strong><PointPill value={survey.point} /></div>
@@ -463,27 +461,25 @@ function AuthScreen({ navigate }) {
 }
 
 function NotificationsScreen({ navigate }) {
-  const notices = [
-    ['관심 설문이 새로 올라왔어요', '취업 분야 · 대학생 AI 활용 조사', '방금 전'],
-    ['마감 임박 보너스', '2시간 남은 설문 참여 시 포인트 1.5배', '20분 전'],
-    ['응답이 도착했어요', '내 설문에 새로운 응답 12개가 모였어요', '1시간 전'],
-  ]
+  const { data: notices, isLoading, error, reload } = useAsyncData(mockApi.getNotifications)
   return (
     <div className="screen">
       <TopBar title="알림" onBack={() => navigate('home')} />
       <main className="screen-content notification-content">
-        {notices.map(([title, body, time], index) => (
-          <button className="notice-card" type="button" key={title} onClick={() => navigate(index === 2 ? 'result' : 'surveys')}>
+        {isLoading ? <div className="loading-state"><i /><i /><i /></div> : null}
+        {error ? <div className="empty-state"><b>알림을 불러오지 못했어요</b><p>{error.message}</p><button type="button" onClick={reload}>다시 시도</button></div> : null}
+        {!isLoading && !error && notices?.length === 0 ? <div className="empty-state"><b>새로운 알림이 없어요</b><p>관심 설문이 등록되면 알려드릴게요.</p></div> : null}
+        {notices?.map((notice) => (
+          <button className="notice-card" type="button" key={notice.id} onClick={() => navigate(notice.target)}>
             <span className="notice-dot" />
-            <span><b>{title}</b><small>{body}</small></span>
-            <time>{time}</time>
+            <span><b>{notice.title}</b><small>{notice.body}</small></span>
+            <time>{notice.time}</time>
           </button>
         ))}
       </main>
     </div>
   )
 }
-
 function ProfileScreen({ navigate, points }) {
   return (
     <div className="screen">

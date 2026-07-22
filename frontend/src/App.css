@@ -1448,3 +1448,36 @@ button {
   color: var(--blue);
   font-size: 22px;
 }
+.loading-state {
+  display: grid;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.loading-state i {
+  display: block;
+  height: 76px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f2f4f7 25%, #fafbfc 50%, #f2f4f7 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.2s infinite;
+}
+
+.empty-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  padding: 28px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: #fafbfd;
+  text-align: center;
+}
+
+.empty-state b { font-size: 13px; }
+.empty-state p { margin: 8px 0 14px; color: var(--muted); font-size: 9px; }
+.empty-state button { padding: 9px 13px; border-radius: 9px; background: var(--blue-soft); color: var(--blue); font-size: 9px; font-weight: 800; }
+
+@keyframes skeleton {
+  to { background-position: -200% 0; }
+}
