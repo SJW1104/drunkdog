@@ -50,7 +50,7 @@ function UiIcon({ name }) {
 function TopBar({ title, onBack, right, brand = false }) {
   return (
     <header className={'top-bar ' + (brand ? 'top-bar--brand' : '')}>
-      {onBack ? <IconButton label="뒤로 가기" onClick={onBack}>‹</IconButton> : <span className="top-spacer" />}
+      {onBack ? <IconButton label="뒤로 가기" onClick={onBack}><svg className="back-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7" /></svg></IconButton> : <span className="top-spacer" />}
       <strong className={brand ? 'wordmark' : ''}>{title}</strong>
       {right || <span className="top-spacer" />}
     </header>
@@ -478,27 +478,92 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
     </div>
   )
 }
+const balanceGames = [
+  { id: 1, category: '학교생활', question: '팀플에서 더 힘든 상황은?', a: '회의에는 오지만 아무것도 안 하는 팀원', b: '연락은 없지만 결과물은 잘 내는 팀원', aLabel: '참여파', bLabel: '결과파', aPercent: 58, participants: '1,284' },
+  { id: 2, category: '연애', question: '연인과 다툰 뒤, 더 나은 선택은?', a: '그날 바로 끝까지 대화하기', b: '하루 식히고 차분하게 말하기', aLabel: '직진파', bLabel: '숙고파', aPercent: 46, participants: '932' },
+  { id: 3, category: '진로', question: '첫 직장을 고를 때 더 중요한 것은?', a: '배울 것이 많은 낮은 연봉', b: '업무는 익숙하지만 높은 연봉', aLabel: '성장파', bLabel: '보상파', aPercent: 63, participants: '2,106' },
+  { id: 4, category: '소비', question: '여행에서 하나만 포기해야 한다면?', a: '숙소의 편안함', b: '맛집과 먹거리', aLabel: '맛집파', bLabel: '숙소파', aPercent: 52, participants: '786' },
+]
+
+const initialDebates = [
+  { id: 1, gameId: 1, team: 'A', author: '과제요정', text: '팀플은 과정도 함께 책임지는 게 중요해요. 회의에서 역할을 나누고 같이 움직여야 배울 수 있다고 봐요.', likes: 24, replies: [{ id: 11, author: '밤샘러', text: '맞아요. 결과만 던져주면 중간에 방향을 맞추기가 너무 어렵더라고요.' }] },
+  { id: 2, gameId: 1, team: 'B', author: '효율중심', text: '연락 방식은 아쉬워도 맡은 결과를 확실히 내면 팀 전체 일정에는 더 도움이 됩니다.', likes: 18, replies: [{ id: 21, author: '마감수호대', text: '결과의 완성도를 보장한다면 저도 이쪽이에요.' }] },
+]
+
+function TeamAvatar({ team, name, small = false }) {
+  return <span className={`team-avatar team-${team.toLowerCase()} ${small ? 'is-small' : ''}`}>{name.slice(0, 1)}</span>
+}
+
 function BalanceGameScreen({ navigate, onVote }) {
-  const [selected, setSelected] = useState(null)
-  const [voted, setVoted] = useState(false)
+  const [activeGame, setActiveGame] = useState(null)
+  const [votes, setVotes] = useState({})
+  const [posts, setPosts] = useState(initialDebates)
+  const [draft, setDraft] = useState('')
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [replyDraft, setReplyDraft] = useState('')
+  const selected = activeGame ? votes[activeGame.id] : null
+
   const vote = (choice) => {
-    if (voted) return
-    setSelected(choice)
-    setVoted(true)
+    if (selected) return
+    setVotes({ ...votes, [activeGame.id]: choice })
     onVote()
   }
+  const addPost = () => {
+    if (!draft.trim() || !selected) return
+    setPosts([{ id: Date.now(), gameId: activeGame.id, team: selected, author: '나', text: draft.trim(), likes: 0, replies: [] }, ...posts])
+    setDraft('')
+  }
+  const addReply = (postId) => {
+    if (!replyDraft.trim() || !selected) return
+    setPosts(posts.map((post) => post.id === postId ? { ...post, replies: [...post.replies, { id: Date.now(), author: '나', text: replyDraft.trim(), team: selected }] } : post))
+    setReplyDraft('')
+    setReplyingTo(null)
+  }
+
+  if (!activeGame) return (
+    <div className="screen with-nav">
+      <TopBar title="밸런스 게임" onBack={() => navigate('home')} />
+      <main className="screen-content balance-feed">
+        <div className="balance-feed-heading"><span>생각이 갈리는 순간</span><h1>당신의 선택은<br />어느 쪽인가요?</h1><p>카드를 골라 투표하고 같은 편과 의견을 나눠보세요.</p></div>
+        <div className="balance-feed-grid">
+          {balanceGames.map((game) => <button className="balance-feed-card" type="button" key={game.id} onClick={() => setActiveGame(game)}>
+            <span className="balance-category">{game.category}</span><strong>{game.question}</strong>
+            <div><span className="blue-preview">{game.a}</span><b>VS</b><span className="red-preview">{game.b}</span></div>
+            <small>{game.participants}명 참여 · 의견 보기 →</small>
+          </button>)}
+        </div>
+      </main>
+      <BottomNav active="balance" navigate={navigate} />
+    </div>
+  )
+
+  const gamePosts = posts.filter((post) => post.gameId === activeGame.id)
   return (
     <div className="screen with-nav">
-      <TopBar title="밸런스게임" onBack={() => navigate('home')} />
-      <main className="screen-content balance-content">
-        <p className="required-label">오늘의 밸런스 · 학교생활</p>
-        <h1 className="question-title">팀플에서 더 힘든 상황은?</h1>
-        <div className="balance-options">
-          <button type="button" className={selected === 'A' ? 'is-selected' : ''} onClick={() => vote('A')}><small>A</small><b>회의에는 오지만<br />아무것도 안 하는 팀원</b>{voted ? <strong>58%</strong> : null}</button>
-          <span>VS</span>
-          <button type="button" className={selected === 'B' ? 'is-selected' : ''} onClick={() => vote('B')}><small>B</small><b>연락은 없지만<br />결과물은 잘 내는 팀원</b>{voted ? <strong>42%</strong> : null}</button>
+      <TopBar title="밸런스 게임" onBack={() => setActiveGame(null)} />
+      <main className="screen-content balance-detail">
+        <span className="balance-category">{activeGame.category} · {activeGame.participants}명 참여</span>
+        <h1>{activeGame.question}</h1>
+        <div className={`versus-poll ${selected ? 'has-result' : ''}`}>
+          <button type="button" className={selected === 'A' ? 'poll-side poll-blue is-selected' : 'poll-side poll-blue'} onClick={() => vote('A')} style={selected ? { '--fill': `${activeGame.aPercent}%` } : undefined}><small>A · {activeGame.aLabel}</small><b>{activeGame.a}</b>{selected ? <strong>{activeGame.aPercent}%</strong> : <span>선택하기</span>}</button>
+          <i>VS</i>
+          <button type="button" className={selected === 'B' ? 'poll-side poll-red is-selected' : 'poll-side poll-red'} onClick={() => vote('B')} style={selected ? { '--fill': `${100 - activeGame.aPercent}%` } : undefined}><small>B · {activeGame.bLabel}</small><b>{activeGame.b}</b>{selected ? <strong>{100 - activeGame.aPercent}%</strong> : <span>선택하기</span>}</button>
         </div>
-        {voted ? <div className="insight-card"><b>투표 완료 · +2P</b><p>1,284명의 대학생이 참여했어요. 댓글에서 선택 이유를 나눠보세요.</p></div> : <p className="privacy-note">투표하면 바로 결과를 확인하고 2P를 받아요.</p>}
+        {!selected ? <p className="vote-guide">하나를 선택하면 실시간 비율과 진영별 토론장이 열려요.</p> : <>
+          <div className={`my-team-banner team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><span><small>내 선택</small><b>{selected === 'A' ? activeGame.aLabel : activeGame.bLabel} 토론에 참여 중</b></span><strong>+2P</strong></div>
+          <section className="debate-section">
+            <div className="debate-heading"><span>TEAM A · {activeGame.aLabel}</span><b>의견 토론장</b><span>TEAM B · {activeGame.bLabel}</span></div>
+            <div className={`debate-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`${selected === 'A' ? activeGame.aLabel : activeGame.bLabel}을 선택한 이유를 남겨보세요`} /><button type="button" onClick={addPost}>등록</button></div>
+            <div className="debate-list">
+              {gamePosts.length ? gamePosts.map((post) => <article className={`debate-post team-${post.team.toLowerCase()}`} key={post.id}>
+                <div className="post-head"><TeamAvatar team={post.team} name={post.author} /><span><b>{post.author}</b><small>{post.team === 'A' ? activeGame.aLabel : activeGame.bLabel} · 방금 전</small></span></div>
+                <p>{post.text}</p><div className="post-actions"><button type="button">공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button></div>
+                {post.replies.map((reply) => <div className={`debate-reply team-${(reply.team || post.team).toLowerCase()}`} key={reply.id}><TeamAvatar team={reply.team || post.team} name={reply.author} small /><span><b>{reply.author}</b><p>{reply.text}</p></span></div>)}
+                {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글을 입력하세요" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
+              </article>) : <div className="empty-debate">첫 번째 의견을 남겨 토론을 시작해보세요.</div>}
+            </div>
+          </section>
+        </>}
       </main>
       <BottomNav active="balance" navigate={navigate} />
     </div>
@@ -631,11 +696,11 @@ function AuthScreen({ navigate }) {
   )
 }
 
-function NotificationsScreen({ navigate }) {
+function NotificationsScreen({ navigate, onBack }) {
   const { data: notices, isLoading, error, reload } = useAsyncData(mockApi.getNotifications)
   return (
     <div className="screen">
-      <TopBar title="알림" onBack={() => navigate('home')} />
+      <TopBar title="알림" onBack={onBack} />
       <main className="screen-content notification-content">
         {isLoading ? <div className="loading-state"><i /><i /><i /></div> : null}
         {error ? <div className="empty-state"><b>알림을 불러오지 못했어요</b><p>{error.message}</p><button type="button" onClick={reload}>다시 시도</button></div> : null}
@@ -680,6 +745,7 @@ function ProfileScreen({ navigate, points, hasDraft }) {
 
 function App() {
   const [screen, setScreen] = useState('home')
+  const [notificationSource, setNotificationSource] = useState('home')
   const [participationSource, setParticipationSource] = useState('surveys')
   const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
   const [adReward, setAdReward] = useState(() => {
@@ -703,6 +769,7 @@ function App() {
 
   const navigate = (next) => {
     if (next === 'participate') setParticipationSource(screen)
+    if (next === 'notifications') setNotificationSource(screen)
     setScreen(next)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -762,7 +829,7 @@ function App() {
     ranking: <RankingScreen navigate={navigate} />,
     balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
     verify: <VerifyScreen navigate={navigate} onVerify={completeVerification} />,
-    notifications: <NotificationsScreen navigate={navigate} />,
+    notifications: <NotificationsScreen navigate={navigate} onBack={() => navigate(notificationSource)} />,
     profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} />,
   }
 

@@ -2131,3 +2131,86 @@ button:focus-visible {
     grid-template-columns: 108px minmax(0, 1fr) auto;
   }
 }
+
+/* Balance game feed, poll and team debate */
+.balance-feed,
+.balance-detail { padding-bottom: 38px; }
+.balance-feed-heading { padding: 12px 2px 20px; }
+.balance-feed-heading > span { color: var(--blue); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.balance-feed-heading h1 { margin: 8px 0; font-size: 27px; line-height: 1.2; letter-spacing: -.045em; }
+.balance-feed-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.balance-feed-grid { display: grid; gap: 12px; }
+.balance-feed-card { display: grid; gap: 13px; width: 100%; padding: 17px; border: 1px solid var(--line); border-radius: 18px; background: #fff; color: var(--ink); text-align: left; box-shadow: 0 8px 24px rgba(30, 43, 65, .05); transition: transform 160ms ease, box-shadow 160ms ease; }
+.balance-feed-card:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(30, 43, 65, .09); }
+.balance-feed-card > strong { font-size: 16px; letter-spacing: -.025em; }
+.balance-feed-card > div { display: grid; grid-template-columns: 1fr 28px 1fr; align-items: stretch; }
+.balance-feed-card > div span { display: grid; min-height: 63px; place-items: center; padding: 10px; border-radius: 12px; font-size: 10px; font-weight: 800; line-height: 1.4; text-align: center; }
+.balance-feed-card > div b { align-self: center; color: #a4aab5; font-size: 9px; text-align: center; }
+.blue-preview { background: #edf5ff; color: #1263dd; }
+.red-preview { background: #fff0f2; color: #e24355; }
+.balance-feed-card > small { color: var(--muted); font-size: 9px; }
+.balance-category { display: inline-flex; width: fit-content; padding: 5px 8px; border-radius: 99px; background: #f0f3f7; color: #687386; font-size: 9px; font-weight: 800; }
+.balance-detail > h1 { margin: 14px 0 20px; font-size: 23px; line-height: 1.25; letter-spacing: -.04em; }
+.versus-poll { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.versus-poll > i { position: absolute; z-index: 3; top: 50%; left: 50%; display: grid; width: 34px; height: 34px; place-items: center; transform: translate(-50%, -50%); border: 3px solid #fff; border-radius: 50%; background: #202530; color: #fff; font-size: 9px; font-style: normal; font-weight: 900; box-shadow: 0 5px 14px rgba(0,0,0,.16); }
+.poll-side { --team: #1769ff; --soft: #edf5ff; position: relative; isolation: isolate; display: flex; min-height: 205px; flex-direction: column; align-items: flex-start; justify-content: space-between; overflow: hidden; padding: 17px 14px; border: 2px solid transparent; border-radius: 20px; background: var(--soft); color: var(--team); text-align: left; }
+.poll-side::before { position: absolute; z-index: -1; right: 0; bottom: 0; left: 0; height: var(--fill, 0%); background: var(--team); content: ''; opacity: .14; transition: height 700ms cubic-bezier(.2,.8,.2,1); }
+.poll-red { --team: #ee4056; --soft: #fff0f2; }
+.poll-side small { font-size: 9px; font-weight: 900; }
+.poll-side b { color: var(--ink); font-size: 13px; line-height: 1.5; }
+.poll-side strong { font-size: 30px; letter-spacing: -.05em; }
+.poll-side > span { padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,.75); font-size: 9px; font-weight: 900; }
+.poll-side.is-selected { border-color: var(--team); box-shadow: 0 0 0 4px color-mix(in srgb, var(--team) 12%, transparent), 0 8px 26px color-mix(in srgb, var(--team) 20%, transparent); }
+.vote-guide { margin: 14px 0 0; color: var(--muted); font-size: 10px; text-align: center; }
+.my-team-banner { --team: #1769ff; display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 12px; border: 1px solid color-mix(in srgb, var(--team) 22%, white); border-radius: 14px; background: color-mix(in srgb, var(--team) 7%, white); }
+.team-b { --team: #ee4056; }
+.my-team-banner > span { display: grid; flex: 1; gap: 2px; }
+.my-team-banner small { color: var(--muted); font-size: 8px; }
+.my-team-banner b { color: var(--team); font-size: 10px; }
+.my-team-banner > strong { color: var(--team); font-size: 11px; }
+.team-avatar { --team: #1769ff; display: grid; flex: 0 0 auto; width: 36px; height: 36px; place-items: center; border: 3px solid var(--team); border-radius: 50%; background: #fff; color: var(--team); font-size: 10px; font-weight: 900; box-shadow: 0 0 0 3px color-mix(in srgb, var(--team) 13%, transparent), 0 0 15px color-mix(in srgb, var(--team) 35%, transparent); }
+.team-avatar.team-b { --team: #ee4056; }
+.team-avatar.is-small { width: 28px; height: 28px; border-width: 2px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--team) 13%, transparent), 0 0 10px color-mix(in srgb, var(--team) 30%, transparent); }
+.debate-section { margin-top: 24px; }
+.debate-heading { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 7px; margin-bottom: 12px; }
+.debate-heading b { font-size: 13px; text-align: center; }
+.debate-heading span { color: #1769ff; font-size: 7px; font-weight: 900; }
+.debate-heading span:last-child { color: #ee4056; text-align: right; }
+.debate-composer { --team: #1769ff; display: grid; grid-template-columns: auto 1fr auto; align-items: end; gap: 8px; padding: 11px; border: 1px solid color-mix(in srgb, var(--team) 25%, white); border-radius: 15px; background: #fff; }
+.debate-composer textarea { min-height: 52px; resize: none; border: 0; outline: 0; color: var(--ink); font: inherit; font-size: 10px; line-height: 1.45; }
+.debate-composer button, .reply-composer button { padding: 7px 9px; border-radius: 8px; background: var(--team); color: #fff; font-size: 8px; font-weight: 900; }
+.debate-list { display: grid; gap: 10px; margin-top: 12px; }
+.debate-post { --team: #1769ff; padding: 14px; border: 1px solid var(--line); border-left: 3px solid var(--team); border-radius: 14px; background: #fff; }
+.post-head { display: flex; align-items: center; gap: 9px; }
+.post-head > span { display: grid; gap: 2px; }
+.post-head b { font-size: 10px; }
+.post-head small { color: var(--team); font-size: 8px; font-weight: 800; }
+.debate-post > p { margin: 12px 0; font-size: 10px; line-height: 1.65; }
+.post-actions { display: flex; gap: 12px; }
+.post-actions button { padding: 0; background: transparent; color: var(--muted); font-size: 8px; font-weight: 800; }
+.debate-reply { --team: #1769ff; display: flex; gap: 8px; margin-top: 11px; margin-left: 20px; padding: 10px; border-radius: 11px; background: color-mix(in srgb, var(--team) 6%, #f8f9fb); }
+.debate-reply > span { min-width: 0; }
+.debate-reply b { color: var(--team); font-size: 8px; }
+.debate-reply p { margin: 3px 0 0; font-size: 9px; line-height: 1.5; }
+.reply-composer { --team: #1769ff; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 7px; margin-top: 10px; margin-left: 20px; }
+.reply-composer input { min-width: 0; padding: 9px; border: 1px solid var(--line); border-radius: 9px; outline-color: var(--team); font-size: 9px; }
+.empty-debate { padding: 22px; border-radius: 13px; background: var(--surface); color: var(--muted); font-size: 9px; text-align: center; }
+
+.top-bar > .icon-button:first-child {
+  width: 38px;
+  height: 38px;
+  margin-left: -4px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.back-icon {
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
