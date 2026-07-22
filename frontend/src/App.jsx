@@ -479,26 +479,56 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
   )
 }
 function BalanceGameScreen({ navigate, onVote }) {
-  const [selected, setSelected] = useState(null)
-  const [voted, setVoted] = useState(false)
+  const games = [
+    { category: '학교생활', question: '팀플에서 더 힘든 상황은?', a: '회의에는 오지만 아무것도 안 하는 팀원', b: '연락은 없지만 결과물은 잘 내는 팀원', rates: [58, 42] },
+    { category: '취업', question: '한 곳만 선택해야 한다면?', a: '연봉은 높지만 야근이 많은 회사', b: '연봉은 낮지만 워라밸이 좋은 회사', rates: [46, 54] },
+    { category: '연애', question: '더 서운한 상황은?', a: '답장은 빠르지만 단답만 하는 연인', b: '답장은 느리지만 길게 해주는 연인', rates: [61, 39] },
+    { category: '소비', question: '한 달 동안 하나만 가능하다면?', a: '배달 음식 완전 금지', b: '카페 음료 완전 금지', rates: [37, 63] },
+  ]
+  const [gameIndex, setGameIndex] = useState(0)
+  const [votes, setVotes] = useState({})
+  const [comment, setComment] = useState('')
+  const [comments, setComments] = useState({ 0: [{ id: 1, author: '통계요정', text: '결과물이라도 잘 내는 팀원이 낫다고 생각해요.', choice: 'B' }] })
+  const game = games[gameIndex]
+  const selected = votes[gameIndex]
+  const voted = Boolean(selected)
+
   const vote = (choice) => {
     if (voted) return
-    setSelected(choice)
-    setVoted(true)
+    setVotes({ ...votes, [gameIndex]: choice })
     onVote()
   }
+  const changeGame = (direction) => {
+    setGameIndex((gameIndex + direction + games.length) % games.length)
+    setComment('')
+  }
+  const submitComment = () => {
+    if (!comment.trim() || !selected) return
+    const next = { id: Date.now(), author: '설문요정', text: comment.trim(), choice: selected }
+    setComments({ ...comments, [gameIndex]: [...(comments[gameIndex] || []), next] })
+    setComment('')
+  }
+
   return (
     <div className="screen with-nav">
       <TopBar title="밸런스게임" onBack={() => navigate('home')} />
       <main className="screen-content balance-content">
-        <p className="required-label">오늘의 밸런스 · 학교생활</p>
-        <h1 className="question-title">팀플에서 더 힘든 상황은?</h1>
+        <div className="balance-browser"><button type="button" aria-label="이전 게임" onClick={() => changeGame(-1)}>‹</button><span>{gameIndex + 1} / {games.length}</span><button type="button" aria-label="다음 게임" onClick={() => changeGame(1)}>›</button></div>
+        <p className="required-label">오늘의 밸런스 · {game.category}</p>
+        <h1 className="question-title">{game.question}</h1>
         <div className="balance-options">
-          <button type="button" className={selected === 'A' ? 'is-selected' : ''} onClick={() => vote('A')}><small>A</small><b>회의에는 오지만<br />아무것도 안 하는 팀원</b>{voted ? <strong>58%</strong> : null}</button>
+          <button type="button" className={selected === 'A' ? 'is-selected' : ''} onClick={() => vote('A')}><small>A</small><b>{game.a}</b>{voted ? <strong>{game.rates[0]}%</strong> : null}</button>
           <span>VS</span>
-          <button type="button" className={selected === 'B' ? 'is-selected' : ''} onClick={() => vote('B')}><small>B</small><b>연락은 없지만<br />결과물은 잘 내는 팀원</b>{voted ? <strong>42%</strong> : null}</button>
+          <button type="button" className={selected === 'B' ? 'is-selected' : ''} onClick={() => vote('B')}><small>B</small><b>{game.b}</b>{voted ? <strong>{game.rates[1]}%</strong> : null}</button>
         </div>
-        {voted ? <div className="insight-card"><b>투표 완료 · +2P</b><p>1,284명의 대학생이 참여했어요. 댓글에서 선택 이유를 나눠보세요.</p></div> : <p className="privacy-note">투표하면 바로 결과를 확인하고 2P를 받아요.</p>}
+        {voted ? <>
+          <div className="insight-card"><b>투표 완료 · +2P</b><p>대학생들의 선택 결과예요. 선택 이유를 댓글로 나눠보세요.</p></div>
+          <section className="balance-discussion">
+            <div className="discussion-title"><b>댓글 토론</b><span>{(comments[gameIndex] || []).length}개</span></div>
+            <div className="comment-form"><input value={comment} onChange={(event) => setComment(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') submitComment() }} placeholder={`${selected}를 선택한 이유를 남겨보세요`} /><button type="button" onClick={submitComment}>등록</button></div>
+            <div className="comment-list">{(comments[gameIndex] || []).map((item) => <article key={item.id}><span>{item.choice}</span><div><b>{item.author}</b><p>{item.text}</p></div></article>)}</div>
+          </section>
+        </> : <p className="privacy-note">투표하면 바로 결과를 확인하고 2P를 받아요.</p>}
       </main>
       <BottomNav active="balance" navigate={navigate} />
     </div>

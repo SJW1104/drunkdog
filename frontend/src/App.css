@@ -2131,3 +2131,22 @@ button:focus-visible {
     grid-template-columns: 108px minmax(0, 1fr) auto;
   }
 }
+/* Balance game browser and discussion */
+.balance-browser { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.balance-browser button { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: var(--surface); color: #536074; font-size: 20px; }
+.balance-browser span { color: var(--muted); font-size: 9px; font-weight: 700; }
+.balance-options button b { min-height: 52px; display: grid; place-items: center; }
+.balance-discussion { margin-top: 18px; }
+.discussion-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+.discussion-title b { font-size: 12px; }
+.discussion-title span { color: var(--muted); font-size: 9px; }
+.comment-form { display: flex; gap: 7px; }
+.comment-form input { min-width: 0; height: 40px; flex: 1; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; outline: none; font-size: 10px; }
+.comment-form input:focus { border-color: var(--blue); }
+.comment-form button { padding: 0 13px; border-radius: 9px; background: var(--blue); color: #fff; font-size: 9px; font-weight: 800; }
+.comment-list { display: grid; margin-top: 10px; }
+.comment-list article { display: flex; gap: 9px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.comment-list article > span { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 9px; font-weight: 900; }
+.comment-list article div { display: grid; gap: 3px; }
+.comment-list article b { font-size: 9px; }
+.comment-list article p { margin: 0; color: #586274; font-size: 9px; line-height: 1.45; }
