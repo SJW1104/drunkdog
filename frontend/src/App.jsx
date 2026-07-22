@@ -29,6 +29,24 @@ function BellIcon() {
     </svg>
   )
 }
+function UiIcon({ name }) {
+  const paths = {
+    all: <><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></>,
+    career: <><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M9 7V5h6v2M3 12h18M10 12v2h4v-2" /></>,
+    consume: <><path d="M6 8h12l1 12H5L6 8Z" /><path d="M9 9V6a3 3 0 0 1 6 0v3" /></>,
+    campus: <><path d="m3 10 9-5 9 5" /><path d="M5 10v9h14v-9M9 11v8M15 11v8M3 19h18" /></>,
+    mbti: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /><circle cx="12" cy="12" r="4" /></>,
+    love: <path d="M20.8 5.8a5.5 5.5 0 0 0-7.8 0L12 6.8l-1-1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z" />,
+    school: <><path d="m3 10 9-5 9 5-9 5-9-5Z" /><path d="M7 13v4c3 2 7 2 10 0v-4M21 10v6" /></>,
+    phone: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" /></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
+    lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
+    survey: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+    draft: <><path d="M4 4h11l5 5v11H4V4Z" /><path d="M14 4v6h6M8 14h8M8 17h5" /></>,
+    coin: <><circle cx="12" cy="12" r="9" /><path d="M9 9.5c0-1.5 1.3-2.5 3-2.5s3 1 3 2.5-1.2 2.1-3 2.5-3 1-3 2.5 1.3 2.5 3 2.5 3-1 3-2.5M12 5v14" /></>,
+  }
+  return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name] || paths.all}</svg>
+}
 function TopBar({ title, onBack, right, brand = false }) {
   return (
     <header className={'top-bar ' + (brand ? 'top-bar--brand' : '')}>
@@ -159,6 +177,7 @@ function HomeScreen({ navigate }) {
 function SurveyListScreen({ navigate, customSurveys = [] }) {
   const [category, setCategory] = useState('전체')
   const [query, setQuery] = useState('')
+  const [showCategories, setShowCategories] = useState(true)
   const { data: fetchedSurveys, isLoading, error, reload } = useAsyncData(mockApi.getSurveys)
   const allSurveys = [...customSurveys, ...(fetchedSurveys || [])]
   const filteredSurveys = allSurveys.filter((survey) => {
@@ -166,16 +185,48 @@ function SurveyListScreen({ navigate, customSurveys = [] }) {
     const matchesCategory = category === '전체' || survey.eyebrow.includes(category)
     return matchesQuery && matchesCategory
   })
+  const categories = [
+    ['전체', 'all', '모든 설문을 한눈에'],
+    ['취업', 'career', '진로·인턴·취업 준비'],
+    ['소비', 'consume', '쇼핑·식생활·서비스'],
+    ['학교생활', 'campus', '수업·통학·캠퍼스'],
+    ['MBTI', 'mbti', '성향·관계·심리'],
+    ['연애', 'love', '연애·친구·관계'],
+  ]
+
+  if (showCategories) {
+    return (
+      <div className="screen with-nav">
+        <TopBar title="설문" onBack={() => navigate('home')} right={<IconButton label="알림" onClick={() => navigate('notifications')}><BellIcon /></IconButton>} />
+        <main className="screen-content category-home">
+          <span className="category-kicker">관심 분야를 골라보세요</span>
+          <h1>어떤 설문을<br />찾고 있나요?</h1>
+          <p>카테고리를 선택하면 관련 설문만 모아볼 수 있어요.</p>
+          <div className="category-grid">
+            {categories.map(([label, icon, description]) => (
+              <button key={label} type="button" className={label === '전체' ? 'category-card category-card--all' : 'category-card'} onClick={() => { setCategory(label); setShowCategories(false) }}>
+                <span className="category-icon"><UiIcon name={icon} /></span>
+                <b>{label}</b>
+                <small>{description}</small>
+              </button>
+            ))}
+          </div>
+        </main>
+        <BottomNav active="surveys" navigate={navigate} />
+      </div>
+    )
+  }
+
   return (
     <div className="screen with-nav">
-      <TopBar title="설문 둘러보기" onBack={() => navigate('home')} right={<IconButton label="알림" onClick={() => navigate('notifications')}><BellIcon /></IconButton>} />
+      <TopBar title="설문 둘러보기" onBack={() => setShowCategories(true)} right={<IconButton label="알림" onClick={() => navigate('notifications')}><BellIcon /></IconButton>} />
       <main className="screen-content list-content">
         <label className="search-box">
           <span>⌕</span>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="키워드로 설문 검색" />
         </label>
         <div className="chips">
-          {['전체', 'MBTI', '연애', '소비', '취업'].map((item) => (
+          {['전체', '취업', '소비', '학교생활', 'MBTI', '연애'].map((item) => (
             <button key={item} type="button" className={category === item ? 'chip is-active' : 'chip'} onClick={() => setCategory(item)}>{item}</button>
           ))}
         </div>
@@ -615,15 +666,15 @@ function ProfileScreen({ navigate, points, hasDraft }) {
         </div>
         <div className="profile-stats"><div><b>{points.toLocaleString()}P</b><small>보유 포인트</small></div><div><b>LEVEL 7</b><small>현재 레벨</small></div><div><b>18위</b><small>전체 랭킹</small></div></div>
         <section className="settings-group">
-          <button type="button" onClick={() => navigate('verify')}><span>� 학교 인증 정보</span><b>완료 ›</b></button>
-          <button type="button"><span>☎ 전화번호 변경</span><b>›</b></button>
-          <button type="button"><span>� 알림 설정</span><b>ON ›</b></button>
-          <button type="button"><span>� 비밀번호 변경</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>완료 ›</b></button>
+          <button type="button"><span><UiIcon name="phone" /> 전화번호 변경</span><b>›</b></button>
+          <button type="button"><span><UiIcon name="bell" /> 알림 설정</span><b>ON ›</b></button>
+          <button type="button"><span><UiIcon name="lock" /> 비밀번호 변경</span><b>›</b></button>
         </section>
         <section className="settings-group">
-          <button type="button" onClick={() => navigate('result')}><span>▤ 내가 만든 설문</span><b>3개 ›</b></button>
-          <button type="button" onClick={() => navigate('create')}><span>▧ 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
-          <button type="button" onClick={() => navigate('points')}><span>● 포인트 이용 내역</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('result')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 ›</b></button>
+          <button type="button" onClick={() => navigate('create')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
+          <button type="button" onClick={() => navigate('points')}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b>›</b></button>
         </section>
         <button className="logout-button" type="button" onClick={() => navigate('auth')}>로그아웃</button>
       </main>
