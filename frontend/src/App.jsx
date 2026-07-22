@@ -225,11 +225,7 @@ function SurveyListScreen({ navigate, customSurveys = [] }) {
           <span>⌕</span>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="키워드로 설문 검색" />
         </label>
-        <div className="chips">
-          {['전체', '취업', '소비', '학교생활', 'MBTI', '연애'].map((item) => (
-            <button key={item} type="button" className={category === item ? 'chip is-active' : 'chip'} onClick={() => setCategory(item)}>{item}</button>
-          ))}
-        </div>
+
         <SectionHeader title="내게 맞는 설문" count="" action="추천순⌄" />
         {isLoading ? <div className="loading-state" aria-label="설문 불러오는 중"><i /><i /><i /></div> : null}
         {error ? <div className="empty-state"><b>설문을 불러오지 못했어요</b><p>{error.message}</p><button type="button" onClick={reload}>다시 시도</button></div> : null}
@@ -534,14 +530,14 @@ function ResultScreen({ navigate, spendPoints }) {
   )
 }
 
-function PointsScreen({ navigate, points, transactions, earnPoints, spendPoints }) {
+function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, onWatchAd }) {
   return (
     <div className="screen with-nav">
       <TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="도움말">?</IconButton>} />
       <main className="screen-content points-content">
         <div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div>
-        <SectionHeader title="포인트 더 모으기" count="" action="일일 한도 1,000P" />
-        <div className="watch-card"><b>▶ 광고 보고 10P 받기</b><small>하루 최대 5회 참여할 수 있어요.</small><button type="button" onClick={() => earnPoints(10, '광고 시청 보상')}>30초 광고 시청</button></div>
+        <SectionHeader title="포인트 더 모으기" count="" action={`${adEarned.toLocaleString()}/1,000P`} />
+        <div className="watch-card"><b>광고 보고 10P 받기</b><small>오늘 광고로 {adEarned.toLocaleString()}P를 모았어요. 하루 최대 1,000P까지 받을 수 있어요.</small><div className="daily-ad-progress"><span style={{ width: `${Math.min(100, adEarned / 10)}%` }} /></div><button type="button" disabled={adEarned >= 1000} onClick={onWatchAd}>{adEarned >= 1000 ? '오늘 한도 달성' : '30초 광고 시청'}</button></div>
         <SectionHeader title="기프티콘 교환" count="" action="전체보기" />
         <button className="gift-card" type="button" onClick={() => spendPoints(3000, '아메리카노 교환')}><div className="gift-image coffee">☕</div><span><b>아메리카노</b><small>모바일 교환권</small></span><strong>3,000P</strong></button>
         <div className="gift-card"><div className="gift-image cone">🍦</div><span><b>편의점 상품권</b><small>3,000원권</small></span><strong>3,500P</strong></div>
@@ -686,6 +682,15 @@ function App() {
   const [screen, setScreen] = useState('home')
   const [participationSource, setParticipationSource] = useState('surveys')
   const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
+  const [adReward, setAdReward] = useState(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    try {
+      const saved = JSON.parse(localStorage.getItem('suniversity-daily-ad-reward'))
+      return saved?.date === today ? saved : { date: today, amount: 0 }
+    } catch {
+      return { date: today, amount: 0 }
+    }
+  })
   const [publishedSurveys, setPublishedSurveys] = useState([])
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('suniversity-transactions')
@@ -731,6 +736,13 @@ function App() {
     setPublishedSurveys([survey, ...publishedSurveys])
   }
 
+  const watchAd = () => {
+    if (adReward.amount >= 1000) return
+    const nextReward = { date: new Date().toISOString().slice(0, 10), amount: Math.min(1000, adReward.amount + 10) }
+    setAdReward(nextReward)
+    localStorage.setItem('suniversity-daily-ad-reward', JSON.stringify(nextReward))
+    earnPoints(10, '광고 시청 보상')
+  }
   const voteBalance = () => earnPoints(2, '밸런스게임 참여')
 
   const completeVerification = () => {
@@ -746,7 +758,7 @@ function App() {
     create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} />,
     resultAccess: <ResultAccessScreen navigate={navigate} points={points} unlockResult={(price) => { if (spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
     result: <ResultScreen navigate={navigate} spendPoints={spendPoints} />,
-    points: <PointsScreen navigate={navigate} points={points} transactions={transactions} earnPoints={earnPoints} spendPoints={spendPoints} />,
+    points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} />,
     ranking: <RankingScreen navigate={navigate} />,
     balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
     verify: <VerifyScreen navigate={navigate} onVerify={completeVerification} />,

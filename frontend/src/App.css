@@ -2082,3 +2082,13 @@ button:focus-visible {
     border-radius: 0;
   }
 }
+/* Compact category and ad progress */
+.category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.category-card, .category-card--all { min-height: 112px; grid-column: auto; align-content: center; padding: 12px 10px; border-radius: 13px; }
+.category-icon { width: 36px; height: 36px; border-radius: 11px; }
+.category-icon .ui-icon { width: 18px; height: 18px; }
+.category-card b { font-size: 11px; }
+.category-card small { font-size: 8px; line-height: 1.35; }
+.daily-ad-progress { height: 6px; overflow: hidden; border-radius: 99px; background: #dfe5ee; }
+.daily-ad-progress span { display: block; height: 100%; border-radius: inherit; background: var(--blue); transition: width 180ms ease; }
+.watch-card button:disabled { background: #cbd2de; cursor: default; }
