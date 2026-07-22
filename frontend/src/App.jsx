@@ -89,8 +89,8 @@ function HomeScreen({ navigate }) {
         right={
           <div className="top-actions">
             <IconButton label="검색">⌕</IconButton>
-            <IconButton label="알림" badge="3">♢</IconButton>
-            <button className="avatar-button" type="button" onClick={() => navigate('verify')}>MY</button>
+            <IconButton label="알림" badge="3" onClick={() => navigate('notifications')}>♢</IconButton>
+            <button className="avatar-button" type="button" onClick={() => navigate('profile')}>MY</button>
           </div>
         }
       />
@@ -156,13 +156,19 @@ function HomeScreen({ navigate }) {
 
 function SurveyListScreen({ navigate }) {
   const [category, setCategory] = useState('전체')
+  const [query, setQuery] = useState('')
+  const filteredSurveys = surveys.filter((survey) => {
+    const matchesQuery = survey.title.toLowerCase().includes(query.toLowerCase())
+    const matchesCategory = category === '전체' || survey.eyebrow.includes(category)
+    return matchesQuery && matchesCategory
+  })
   return (
     <div className="screen">
       <TopBar title="설문 둘러보기" onBack={() => navigate('home')} right={<IconButton label="알림">♢</IconButton>} />
       <main className="screen-content list-content">
         <label className="search-box">
           <span>⌕</span>
-          <input placeholder="키워드로 설문 검색" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="키워드로 설문 검색" />
         </label>
         <div className="chips">
           {['전체', 'MBTI', '연애', '소비', '취업'].map((item) => (
@@ -171,7 +177,7 @@ function SurveyListScreen({ navigate }) {
         </div>
         <SectionHeader title="내게 맞는 설문" count="" action="추천순⌄" />
         <div className="survey-card-list">
-          {surveys.map((survey, index) => (
+          {filteredSurveys.map((survey, index) => (
             <button className="survey-card" key={survey.title} type="button" onClick={() => navigate('participate')}>
               <span className={'survey-eyebrow ' + survey.tone}>{survey.eyebrow}</span>
               <div className="survey-title-row"><strong>{survey.title}</strong><PointPill value={survey.point} /></div>
@@ -185,7 +191,7 @@ function SurveyListScreen({ navigate }) {
   )
 }
 
-function ParticipateScreen({ navigate }) {
+function ParticipateScreen({ navigate, onComplete }) {
   const [selected, setSelected] = useState(2)
   const options = ['거의 사용하지 않아요', '월 1~2회 사용해요', '주 1~2회 사용해요', '거의 매일 사용해요']
   return (
@@ -209,7 +215,7 @@ function ParticipateScreen({ navigate }) {
           ))}
         </div>
         <div className="reward-banner"><strong>30P</strong><span>끝까지 응답하면<br /><b>포인트가 바로 지급돼요</b></span></div>
-        <button className="primary-button" type="button" onClick={() => navigate('result')}>다음 질문</button>
+        <button className="primary-button" type="button" onClick={() => onComplete(30)}>응답 완료하고 30P 받기</button>
         <p className="privacy-note">응답은 익명으로 안전하게 저장됩니다.</p>
       </main>
     </div>
@@ -232,7 +238,7 @@ function CreateScreen({ navigate }) {
         <div className="ai-helper">
           <b>✦ AI 문항 도우미</b>
           <small>주제와 대상을 분석해 중복 없는 질문, 예상 소요시간, 응답률을 제안해요.</small>
-          <button type="button">AI로 문항 추천 · 20P</button>
+          <button type="button" onClick={() => setQuestions([...questions, ['Q' + (questions.length + 1) + '. AI 추천 문항', '단일 선택 · 필수']])}>AI로 문항 추천 · 20P</button>
         </div>
         <div className="question-list">
           {questions.map(([title, meta]) => (
@@ -274,18 +280,18 @@ function ResultScreen({ navigate }) {
   )
 }
 
-function PointsScreen({ navigate }) {
+function PointsScreen({ navigate, points, transactions, earnPoints, spendPoints }) {
   return (
     <div className="screen with-nav">
       <TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="도움말">?</IconButton>} />
       <main className="screen-content points-content">
-        <div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> 2,540 P</strong><b>↑ 이번 달 +780P 적립</b></div>
+        <div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div>
         <SectionHeader title="포인트 더 모으기" count="" action="일일 한도 1,000P" />
-        <div className="watch-card"><b>▶ 광고 보고 10P 받기</b><small>오늘 3 / 5회 남았어요.</small><button type="button">30초 광고 시청</button></div>
+        <div className="watch-card"><b>▶ 광고 보고 10P 받기</b><small>하루 최대 5회 참여할 수 있어요.</small><button type="button" onClick={() => earnPoints(10, '광고 시청 보상')}>30초 광고 시청</button></div>
         <SectionHeader title="기프티콘 교환" count="" action="전체보기" />
-        <div className="gift-card"><div className="gift-image coffee">☕</div><span><b>아메리카노</b><small>모바일 교환권</small></span><strong>3,000P</strong></div>
+        <button className="gift-card" type="button" onClick={() => spendPoints(3000, '아메리카노 교환')}><div className="gift-image coffee">☕</div><span><b>아메리카노</b><small>모바일 교환권</small></span><strong>3,000P</strong></button>
         <div className="gift-card"><div className="gift-image cone">🍦</div><span><b>편의점 상품권</b><small>3,000원권</small></span><strong>3,500P</strong></div>
-        <p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p>
+        <p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div>
       </main>
       <BottomNav active="points" navigate={navigate} />
     </div>
@@ -320,7 +326,7 @@ function RankingScreen({ navigate }) {
   )
 }
 
-function VerifyScreen({ navigate }) {
+function VerifyScreen({ navigate, onVerify }) {
   const [phoneVerified, setPhoneVerified] = useState(true)
   return (
     <div className="screen">
@@ -339,7 +345,85 @@ function VerifyScreen({ navigate }) {
         <div className="review-note">✓ 인증 심사 진행 중 · 최대 24시간</div>
         <label className="field-label">관심 분야 선택</label>
         <div className="chips interest-chips"><button className="chip is-active" type="button">취업</button><button className="chip" type="button">학교생활</button><button className="chip is-active" type="button">소비</button><button className="chip" type="button">MBTI</button><button className="chip" type="button">연애</button></div>
-        <button className="primary-button" type="button" onClick={() => navigate('home')}>인증 완료하고 2,500P 받기</button>
+        <button className="primary-button" type="button" onClick={onVerify}>인증 완료하고 2,500P 받기</button>
+      </main>
+    </div>
+  )
+}
+
+function AuthScreen({ navigate }) {
+  const [mode, setMode] = useState('login')
+  const [form, setForm] = useState({ id: '', nickname: '', password: '', passwordConfirm: '' })
+  const update = (key) => (event) => setForm({ ...form, [key]: event.target.value })
+  const canSubmit = form.id && form.password && (mode === 'login' || (form.nickname && form.password === form.passwordConfirm))
+
+  return (
+    <div className="screen auth-screen">
+      <main className="screen-content auth-content">
+        <div className="auth-brand">suniversity</div>
+        <p className="auth-slogan">설문은 쉽게, 응답은 빠르게.<br />대학생이 함께 만드는 설문 커뮤니티</p>
+        <div className="auth-tabs">
+          <button type="button" className={mode === 'login' ? 'is-active' : ''} onClick={() => setMode('login')}>로그인</button>
+          <button type="button" className={mode === 'signup' ? 'is-active' : ''} onClick={() => setMode('signup')}>회원가입</button>
+        </div>
+        <div className="auth-form">
+          {mode === 'signup' ? <label>닉네임<input value={form.nickname} onChange={update('nickname')} placeholder="사용할 닉네임" /></label> : null}
+          <label>아이디<input value={form.id} onChange={update('id')} placeholder="아이디를 입력해 주세요" /></label>
+          <label>비밀번호<input type="password" value={form.password} onChange={update('password')} placeholder="8자 이상 입력" /></label>
+          {mode === 'signup' ? <label>비밀번호 확인<input type="password" value={form.passwordConfirm} onChange={update('passwordConfirm')} placeholder="비밀번호를 다시 입력" /></label> : null}
+        </div>
+        <button className="primary-button" disabled={!canSubmit} type="button" onClick={() => navigate(mode === 'signup' ? 'verify' : 'home')}>
+          {mode === 'signup' ? '가입하고 대학생 인증하기' : '로그인'}
+        </button>
+        <button className="guest-button" type="button" onClick={() => navigate('home')}>프로토타입 둘러보기</button>
+      </main>
+    </div>
+  )
+}
+
+function NotificationsScreen({ navigate }) {
+  const notices = [
+    ['관심 설문이 새로 올라왔어요', '취업 분야 · 대학생 AI 활용 조사', '방금 전'],
+    ['마감 임박 보너스', '2시간 남은 설문 참여 시 포인트 1.5배', '20분 전'],
+    ['응답이 도착했어요', '내 설문에 새로운 응답 12개가 모였어요', '1시간 전'],
+  ]
+  return (
+    <div className="screen">
+      <TopBar title="알림" onBack={() => navigate('home')} />
+      <main className="screen-content notification-content">
+        {notices.map(([title, body, time], index) => (
+          <button className="notice-card" type="button" key={title} onClick={() => navigate(index === 2 ? 'result' : 'surveys')}>
+            <span className="notice-dot" />
+            <span><b>{title}</b><small>{body}</small></span>
+            <time>{time}</time>
+          </button>
+        ))}
+      </main>
+    </div>
+  )
+}
+
+function ProfileScreen({ navigate, points }) {
+  return (
+    <div className="screen">
+      <TopBar title="마이페이지" onBack={() => navigate('home')} />
+      <main className="screen-content profile-content">
+        <div className="profile-hero">
+          <div className="profile-avatar">SU</div>
+          <span><b>설문요정</b><small>고려대학교 세종캠퍼스 · 인증 완료</small></span>
+        </div>
+        <div className="profile-stats"><div><b>{points.toLocaleString()}P</b><small>보유 포인트</small></div><div><b>LEVEL 7</b><small>현재 레벨</small></div><div><b>18위</b><small>전체 랭킹</small></div></div>
+        <section className="settings-group">
+          <button type="button" onClick={() => navigate('verify')}><span>� 학교 인증 정보</span><b>완료 ›</b></button>
+          <button type="button"><span>☎ 전화번호 변경</span><b>›</b></button>
+          <button type="button"><span>� 알림 설정</span><b>ON ›</b></button>
+          <button type="button"><span>� 비밀번호 변경</span><b>›</b></button>
+        </section>
+        <section className="settings-group">
+          <button type="button" onClick={() => navigate('result')}><span>▤ 내가 만든 설문</span><b>3개 ›</b></button>
+          <button type="button" onClick={() => navigate('points')}><span>● 포인트 이용 내역</span><b>›</b></button>
+        </section>
+        <button className="logout-button" type="button" onClick={() => navigate('auth')}>로그아웃</button>
       </main>
     </div>
   )
@@ -347,20 +431,62 @@ function VerifyScreen({ navigate }) {
 
 function App() {
   const [screen, setScreen] = useState('home')
+  const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
+  const [transactions, setTransactions] = useState(() => {
+    const saved = localStorage.getItem('suniversity-transactions')
+    return saved ? JSON.parse(saved) : [
+      { id: 1, label: '학교 인증 가입 보상', amount: 2500 },
+      { id: 2, label: '설문 참여 보상', amount: 30 },
+      { id: 3, label: 'AI 심층 분석', amount: -200 },
+    ]
+  })
+
   const navigate = (next) => {
     setScreen(next)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const updateWallet = (nextPoints, nextTransactions) => {
+    setPoints(nextPoints)
+    setTransactions(nextTransactions)
+    localStorage.setItem('suniversity-points', String(nextPoints))
+    localStorage.setItem('suniversity-transactions', JSON.stringify(nextTransactions))
+  }
+
+  const earnPoints = (amount, label) => {
+    updateWallet(points + amount, [{ id: Date.now(), label, amount }, ...transactions].slice(0, 8))
+  }
+
+  const spendPoints = (amount, label) => {
+    if (points < amount) {
+      window.alert('포인트가 부족해요. 설문이나 광고에 참여해 주세요.')
+      return
+    }
+    updateWallet(points - amount, [{ id: Date.now(), label, amount: -amount }, ...transactions].slice(0, 8))
+  }
+
+  const completeSurvey = (amount) => {
+    earnPoints(amount, '설문 참여 보상')
+    navigate('result')
+  }
+
+  const completeVerification = () => {
+    earnPoints(2500, '학교 인증 가입 보상')
+    navigate('home')
+  }
+
   const screens = {
+    auth: <AuthScreen navigate={navigate} />,
     home: <HomeScreen navigate={navigate} />,
     surveys: <SurveyListScreen navigate={navigate} />,
-    participate: <ParticipateScreen navigate={navigate} />,
+    participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} />,
     create: <CreateScreen navigate={navigate} />,
     result: <ResultScreen navigate={navigate} />,
-    points: <PointsScreen navigate={navigate} />,
+    points: <PointsScreen navigate={navigate} points={points} transactions={transactions} earnPoints={earnPoints} spendPoints={spendPoints} />,
     ranking: <RankingScreen navigate={navigate} />,
-    verify: <VerifyScreen navigate={navigate} />,
+    verify: <VerifyScreen navigate={navigate} onVerify={completeVerification} />,
+    notifications: <NotificationsScreen navigate={navigate} />,
+    profile: <ProfileScreen navigate={navigate} points={points} />,
   }
 
   return (
