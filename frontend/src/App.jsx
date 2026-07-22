@@ -220,7 +220,7 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
   if (showCategories) {
     return (
       <div className="screen with-nav">
-        <TopBar title="설문" onBack={() => navigate('home')} right={<IconButton label="알림" onClick={() => navigate('notifications')}><BellIcon /></IconButton>} />
+        <TopBar title="설문" onBack={() => navigate('home')} />
         <main className="screen-content category-home">
           <span className="category-kicker">관심 분야를 골라보세요</span>
           <h1>어떤 설문을<br />찾고 있나요?</h1>
@@ -242,7 +242,7 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
 
   return (
     <div className="screen with-nav">
-      <TopBar title="설문 둘러보기" onBack={() => setShowCategories(true)} right={<IconButton label="알림" onClick={() => navigate('notifications')}><BellIcon /></IconButton>} />
+      <TopBar title="설문 둘러보기" onBack={() => setShowCategories(true)} />
       <main className="screen-content list-content">
         <label className="search-box">
           <span>⌕</span>
