@@ -552,15 +552,23 @@ function BalanceGameScreen({ navigate, onVote }) {
         {!selected ? <p className="vote-guide">하나를 선택하면 실시간 비율과 진영별 토론장이 열려요.</p> : <>
           <div className={`my-team-banner team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><span><small>내 선택</small><b>{selected === 'A' ? activeGame.aLabel : activeGame.bLabel} 토론에 참여 중</b></span><strong>+2P</strong></div>
           <section className="debate-section">
-            <div className="debate-heading"><span>TEAM A · {activeGame.aLabel}</span><b>의견 토론장</b><span>TEAM B · {activeGame.bLabel}</span></div>
+            <div className="debate-title"><span>찬성과 반대, 서로의 생각을 확인해보세요</span><b>의견 토론장</b></div>
             <div className={`debate-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`${selected === 'A' ? activeGame.aLabel : activeGame.bLabel}을 선택한 이유를 남겨보세요`} /><button type="button" onClick={addPost}>등록</button></div>
-            <div className="debate-list">
-              {gamePosts.length ? gamePosts.map((post) => <article className={`debate-post team-${post.team.toLowerCase()}`} key={post.id}>
-                <div className="post-head"><TeamAvatar team={post.team} name={post.author} /><span><b>{post.author}</b><small>{post.team === 'A' ? activeGame.aLabel : activeGame.bLabel} · 방금 전</small></span></div>
-                <p>{post.text}</p><div className="post-actions"><button type="button">공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button></div>
-                {post.replies.map((reply) => <div className={`debate-reply team-${(reply.team || post.team).toLowerCase()}`} key={reply.id}><TeamAvatar team={reply.team || post.team} name={reply.author} small /><span><b>{reply.author}</b><p>{reply.text}</p></span></div>)}
-                {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글을 입력하세요" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
-              </article>) : <div className="empty-debate">첫 번째 의견을 남겨 토론을 시작해보세요.</div>}
+            <div className="debate-columns">
+              {['A', 'B'].map((team) => {
+                const teamPosts = gamePosts.filter((post) => post.team === team)
+                return <div className={`debate-lane team-${team.toLowerCase()}`} key={team}>
+                  <div className="debate-lane-head"><small>{team === 'A' ? '찬성' : '반대'}</small><b>{team === 'A' ? activeGame.aLabel : activeGame.bLabel}</b><span>{teamPosts.length}개 의견</span></div>
+                  <div className="debate-list">
+                    {teamPosts.length ? teamPosts.map((post) => <article className={`debate-post team-${post.team.toLowerCase()}`} key={post.id}>
+                      <div className="post-head"><TeamAvatar team={post.team} name={post.author} /><span><b>{post.author}</b><small>{post.team === 'A' ? activeGame.aLabel : activeGame.bLabel}</small></span></div>
+                      <p>{post.text}</p><div className="post-actions"><button type="button">공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button></div>
+                      {post.replies.map((reply) => <div className={`debate-reply team-${(reply.team || post.team).toLowerCase()}`} key={reply.id}><TeamAvatar team={reply.team || post.team} name={reply.author} small /><span><b>{reply.author}</b><p>{reply.text}</p></span></div>)}
+                      {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글 입력" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
+                    </article>) : <div className="empty-debate">아직 의견이 없어요.</div>}
+                  </div>
+                </div>
+              })}
             </div>
           </section>
         </>}
