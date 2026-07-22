@@ -2459,3 +2459,9 @@ button:focus-visible {
 .survey-card.is-completed .progress-line { background: #d8dce2; }
 .survey-card.is-completed .progress-line span { background: #969da8; }
 .completed-label { position: absolute; top: 12px; right: 12px; padding: 5px 8px; border-radius: 99px; background: #dfe2e7; color: #777f8b; font-size: 8px; font-weight: 900; }
+/* Completed balance game state */
+.balance-feed-card.is-completed { border-color: #d9dde4; background: #eef0f3; filter: grayscale(1); opacity: .72; box-shadow: none; }
+.balance-feed-card.is-completed * { color: #858d99 !important; }
+.balance-feed-card.is-completed .blue-preview,
+.balance-feed-card.is-completed .red-preview,
+.balance-feed-card.is-completed .balance-category { background: #dfe2e7; }
