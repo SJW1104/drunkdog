@@ -1,0 +1,12 @@
+.app-shell {
+  min-height: 100vh;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.app-shell__content {
+  width: min(100%, var(--app-max-width));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+}
