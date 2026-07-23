@@ -2252,6 +2252,13 @@ button:focus-visible {
 .category-card b { font-size: 13px; }
 .category-card small { color: var(--muted); font-size: 9px; }
 .category-card--all small { color: rgba(255, 255, 255, 0.8); }
+
+.category-emoji { display: grid; width: 35px; height: 35px; flex: 0 0 35px; place-items: center; border-radius: 11px; background: var(--blue-soft); font-size: 17px; }
+
+.subcategory-filter { display: flex; gap: 7px; margin: 13px 0 19px; padding: 2px 1px 5px; overflow-x: auto; scrollbar-width: none; }
+.subcategory-filter::-webkit-scrollbar { display: none; }
+.subcategory-filter button { flex: 0 0 auto; padding: 7px 10px; border: 1px solid #e0e6ef; border-radius: 999px; background: #fff; color: #687386; font-size: 9px; font-weight: 750; white-space: nowrap; }
+.subcategory-filter button.is-active { border-color: var(--blue); background: var(--blue); color: #fff; box-shadow: 0 4px 10px rgba(23, 105, 255, .16); }
 .settings-group button > span { display: inline-flex; align-items: center; gap: 8px; }
 .settings-group .ui-icon { width: 17px; height: 17px; color: #667286; }
 /* Slim device proportions */

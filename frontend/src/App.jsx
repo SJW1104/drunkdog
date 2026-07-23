@@ -162,6 +162,17 @@ const homeSurveySections = {
   ],
 }
 
+const surveyCategories = [
+  { label: '연구 · 프로젝트', filter: '연구·프로젝트', icon: '📚', description: '대학생들이 가장 많이 찾는 카테고리', items: ['🎓 논문·연구', '📑 팀플·과제', '💡 창업·시장조사', '🏆 공모전·캡스톤', '🏫 학생회·동아리'] },
+  { label: '재미', icon: '😂', description: '가볍게 참여하고 이야기해요', items: ['❤️ 연애', '🧠 MBTI·심리', '⚖️ 밸런스게임', '🤣 유머·밈', '👀 익명 고민'] },
+  { label: '대학생활', icon: '🎓', items: ['🚍 통학', '📚 공부', '🍚 학식', '🎉 축제', '🏫 학교생활', '📖 수강신청'] },
+  { label: '트렌드', icon: '📱', items: ['SNS', 'AI', '게임', '유튜브', 'OTT', '쇼핑'] },
+  { label: '소비', icon: '💰', items: ['소비습관', '카페', '배달', '패션', '앱테크'] },
+  { label: '라이프', icon: '🏃', items: ['운동', '여행', '건강', '취미', '반려동물'] },
+  { label: '토론', icon: '💬', items: ['찬반토론', '자유투표', '사회이슈', '시사'] },
+  { label: '인기', icon: '🔥', description: '참여 데이터를 기준으로 자동 생성', items: ['HOT 설문', '급상승', '마감임박', '신규'] },
+]
+
 function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate }) {
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [notificationOpen, setNotificationOpen] = useState(false)
@@ -273,26 +284,24 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate }) {
 
 function SurveyListScreen({ navigate, customSurveys = [], onParticipate, completedSurveys }) {
   const [category, setCategory] = useState('전체')
+  const [subcategory, setSubcategory] = useState('')
   const [query, setQuery] = useState('')
   const [showCategories, setShowCategories] = useState(true)
   const { data: fetchedSurveys, isLoading, error, reload } = useAsyncData(mockApi.getSurveys)
   const allSurveys = [...customSurveys, ...(fetchedSurveys || [])]
   const filteredSurveys = allSurveys.filter((survey) => {
     const matchesQuery = survey.title.toLowerCase().includes(query.toLowerCase())
-    const matchesCategory = category === '전체' || survey.eyebrow.includes(category)
+    const searchable = `${survey.title} ${survey.eyebrow} ${survey.meta}`.toLowerCase()
+    const normalizedSubcategory = subcategory.replace(/^[^\s]+\s/, '').split('·')[0]
+    const matchesCategory = !subcategory || searchable.includes(normalizedSubcategory.toLowerCase())
     return matchesQuery && matchesCategory
   })
-  const categories = [
-    ['전체', 'all', '모든 설문을 한눈에'],
-    ['연구·프로젝트', 'career', '논문·팀플·캡스톤'],
-    ['재미', 'mbti', '연애·심리·유머·밈'],
-    ['대학생활', 'campus', '통학·학식·수강신청'],
-    ['트렌드', 'all', 'AI·SNS·게임·OTT'],
-    ['소비', 'consume', '쇼핑·식생활·서비스'],
-    ['라이프', 'love', '운동·여행·취미'],
-    ['토론', 'school', '찬반·사회 이슈·투표'],
-    ['인기', 'all', 'HOT·급상승·마감 임박'],
-  ]
+  const chooseCategory = (nextCategory, nextSubcategory = '') => {
+    setCategory(nextCategory)
+    setSubcategory(nextSubcategory)
+    setShowCategories(false)
+  }
+  const activeCategory = surveyCategories.find((item) => (item.filter || item.label) === category)
 
   if (showCategories) {
     return (
@@ -303,13 +312,10 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
           <h1>어떤 설문을<br />찾고 있나요?</h1>
           <p>카테고리를 선택하면 관련 설문만 모아볼 수 있어요.</p>
           <div className="category-grid">
-            {categories.map(([label, icon, description]) => (
-              <button key={label} type="button" className={label === '전체' ? 'category-card category-card--all' : 'category-card'} onClick={() => { setCategory(label); setShowCategories(false) }}>
-                <span className="category-icon"><UiIcon name={icon} /></span>
-                <b>{label}</b>
-                <small>{description}</small>
-              </button>
-            ))}
+            <button type="button" className="category-card category-card--all" onClick={() => chooseCategory('전체')}><span className="category-icon"><UiIcon name="all" /></span><b>전체 설문</b><small>모든 주제의 설문을 한눈에 둘러보세요</small></button>
+            {surveyCategories.map((item) => <button type="button" className="category-card" key={item.label} onClick={() => chooseCategory(item.filter || item.label)}>
+              <span className="category-emoji" aria-hidden="true">{item.icon}</span><b>{item.label}</b><small>{item.description || item.items.slice(0, 3).map((child) => child.replace(/^\S+\s/, '')).join(' · ')}</small>
+            </button>)}
           </div>
         </main>
         <BottomNav active="surveys" navigate={navigate} />
@@ -319,17 +325,22 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
 
   return (
     <div className="screen with-nav">
-      <TopBar title="설문 둘러보기" onBack={() => setShowCategories(true)} />
+      <TopBar title={subcategory || (category === '전체' ? '설문 둘러보기' : category)} onBack={() => setShowCategories(true)} />
       <main className="screen-content list-content">
         <label className="search-box">
           <span>⌕</span>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="키워드로 설문 검색" />
         </label>
 
+        {activeCategory ? <div className="subcategory-filter" aria-label={`${activeCategory.label} 세부 카테고리`}>
+          <button type="button" className={!subcategory ? 'is-active' : ''} onClick={() => setSubcategory('')}>전체</button>
+          {activeCategory.items.map((item) => <button type="button" className={subcategory === item ? 'is-active' : ''} key={item} onClick={() => setSubcategory(item)}>{item}</button>)}
+        </div> : null}
+
         <SectionHeader title="내게 맞는 설문" count="" action="추천순⌄" />
         {isLoading ? <div className="loading-state" aria-label="설문 불러오는 중"><i /><i /><i /></div> : null}
         {error ? <div className="empty-state"><b>설문을 불러오지 못했어요</b><p>{error.message}</p><button type="button" onClick={reload}>다시 시도</button></div> : null}
-        {!isLoading && !error && filteredSurveys.length === 0 ? <div className="empty-state"><b>조건에 맞는 설문이 없어요</b><p>검색어나 카테고리를 바꿔보세요.</p><button type="button" onClick={() => { setQuery(''); setCategory('전체'); setShowCategories(true) }}>필터 초기화</button></div> : null}
+        {!isLoading && !error && filteredSurveys.length === 0 ? <div className="empty-state"><b>조건에 맞는 설문이 없어요</b><p>검색어나 카테고리를 바꿔보세요.</p><button type="button" onClick={() => { setQuery(''); setCategory('전체'); setSubcategory(''); setShowCategories(true) }}>필터 초기화</button></div> : null}
         <div className="survey-card-list">
           {!isLoading && !error && filteredSurveys.map((survey, index) => (
             <button className={completedSurveys.includes(String(survey.id || survey.title)) ? 'survey-card is-completed' : 'survey-card'} key={survey.title} type="button" onClick={() => onParticipate(String(survey.id || survey.title))}>
@@ -346,7 +357,7 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
   )
 }
 
-function ParticipateScreen({ onComplete, onExit }) {
+function ParticipateScreen({ onComplete, onExit, resultBadge }) {
   const questions = [
     { title: '과제할 때 AI, 얼마나 자주 꺼내 쓰나요?', options: ['거의 안 써요', '한 달에 1~2번 써요', '일주일에 1~2번 써요', '거의 매일 써요'], rates: [8, 15, 46, 31] },
     { title: '가장 손이 자주 가는 AI는 무엇인가요?', options: ['ChatGPT', 'Claude', 'Gemini', '다른 도구'], rates: [64, 12, 19, 5] },
@@ -366,7 +377,7 @@ function ParticipateScreen({ onComplete, onExit }) {
     if (selected === undefined) return
     if (isLast) {
       setIsSubmitting(true)
-      window.setTimeout(() => onComplete(30, 'AI 활용 만렙 새내기'), 1200)
+      window.setTimeout(() => onComplete(30, resultBadge), 1600)
     } else setQuestionIndex(questionIndex + 1)
   }
   if (isSubmitting) return <div className="screen"><main className="screen-content result-wait"><div className="result-wait-spinner" /><h1>응답을 분석하고 있어요</h1><p>나와 비슷한 대학생을 찾는 중이에요.<br />잠시만 기다려 주세요!</p></main></div>
@@ -673,8 +684,8 @@ function BalanceGameScreen({ navigate, onVote }) {
     </div>
   )
 }
-function ResultScreen({ navigate, spendPoints }) {
-  return (<div className="screen"><TopBar title="설문 결과" onBack={() => navigate('home')} right={<IconButton label="공유">↗</IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>AI 활용 만렙<br />새내기</h1><p className="subtitle">AI를 능숙하게 쓰면서도 새로운 활용법을 궁금해하는 유형이에요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>92%</strong><small>완료율</small></div><div><strong>3:12</strong><small>평균 시간</small></div></div><SectionHeader title="나와 같은 답을 고른 사람" count="" action="68%" /><div className="match-card"><strong>68%</strong><span>응답자 10명 중 약 7명이<br />나와 비슷하게 답했어요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action="Q3 기준" /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: '57%' }}>남 57%</span><span style={{ width: '43%' }}>여 43%</span></p><small>남학생의 주 1회 이상 활용 비율이 8%p 높아요.</small></article><article><b>학교 비교</b><p><span style={{ width: '64%' }}>우리 학교 64%</span><span style={{ width: '36%' }}>다른 학교 36%</span></p><small>우리 학교 학생이 코딩·분석 용도로 더 자주 사용해요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>응답자의 68%가 주 1회 이상 AI를 활용하며, 취업 준비 집단에서 활용 빈도가 더 높아요.</p></div><button className="primary-button" type="button" onClick={() => spendPoints(200, 'AI 심층 분석')}>심층 분석 보기 · 200P</button><button className="soft-button" type="button" onClick={() => spendPoints(400, 'PPT 자동 생성')}>PPT 자동 생성 · 400P</button></main></div>)
+function ResultScreen({ navigate, spendPoints, badge }) {
+  return (<div className="screen"><TopBar title="설문 결과" onBack={() => navigate('home')} right={<IconButton label="공유">↗</IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>{badge}</h1><p className="subtitle">내 답변을 바탕으로 발견한 결과예요. 이 별명은 프로필에도 차곡차곡 저장됐어요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>92%</strong><small>완료율</small></div><div><strong>3:12</strong><small>평균 시간</small></div></div><SectionHeader title="나와 같은 답을 고른 사람" count="" action="68%" /><div className="match-card"><strong>68%</strong><span>응답자 10명 중 약 7명이<br />나와 비슷하게 답했어요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action="Q3 기준" /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: '57%' }}>남 57%</span><span style={{ width: '43%' }}>여 43%</span></p><small>남학생의 주 1회 이상 활용 비율이 8%p 높아요.</small></article><article><b>학교 비교</b><p><span style={{ width: '64%' }}>우리 학교 64%</span><span style={{ width: '36%' }}>다른 학교 36%</span></p><small>우리 학교 학생이 코딩·분석 용도로 더 자주 사용해요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>응답자의 68%가 주 1회 이상 AI를 활용하며, 취업 준비 집단에서 활용 빈도가 더 높아요.</p></div><button className="primary-button" type="button" onClick={() => spendPoints(200, 'AI 심층 분석')}>심층 분석 보기 · 200P</button><button className="soft-button" type="button" onClick={() => spendPoints(400, 'PPT 자동 생성')}>PPT 자동 생성 · 400P</button></main></div>)
 }
 function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, onWatchAd }) {
   return (
@@ -848,6 +859,7 @@ function App() {
   })
   const [publishedSurveys, setPublishedSurveys] = useState([])
   const [badges, setBadges] = useState(() => JSON.parse(localStorage.getItem('suniversity-survey-badges') || '[]'))
+  const [lastBadge, setLastBadge] = useState(() => localStorage.getItem('suniversity-last-survey-badge') || 'AI 활용 만렙 새내기')
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('suniversity-transactions')
     return saved ? JSON.parse(saved) : [
@@ -895,8 +907,17 @@ function App() {
     earnPoints(amount, '설문 참여 보상')
     if (activeSurveyId && !completedSurveys.includes(activeSurveyId)) { const nextCompleted = [activeSurveyId, ...completedSurveys]; setCompletedSurveys(nextCompleted); localStorage.setItem('suniversity-completed-surveys', JSON.stringify(nextCompleted)) }
     if (badge && !badges.includes(badge)) { const next = [badge, ...badges]; setBadges(next); localStorage.setItem('suniversity-survey-badges', JSON.stringify(next)) }
-    navigate('resultAccess')
+    setLastBadge(badge)
+    localStorage.setItem('suniversity-last-survey-badge', badge)
+    navigate('result')
   }
+
+  const surveyBadge = (() => {
+    const badgeNames = ['AI 활용 만렙 새내기', '캠퍼스 트렌드 레이더', '취향 확실한 선택 장인', '마감 전에 움직이는 실천파', '호기심 가득 데이터 탐험가', '공감 백 퍼센트 이야기꾼']
+    const value = String(activeSurveyId || '')
+    const hash = [...value].reduce((sum, character) => sum + character.charCodeAt(0), 0)
+    return badgeNames[hash % badgeNames.length]
+  })()
 
   const publishSurvey = (survey) => {
     setPublishedSurveys([survey, ...publishedSurveys])
@@ -927,10 +948,10 @@ function App() {
     auth: <AuthScreen navigate={navigate} />,
     home: <HomeScreen navigate={navigate} isCheckedIn={lastCheckin === new Date().toISOString().slice(0, 10)} onCheckIn={checkInToday} onParticipate={startSurvey} />,
     surveys: <SurveyListScreen navigate={navigate} customSurveys={publishedSurveys} onParticipate={startSurvey} completedSurveys={completedSurveys} />,
-    participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} />,
+    participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} resultBadge={surveyBadge} />,
     create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} />,
     resultAccess: <ResultAccessScreen navigate={navigate} points={points} unlockResult={(price) => { if (spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
-    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} />,
+    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} badge={lastBadge} />,
     points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} />,
     ranking: <RankingScreen navigate={navigate} />,
     balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
