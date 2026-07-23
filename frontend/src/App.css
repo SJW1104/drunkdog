@@ -2342,6 +2342,10 @@ button:focus-visible {
 .subcategory-filter button.is-active { border-color: var(--blue); background: var(--blue); color: #fff; box-shadow: 0 4px 10px rgba(23, 105, 255, .16); }
 .settings-group button > span { display: inline-flex; align-items: center; gap: 8px; }
 .settings-group .ui-icon { width: 17px; height: 17px; color: #667286; }
+.settings-group button > b { display: inline-flex; align-items: center; gap: 5px; }
+.chevron-right-icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.settings-group button:not(:disabled):hover .chevron-right-icon { transform: translateX(2px); }
+.settings-group .chevron-right-icon { transition: transform 180ms ease; }
 .settings-group button.setting-verified { cursor: default; background: #f3f4f6; color: #969daa; }
 .settings-group button.setting-verified > span,
 .settings-group button.setting-verified b { color: #969daa; }
@@ -2644,6 +2648,11 @@ button:focus-visible {
 .survey-card.is-completed .completed-label { background: #dfe2e7 !important; color: #777f8b !important; }
 .survey-card.is-completed .progress-line { background: #d8dce2; }
 .survey-card.is-completed .progress-line span { background: #969da8; }
+.survey-card:not(.is-completed) { background: #fbfcff; transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+.survey-card:not(.is-completed).tone-blue { border-color: #dfe9fa; background: #f8fbff; }
+.survey-card:not(.is-completed).tone-orange { border-color: #f6e2d9; background: #fffaf7; }
+.survey-card:not(.is-completed).tone-purple { border-color: #e7e0fa; background: #fbf9ff; }
+.survey-card:not(.is-completed):hover { box-shadow: 0 9px 22px rgba(31, 43, 66, .08); transform: translateY(-1px); }
 .completed-label { position: absolute; top: 12px; right: 12px; padding: 5px 8px; border-radius: 99px; background: #dfe2e7; color: #777f8b; font-size: 8px; font-weight: 900; }
 /* Completed balance game state */
 .balance-feed-card.is-completed { border-color: #d9dde4; background: #eef0f3; filter: grayscale(1); opacity: .72; box-shadow: none; }

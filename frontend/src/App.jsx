@@ -47,6 +47,13 @@ function CopyIcon() {
     </svg>
   )
 }
+function ChevronRightIcon() {
+  return (
+    <svg className="chevron-right-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m9 5 7 7-7 7" />
+    </svg>
+  )
+}
 function BalanceScaleIcon() {
   return (
     <svg className="balance-scale-icon" viewBox="0 0 28 24" aria-hidden="true">
@@ -352,7 +359,7 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
         {!isLoading && !error && filteredSurveys.length === 0 ? <div className="empty-state"><b>조건에 맞는 설문이 없어요</b><p>검색어나 카테고리를 바꿔보세요.</p><button type="button" onClick={() => { setQuery(''); setCategory('전체'); setSubcategory(''); setShowCategories(true) }}>필터 초기화</button></div> : null}
         <div className="survey-card-list">
           {!isLoading && !error && filteredSurveys.map((survey, index) => (
-            <button className={completedSurveys.includes(String(survey.id || survey.title)) ? 'survey-card is-completed' : 'survey-card'} key={survey.title} type="button" onClick={() => onParticipate(String(survey.id || survey.title))}>
+            <button className={`${completedSurveys.includes(String(survey.id || survey.title)) ? 'survey-card is-completed' : 'survey-card'} tone-${survey.tone || 'blue'}`} key={survey.title} type="button" onClick={() => onParticipate(String(survey.id || survey.title))}>
               <span className={'survey-eyebrow ' + survey.tone}>{survey.eyebrow}</span>{completedSurveys.includes(String(survey.id || survey.title)) ? <span className="completed-label">참여 완료</span> : null}
               <div className="survey-title-row"><strong>{survey.title}</strong><PointPill value={survey.point} /></div>
               <div className="survey-meta"><span>{survey.meta}</span><span>{survey.count}</span></div>
@@ -1036,17 +1043,17 @@ function ProfileScreen({ navigate, points, hasDraft, badges, selectedTitle, onSe
         <div className="profile-stats"><div><b>{points.toLocaleString()}P</b><small>보유 포인트</small></div><div><b>LEVEL 7</b><small>현재 레벨</small></div><div><b>18위</b><small>전체 랭킹</small></div></div>
         {badges.length ? <section className="profile-badges"><div><b>내 설문 별명</b><small>대표 호칭을 고르면 랭킹과 밸런스 게임 토론에 표시돼요.</small>{selectedTitle ? <em>현재 호칭 · {selectedTitle}</em> : null}</div><div>{badges.map((badge) => <button type="button" className={selectedTitle === badge ? 'is-selected' : ''} key={badge} onClick={() => onSelectTitle(badge)}>{badge}{selectedTitle === badge ? ' ✓' : ''}</button>)}</div></section> : null}
         <section className="settings-group">
-          <button type="button" className={schoolVerified ? 'setting-verified' : ''} disabled={schoolVerified} onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>{schoolVerified ? '인증 완료 ✓' : '인증하기 ›'}</b></button>
-          <button type="button" onClick={() => navigate('phoneChange')}><span><UiIcon name="phone" /> 전화번호 변경</span><b>›</b></button>
+          <button type="button" className={schoolVerified ? 'setting-verified' : ''} disabled={schoolVerified} onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>{schoolVerified ? '인증 완료 ✓' : <>인증하기 <ChevronRightIcon /></>}</b></button>
+          <button type="button" onClick={() => navigate('phoneChange')}><span><UiIcon name="phone" /> 전화번호 변경</span><b><ChevronRightIcon /></b></button>
           <button type="button" onClick={toggleNotifications}><span><UiIcon name="bell" /> 알림 설정</span><span className={notificationsEnabled ? 'setting-toggle is-on' : 'setting-toggle'} role="switch" aria-checked={notificationsEnabled}><i /></span></button>
-          <button type="button" onClick={() => navigate('passwordChange')}><span><UiIcon name="lock" /> 비밀번호 변경</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('passwordChange')}><span><UiIcon name="lock" /> 비밀번호 변경</span><b><ChevronRightIcon /></b></button>
         </section>
 
         <section className="settings-group">
-          <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 ›</b></button>
-          <button type="button" onClick={() => navigate('drafts')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
-          <button type="button" onClick={() => navigate('viewedSurveys')}><span><UiIcon name="all" /> 내가 열람한 설문</span><b>{viewedSurveyCount ? `${viewedSurveyCount}개` : '없음'} ›</b></button>
-          <button type="button" onClick={onOpenPointHistory}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 <ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('drafts')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} <ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('viewedSurveys')}><span><UiIcon name="all" /> 내가 열람한 설문</span><b>{viewedSurveyCount ? `${viewedSurveyCount}개` : '없음'} <ChevronRightIcon /></b></button>
+          <button type="button" onClick={onOpenPointHistory}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b><ChevronRightIcon /></b></button>
         </section>
         <button className="logout-button" type="button" onClick={() => navigate('auth')}>로그아웃</button>
       </main>
