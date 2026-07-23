@@ -1,0 +1,667 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "name": "SUNIVERSITY JSON dummy data",
+    "description": "로컬 MVP 화면과 API 테스트를 위한 초기 데이터",
+    "updated_at": "2026-07-23T09:00:00+00:00"
+  },
+  "universities": [
+    {
+      "id": "korea-sejong",
+      "name": "고려대학교 세종캠퍼스",
+      "email_domains": ["korea.ac.kr"],
+      "created_at": "2026-07-01T00:00:00+00:00"
+    },
+    {
+      "id": "hongik-sejong",
+      "name": "홍익대학교 세종캠퍼스",
+      "email_domains": ["hongik.ac.kr"],
+      "created_at": "2026-07-01T00:00:00+00:00"
+    }
+  ],
+  "users": [
+    {
+      "id": "demo-author",
+      "phone": "01090000001",
+      "nickname": "설문요정",
+      "email": "author@korea.ac.kr",
+      "university_id": "korea-sejong",
+      "university_verified": true,
+      "role": "user",
+      "status": "active",
+      "created_at": "2026-07-01T01:00:00+00:00",
+      "updated_at": "2026-07-01T01:00:00+00:00"
+    },
+    {
+      "id": "demo-student",
+      "phone": "01090000002",
+      "nickname": "세종캠퍼",
+      "email": "student@korea.ac.kr",
+      "university_id": "korea-sejong",
+      "university_verified": true,
+      "role": "user",
+      "status": "active",
+      "created_at": "2026-07-02T01:00:00+00:00",
+      "updated_at": "2026-07-02T01:00:00+00:00"
+    },
+    {
+      "id": "demo-balance",
+      "phone": "01090000003",
+      "nickname": "밸런스장인",
+      "email": "balance@hongik.ac.kr",
+      "university_id": "hongik-sejong",
+      "university_verified": true,
+      "role": "user",
+      "status": "active",
+      "created_at": "2026-07-03T01:00:00+00:00",
+      "updated_at": "2026-07-03T01:00:00+00:00"
+    }
+  ],
+  "phone_otps": [],
+  "university_otps": [],
+  "surveys": [
+    {
+      "id": "survey-ai-campus",
+      "author_id": "demo-author",
+      "title": "대학생들은 AI를 어디까지 활용하고 있을까?",
+      "description": "과제와 일상에서 사용하는 생성형 AI 경험을 알아보는 설문입니다.",
+      "category": "대학생활",
+      "subcategory": "수업·과제",
+      "survey_type": "standard",
+      "status": "published",
+      "results_visibility": "public",
+      "result_price_points": 0,
+      "reward_points": 20,
+      "target_responses": 100,
+      "deadline": null,
+      "deadline_offset_hours": 72,
+      "questions": [
+        {
+          "id": "q-ai-frequency",
+          "position": 1,
+          "question_type": "single",
+          "prompt": "생성형 AI를 얼마나 자주 사용하나요?",
+          "required": true,
+          "min_choices": null,
+          "max_choices": null,
+          "options": [
+            {"id": "o-ai-daily", "label": "거의 매일", "position": 1},
+            {"id": "o-ai-weekly", "label": "일주일에 1~3번", "position": 2},
+            {"id": "o-ai-rare", "label": "거의 사용하지 않음", "position": 3}
+          ]
+        },
+        {
+          "id": "q-ai-purpose",
+          "position": 2,
+          "question_type": "multiple",
+          "prompt": "주로 어떤 용도로 사용하나요?",
+          "required": true,
+          "min_choices": 1,
+          "max_choices": 3,
+          "options": [
+            {"id": "o-ai-report", "label": "과제와 보고서", "position": 1},
+            {"id": "o-ai-code", "label": "코딩", "position": 2},
+            {"id": "o-ai-idea", "label": "아이디어 정리", "position": 3}
+          ]
+        },
+        {
+          "id": "q-ai-opinion",
+          "position": 3,
+          "question_type": "text",
+          "prompt": "학교에서 AI 활용 교육이 필요한 이유를 알려주세요.",
+          "required": false,
+          "min_choices": null,
+          "max_choices": null,
+          "options": []
+        }
+      ],
+      "bump_count": 1,
+      "bumped_at": "2026-07-22T08:00:00+00:00",
+      "published_at": "2026-07-20T03:00:00+00:00",
+      "closed_at": null,
+      "created_at": "2026-07-19T03:00:00+00:00",
+      "updated_at": "2026-07-22T08:00:00+00:00"
+    },
+    {
+      "id": "survey-campus-shuttle",
+      "author_id": "demo-balance",
+      "title": "세종캠퍼스 심야 셔틀이 생긴다면 타실 건가요?",
+      "description": "캡스톤 프로젝트를 위한 교내 심야 이동 수요 조사입니다.",
+      "category": "연구·프로젝트",
+      "subcategory": "캡스톤",
+      "survey_type": "standard",
+      "status": "published",
+      "results_visibility": "after_participation",
+      "result_price_points": 0,
+      "reward_points": 30,
+      "target_responses": 200,
+      "deadline": null,
+      "deadline_offset_hours": 20,
+      "questions": [
+        {
+          "id": "q-shuttle-use",
+          "position": 1,
+          "question_type": "single",
+          "prompt": "밤 10시 이후 심야 셔틀이 생기면 이용하시겠어요?",
+          "required": true,
+          "min_choices": null,
+          "max_choices": null,
+          "options": [
+            {"id": "o-shuttle-yes", "label": "자주 이용할 것 같아요", "position": 1},
+            {"id": "o-shuttle-maybe", "label": "상황에 따라 이용할 것 같아요", "position": 2},
+            {"id": "o-shuttle-no", "label": "이용하지 않을 것 같아요", "position": 3}
+          ]
+        },
+        {
+          "id": "q-shuttle-route",
+          "position": 2,
+          "question_type": "text",
+          "prompt": "가장 필요한 노선을 자유롭게 적어주세요.",
+          "required": false,
+          "min_choices": null,
+          "max_choices": null,
+          "options": []
+        }
+      ],
+      "bump_count": 0,
+      "bumped_at": null,
+      "published_at": "2026-07-22T02:00:00+00:00",
+      "closed_at": null,
+      "created_at": "2026-07-21T12:00:00+00:00",
+      "updated_at": "2026-07-22T02:00:00+00:00"
+    },
+    {
+      "id": "survey-team-balance",
+      "author_id": "demo-balance",
+      "title": "팀플에서 더 답답한 팀원은?",
+      "description": "대학생이라면 한 번쯤 겪어본 팀플 극한 밸런스게임!",
+      "category": "대학생활",
+      "subcategory": "팀플",
+      "survey_type": "balance",
+      "status": "published",
+      "results_visibility": "public",
+      "result_price_points": 0,
+      "reward_points": 2,
+      "target_responses": 500,
+      "deadline": null,
+      "deadline_offset_hours": 240,
+      "questions": [
+        {
+          "id": "q-team-balance",
+          "position": 1,
+          "question_type": "balance",
+          "prompt": "둘 중 더 답답한 팀원을 골라주세요.",
+          "required": true,
+          "min_choices": null,
+          "max_choices": null,
+          "options": [
+            {"id": "o-team-attend", "label": "회의에는 오지만 아무것도 안 하는 팀원", "position": 1},
+            {"id": "o-team-result", "label": "연락은 없지만 결과물은 잘 내는 팀원", "position": 2}
+          ]
+        }
+      ],
+      "bump_count": 2,
+      "bumped_at": "2026-07-23T04:00:00+00:00",
+      "published_at": "2026-07-18T03:00:00+00:00",
+      "closed_at": null,
+      "created_at": "2026-07-18T02:00:00+00:00",
+      "updated_at": "2026-07-23T04:00:00+00:00"
+    },
+    {
+      "id": "survey-cafe-paid",
+      "author_id": "demo-author",
+      "title": "세종 지역 대학생 카페 소비 트렌드",
+      "description": "카페 이용 빈도와 메뉴 선택 기준을 알아보는 시장조사입니다.",
+      "category": "소비·트렌드",
+      "subcategory": "카페",
+      "survey_type": "standard",
+      "status": "published",
+      "results_visibility": "paid",
+      "result_price_points": 200,
+      "reward_points": 15,
+      "target_responses": 150,
+      "deadline": null,
+      "deadline_offset_hours": 168,
+      "questions": [
+        {
+          "id": "q-cafe-weekly",
+          "position": 1,
+          "question_type": "number",
+          "prompt": "일주일에 카페를 몇 번 이용하나요?",
+          "required": true,
+          "min_choices": null,
+          "max_choices": null,
+          "options": []
+        },
+        {
+          "id": "q-cafe-value",
+          "position": 2,
+          "question_type": "single",
+          "prompt": "카페를 고를 때 가장 중요한 기준은 무엇인가요?",
+          "required": true,
+          "min_choices": null,
+          "max_choices": null,
+          "options": [
+            {"id": "o-cafe-price", "label": "가격", "position": 1},
+            {"id": "o-cafe-taste", "label": "맛", "position": 2},
+            {"id": "o-cafe-space", "label": "공간과 분위기", "position": 3}
+          ]
+        }
+      ],
+      "bump_count": 0,
+      "bumped_at": null,
+      "published_at": "2026-07-21T05:00:00+00:00",
+      "closed_at": null,
+      "created_at": "2026-07-20T05:00:00+00:00",
+      "updated_at": "2026-07-21T05:00:00+00:00"
+    },
+    {
+      "id": "survey-draft-library",
+      "author_id": "demo-author",
+      "title": "도서관 24시간 운영 수요 조사",
+      "description": "게시 전인 임시저장 예시 설문입니다.",
+      "category": "대학생활",
+      "subcategory": "학교시설",
+      "survey_type": "standard",
+      "status": "draft",
+      "results_visibility": "after_participation",
+      "result_price_points": 0,
+      "reward_points": 20,
+      "target_responses": 100,
+      "deadline": null,
+      "deadline_offset_hours": 240,
+      "questions": [
+        {
+          "id": "q-library-use",
+          "position": 1,
+          "question_type": "single",
+          "prompt": "시험 기간 24시간 운영이 필요하다고 생각하나요?",
+          "required": true,
+          "min_choices": null,
+          "max_choices": null,
+          "options": [
+            {"id": "o-library-yes", "label": "필요해요", "position": 1},
+            {"id": "o-library-no", "label": "필요하지 않아요", "position": 2}
+          ]
+        }
+      ],
+      "bump_count": 0,
+      "bumped_at": null,
+      "published_at": null,
+      "closed_at": null,
+      "created_at": "2026-07-23T06:00:00+00:00",
+      "updated_at": "2026-07-23T06:00:00+00:00"
+    }
+  ],
+  "responses": [
+    {
+      "id": "response-ai-student",
+      "survey_id": "survey-ai-campus",
+      "user_id": "demo-student",
+      "answers": [
+        {"question_id": "q-ai-frequency", "option_ids": ["o-ai-daily"], "value_text": null, "value_number": null},
+        {"question_id": "q-ai-purpose", "option_ids": ["o-ai-report", "o-ai-idea"], "value_text": null, "value_number": null},
+        {"question_id": "q-ai-opinion", "option_ids": [], "value_text": "AI 결과를 검증하고 인용하는 법을 배우고 싶어요.", "value_number": null}
+      ],
+      "submitted_at": "2026-07-21T03:00:00+00:00"
+    },
+    {
+      "id": "response-shuttle-student",
+      "survey_id": "survey-campus-shuttle",
+      "user_id": "demo-student",
+      "answers": [
+        {"question_id": "q-shuttle-use", "option_ids": ["o-shuttle-yes"], "value_text": null, "value_number": null},
+        {"question_id": "q-shuttle-route", "option_ids": [], "value_text": "정문에서 조치원역 노선이 필요해요.", "value_number": null}
+      ],
+      "submitted_at": "2026-07-22T05:00:00+00:00"
+    },
+    {
+      "id": "response-balance-author",
+      "survey_id": "survey-team-balance",
+      "user_id": "demo-author",
+      "answers": [
+        {"question_id": "q-team-balance", "option_ids": ["o-team-attend"], "value_text": null, "value_number": null}
+      ],
+      "submitted_at": "2026-07-22T06:00:00+00:00"
+    },
+    {
+      "id": "response-balance-student",
+      "survey_id": "survey-team-balance",
+      "user_id": "demo-student",
+      "answers": [
+        {"question_id": "q-team-balance", "option_ids": ["o-team-result"], "value_text": null, "value_number": null}
+      ],
+      "submitted_at": "2026-07-22T07:00:00+00:00"
+    },
+    {
+      "id": "response-cafe-balance",
+      "survey_id": "survey-cafe-paid",
+      "user_id": "demo-balance",
+      "answers": [
+        {"question_id": "q-cafe-weekly", "option_ids": [], "value_text": null, "value_number": 4},
+        {"question_id": "q-cafe-value", "option_ids": ["o-cafe-space"], "value_text": null, "value_number": null}
+      ],
+      "submitted_at": "2026-07-22T09:00:00+00:00"
+    }
+  ],
+  "comments": [
+    {
+      "id": "comment-ai-1",
+      "survey_id": "survey-ai-campus",
+      "user_id": "demo-student",
+      "parent_id": null,
+      "body": "결과가 궁금해서 참여했어요!",
+      "display_mode": "nickname",
+      "created_at": "2026-07-21T03:10:00+00:00",
+      "deleted_at": null
+    },
+    {
+      "id": "comment-ai-2",
+      "survey_id": "survey-ai-campus",
+      "user_id": "demo-author",
+      "parent_id": "comment-ai-1",
+      "body": "참여 감사합니다. 마감 후 요약도 공유할게요.",
+      "display_mode": "nickname",
+      "created_at": "2026-07-21T03:20:00+00:00",
+      "deleted_at": null
+    },
+    {
+      "id": "comment-balance-1",
+      "survey_id": "survey-team-balance",
+      "user_id": "demo-balance",
+      "parent_id": null,
+      "body": "연락이 안 되는 팀원이 제일 불안해요.",
+      "display_mode": "anonymous",
+      "created_at": "2026-07-22T10:00:00+00:00",
+      "deleted_at": null
+    }
+  ],
+  "likes": [
+    {"survey_id": "survey-ai-campus", "user_id": "demo-student", "created_at": "2026-07-21T03:15:00+00:00"},
+    {"survey_id": "survey-ai-campus", "user_id": "demo-balance", "created_at": "2026-07-21T04:15:00+00:00"},
+    {"survey_id": "survey-team-balance", "user_id": "demo-student", "created_at": "2026-07-22T07:10:00+00:00"}
+  ],
+  "reports": [],
+  "point_ledger": [
+    {
+      "id": "ledger-author-bonus",
+      "user_id": "demo-author",
+      "amount": 2500,
+      "entry_type": "university_verified_bonus",
+      "reference_type": "user",
+      "reference_id": "demo-author",
+      "idempotency_key": "seed:author:bonus",
+      "balance_after": 2500,
+      "created_at": "2026-07-01T01:10:00+00:00"
+    },
+    {
+      "id": "ledger-author-activity",
+      "user_id": "demo-author",
+      "amount": 1198,
+      "entry_type": "seed_activity",
+      "reference_type": "seed",
+      "reference_id": "demo-author",
+      "idempotency_key": "seed:author:activity",
+      "balance_after": 3698,
+      "created_at": "2026-07-20T01:10:00+00:00"
+    },
+    {
+      "id": "ledger-author-balance-response",
+      "user_id": "demo-author",
+      "amount": 2,
+      "entry_type": "balance_vote",
+      "reference_type": "survey_response",
+      "reference_id": "response-balance-author",
+      "idempotency_key": "seed:response:balance-author",
+      "balance_after": 3700,
+      "created_at": "2026-07-22T06:00:00+00:00"
+    },
+    {
+      "id": "ledger-student-bonus",
+      "user_id": "demo-student",
+      "amount": 2500,
+      "entry_type": "university_verified_bonus",
+      "reference_type": "user",
+      "reference_id": "demo-student",
+      "idempotency_key": "seed:student:bonus",
+      "balance_after": 2500,
+      "created_at": "2026-07-02T01:10:00+00:00"
+    },
+    {
+      "id": "ledger-student-activity",
+      "user_id": "demo-student",
+      "amount": 833,
+      "entry_type": "seed_activity",
+      "reference_type": "seed",
+      "reference_id": "demo-student",
+      "idempotency_key": "seed:student:activity",
+      "balance_after": 3333,
+      "created_at": "2026-07-20T01:10:00+00:00"
+    },
+    {
+      "id": "ledger-student-ai-response",
+      "user_id": "demo-student",
+      "amount": 20,
+      "entry_type": "survey_participation",
+      "reference_type": "survey_response",
+      "reference_id": "response-ai-student",
+      "idempotency_key": "seed:response:ai-student",
+      "balance_after": 3353,
+      "created_at": "2026-07-21T03:00:00+00:00"
+    },
+    {
+      "id": "ledger-student-shuttle-response",
+      "user_id": "demo-student",
+      "amount": 45,
+      "entry_type": "survey_participation",
+      "reference_type": "survey_response",
+      "reference_id": "response-shuttle-student",
+      "idempotency_key": "seed:response:shuttle-student",
+      "balance_after": 3398,
+      "created_at": "2026-07-22T05:00:00+00:00"
+    },
+    {
+      "id": "ledger-student-balance-response",
+      "user_id": "demo-student",
+      "amount": 2,
+      "entry_type": "balance_vote",
+      "reference_type": "survey_response",
+      "reference_id": "response-balance-student",
+      "idempotency_key": "seed:response:balance-student",
+      "balance_after": 3400,
+      "created_at": "2026-07-22T07:00:00+00:00"
+    },
+    {
+      "id": "ledger-balance-bonus",
+      "user_id": "demo-balance",
+      "amount": 2500,
+      "entry_type": "university_verified_bonus",
+      "reference_type": "user",
+      "reference_id": "demo-balance",
+      "idempotency_key": "seed:balance:bonus",
+      "balance_after": 2500,
+      "created_at": "2026-07-03T01:10:00+00:00"
+    },
+    {
+      "id": "ledger-balance-activity",
+      "user_id": "demo-balance",
+      "amount": 1585,
+      "entry_type": "seed_activity",
+      "reference_type": "seed",
+      "reference_id": "demo-balance",
+      "idempotency_key": "seed:balance:activity",
+      "balance_after": 4085,
+      "created_at": "2026-07-21T02:10:00+00:00"
+    },
+    {
+      "id": "ledger-balance-cafe-response",
+      "user_id": "demo-balance",
+      "amount": 15,
+      "entry_type": "survey_participation",
+      "reference_type": "survey_response",
+      "reference_id": "response-cafe-balance",
+      "idempotency_key": "seed:response:cafe-balance",
+      "balance_after": 4100,
+      "created_at": "2026-07-22T09:00:00+00:00"
+    }
+  ],
+  "ad_reward_events": [],
+  "ai_usage": [],
+  "attendance": [],
+  "notifications": [
+    {
+      "id": "notification-demo-1",
+      "user_id": "demo-student",
+      "type": "survey_recommendation",
+      "title": "관심 설문이 새로 올라왔어요",
+      "body": "대학생활 · 대학생들은 AI를 어디까지 활용하고 있을까?",
+      "target": {
+        "screen": "survey_detail",
+        "resource_id": "survey-ai-campus"
+      },
+      "read_at": null,
+      "created_at": "2026-07-23T07:00:00+00:00",
+      "idempotency_key": "seed-notification-1"
+    },
+    {
+      "id": "notification-demo-2",
+      "user_id": "demo-student",
+      "type": "deadline_bonus",
+      "title": "마감 임박 보너스",
+      "body": "심야 셔틀 설문 참여 시 포인트 1.5배",
+      "target": {
+        "screen": "survey_detail",
+        "resource_id": "survey-campus-shuttle"
+      },
+      "read_at": null,
+      "created_at": "2026-07-23T06:30:00+00:00",
+      "idempotency_key": "seed-notification-2"
+    }
+  ],
+  "bookmarks": [
+    {
+      "id": "bookmark-demo-student-cafe",
+      "user_id": "demo-student",
+      "survey_id": "survey-cafe-paid",
+      "created_at": "2026-07-23T07:10:00+00:00"
+    }
+  ],
+  "reward_products": [
+    {
+      "id": "coffee-americano",
+      "name": "카페 아메리카노",
+      "description": "전국 제휴 카페 교환권",
+      "emoji": "☕",
+      "price_points": 1500,
+      "active": true
+    },
+    {
+      "id": "convenience-3000",
+      "name": "편의점 3천원권",
+      "description": "모바일 금액권",
+      "emoji": "🏪",
+      "price_points": 3000,
+      "active": true
+    },
+    {
+      "id": "bakery-5000",
+      "name": "베이커리 5천원권",
+      "description": "모바일 교환권",
+      "emoji": "🥐",
+      "price_points": 4500,
+      "active": true
+    },
+    {
+      "id": "culture-5000",
+      "name": "문화상품권 5천원권",
+      "description": "온라인 문화상품권",
+      "emoji": "🎁",
+      "price_points": 5000,
+      "active": true
+    }
+  ],
+  "reward_exchanges": [],
+  "badges": [
+    {
+      "id": "badge-balance-master",
+      "name": "극한 밸런스 장인",
+      "emoji": "⚖️",
+      "description": "밸런스게임 참여로 획득",
+      "match": {
+        "survey_type": "balance"
+      }
+    },
+    {
+      "id": "badge-campus-ai",
+      "name": "AI 활용 만렙 대학생",
+      "emoji": "🤖",
+      "description": "대학생활 설문 참여로 획득",
+      "match": {
+        "category": "대학생활"
+      }
+    },
+    {
+      "id": "badge-researcher",
+      "name": "캡스톤 데이터 수집가",
+      "emoji": "📊",
+      "description": "연구·프로젝트 설문 참여로 획득",
+      "match": {
+        "category": "연구·프로젝트"
+      }
+    },
+    {
+      "id": "badge-trend-reader",
+      "name": "트렌드 레이더",
+      "emoji": "📡",
+      "description": "소비·트렌드 설문 참여로 획득",
+      "match": {
+        "category": "소비·트렌드"
+      }
+    }
+  ],
+  "user_badges": [
+    {
+      "id": "user-badge-student-ai",
+      "user_id": "demo-student",
+      "badge_id": "badge-campus-ai",
+      "survey_id": "survey-ai-campus",
+      "earned_at": "2026-07-21T03:00:00+00:00"
+    },
+    {
+      "id": "user-badge-author-balance",
+      "user_id": "demo-author",
+      "badge_id": "badge-balance-master",
+      "survey_id": "survey-team-balance",
+      "earned_at": "2026-07-22T06:00:00+00:00"
+    }
+  ],
+  "balance_posts": [
+    {
+      "id": "balance-post-1",
+      "game_id": "survey-team-balance",
+      "user_id": "demo-student",
+      "parent_id": null,
+      "team": "o-team-result",
+      "body": "연락이 늦어도 결과물이 좋다면 기다릴 수 있어요.",
+      "created_at": "2026-07-22T08:00:00+00:00"
+    },
+    {
+      "id": "balance-reply-1",
+      "game_id": "survey-team-balance",
+      "user_id": "demo-author",
+      "parent_id": "balance-post-1",
+      "team": "o-team-attend",
+      "body": "그래도 진행 상황 공유는 꼭 필요하다고 생각해요.",
+      "created_at": "2026-07-22T08:10:00+00:00"
+    }
+  ],
+  "balance_post_likes": [
+    {
+      "id": "balance-like-1",
+      "post_id": "balance-post-1",
+      "user_id": "demo-author",
+      "created_at": "2026-07-22T08:20:00+00:00"
+    }
+  ],
+  "result_reports": []
+}

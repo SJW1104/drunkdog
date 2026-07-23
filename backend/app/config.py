@@ -8,7 +8,8 @@ from pathlib import Path
 @dataclass(frozen=True, slots=True)
 class Settings:
     environment: str = "development"
-    database_path: Path = Path("data/suniversity.db")
+    data_path: Path = Path("data/runtime.json")
+    seed_path: Path = Path("data/seed.json")
     token_secret: str = "dev-only-change-me"
     webhook_secret: str = "dev-webhook-secret"
     access_token_ttl_seconds: int = 60 * 60 * 24 * 7
@@ -21,7 +22,8 @@ class Settings:
     def from_env(cls) -> "Settings":
         return cls(
             environment=os.getenv("ENVIRONMENT", "development"),
-            database_path=Path(os.getenv("DATABASE_PATH", "data/suniversity.db")),
+            data_path=Path(os.getenv("JSON_DATA_PATH", "data/runtime.json")),
+            seed_path=Path(os.getenv("JSON_SEED_PATH", "data/seed.json")),
             token_secret=os.getenv("TOKEN_SECRET", "dev-only-change-me"),
             webhook_secret=os.getenv("WEBHOOK_SECRET", "dev-webhook-secret"),
             access_token_ttl_seconds=int(

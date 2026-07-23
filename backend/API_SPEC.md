@@ -1,6 +1,6 @@
 # SUNIVERSITY MVP API 명세서
 
-이 문서는 `outputs/suniversity-api`에 구현된 자체 백엔드 API를 기준으로 작성되었습니다.
+이 문서는 `backend/`에 구현된 JSON 더미데이터 백엔드 API를 기준으로 작성되었습니다.
 SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, SUNIVERSITY 앱과 프론트엔드가
 호출하는 내부 REST API를 설명합니다.
 
@@ -8,13 +8,13 @@ SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, S
 
 | 항목 | 값 |
 |---|---|
-| 기본 URL | `http://127.0.0.1:8000/api/v1` |
+| 기본 URL | `http://127.0.0.1:4000/api/v1` |
 | 데이터 형식 | `application/json` |
 | 인증 방식 | `Authorization: Bearer {access_token}` |
 | ID 형식 | UUID 문자열. 대학 ID 등 일부 기준정보는 고정 문자열 사용 |
 | 날짜 형식 | ISO 8601 문자열. 예: `2026-07-23T14:30:00+00:00` |
 | 오류 형식 | `{ "detail": "오류 설명" }` |
-| 자동 문서 | 서버 실행 후 `http://127.0.0.1:8000/docs` |
+| 자동 문서 | 서버 실행 후 `http://127.0.0.1:4000/docs` |
 
 ### 공통 상태 코드
 
@@ -46,6 +46,9 @@ SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, S
 | 영역 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|---|
 | 시스템 | GET | `/health` | 공개 | 서버 상태 확인 |
+| 개발 | GET | `/dev/dummy-users` | 개발 전용 | 더미 사용자 목록 |
+| 개발 | POST | `/dev/login` | 개발 전용 | 더미 사용자 즉시 로그인 |
+| 개발 | POST | `/dev/reset` | 개발 전용 | 시드 JSON으로 초기화 |
 | 인증 | GET | `/universities` | 공개 | 인증 가능한 학교 목록 |
 | 인증 | POST | `/auth/phone/request` | 공개 | 휴대전화 OTP 발급 |
 | 인증 | POST | `/auth/phone/verify` | 공개 | OTP 검증 및 로그인 |
@@ -53,9 +56,21 @@ SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, S
 | 인증 | POST | `/auth/university/verify` | 로그인 | 학교 인증 및 최초 포인트 지급 |
 | 사용자 | GET | `/users/me` | 로그인 | 내 프로필 조회 |
 | 사용자 | PATCH | `/users/me` | 로그인 | 닉네임 변경 |
+| 사용자 | GET | `/users/me/profile` | 로그인 | 활동 통계와 레벨 조회 |
+| 사용자 | GET | `/users/me/surveys` | 로그인 | 작성·참여 설문 조회 |
+| 사용자 | PATCH | `/users/me/preferences` | 로그인 | 관심사·알림·대표 칭호 변경 |
+| 사용자 | GET | `/users/me/bookmarks` | 로그인 | 저장한 설문 조회 |
+| 출석 | GET | `/attendance/today` | 로그인 | 오늘 출석과 연속 출석 조회 |
+| 출석 | POST | `/attendance/check-in` | 학교 인증 | 오늘 출석 및 10P 지급 |
+| 알림 | GET | `/notifications` | 로그인 | 알림 목록과 안 읽은 수 조회 |
+| 알림 | PATCH | `/notifications/{notification_id}/read` | 로그인 | 알림 한 건 읽음 처리 |
+| 알림 | POST | `/notifications/read-all` | 로그인 | 알림 모두 읽음 처리 |
+| 설문 | GET | `/survey-categories` | 공개 | 카테고리별 설문 수 조회 |
 | 설문 | POST | `/surveys` | 학교 인증 | 설문 임시저장 생성 |
 | 설문 | GET | `/surveys` | 공개 | 게시된 설문 피드 조회 |
 | 설문 | GET | `/surveys/{survey_id}` | 로그인 | 설문 상세 조회 |
+| 설문 | PATCH | `/surveys/{survey_id}` | 학교 인증·작성자 | 임시저장 수정 |
+| 설문 | DELETE | `/surveys/{survey_id}` | 학교 인증·작성자 | 임시저장 삭제 |
 | 설문 | POST | `/surveys/{survey_id}/publish` | 학교 인증·작성자 | 설문 게시 |
 | 설문 | POST | `/surveys/{survey_id}/close` | 학교 인증·작성자 | 설문 마감 |
 | 설문 | GET | `/surveys/{survey_id}/progress` | 공개 | 응답 진행률 조회 |
@@ -65,10 +80,26 @@ SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, S
 | 커뮤니티 | GET | `/surveys/{survey_id}/comments` | 공개 | 댓글·대댓글 조회 |
 | 커뮤니티 | POST | `/surveys/{survey_id}/comments` | 학교 인증 | 댓글·대댓글 작성 |
 | 커뮤니티 | POST | `/surveys/{survey_id}/like` | 학교 인증 | 좋아요 토글 |
+| 커뮤니티 | POST/PUT/DELETE | `/surveys/{survey_id}/bookmark` | 로그인 | 북마크 토글·저장·해제 |
 | 커뮤니티 | POST | `/reports` | 학교 인증 | 설문·댓글·사용자 신고 |
 | 포인트 | GET | `/wallet` | 로그인 | 잔액과 원장 내역 조회 |
+| 포인트 | GET | `/rankings` | 로그인 | 전체·학교 랭킹 조회 |
+| 리워드 | GET | `/rewards/products` | 공개 | 교환 가능한 상품 조회 |
+| 리워드 | POST | `/rewards/exchanges` | 학교 인증 | 포인트로 상품 교환 |
+| 리워드 | GET | `/users/me/coupons` | 로그인 | 발급된 쿠폰 조회 |
+| 리워드 | POST | `/coupons/{exchange_id}/use` | 로그인 | 쿠폰 사용 처리 |
 | AI | POST | `/ai/survey-drafts` | 학교 인증 | AI 설문 초안 생성 |
 | AI | POST | `/ai/surveys/{survey_id}/analysis` | 학교 인증·작성자 | AI 심층 분석 |
+| 리포트 | POST | `/surveys/{survey_id}/reports/ppt` | 학교 인증·열람 권한 | Mock PPT 리포트 생성 |
+| 리포트 | GET | `/mock-files/{report_id}` | 공개·개발 전용 | Mock 리포트 다운로드 |
+| 밸런스 | GET | `/balance-games/categories` | 공개 | 밸런스게임 카테고리 |
+| 밸런스 | GET | `/balance-games` | 공개 | 밸런스게임 목록 |
+| 밸런스 | GET | `/balance-games/{game_id}` | 공개 | 게임과 실시간 비율 조회 |
+| 밸런스 | POST | `/balance-games/{game_id}/vote` | 학교 인증 | 투표 및 2P 지급 |
+| 밸런스 | GET/POST | `/balance-games/{game_id}/posts` | 조회 공개·작성 학교 인증 | 팀별 토론 |
+| 밸런스 | POST | `/balance-posts/{post_id}/replies` | 학교 인증 | 토론 답글 |
+| 밸런스 | POST | `/balance-posts/{post_id}/like` | 학교 인증 | 토론 좋아요 |
+| 광고 | POST | `/ads/rewarded/mock-complete` | 학교 인증·개발 전용 | 개발용 광고 보상 |
 | 광고 | POST | `/integrations/admob/rewarded` | 내부 웹훅 | 검증된 리워드 광고 포인트 지급 |
 
 ## 3. 시스템 API
@@ -81,7 +112,8 @@ SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, S
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "storage": "json"
 }
 ```
 
@@ -371,7 +403,13 @@ Authorization: Bearer signed-access-token
 {
   "response_id": "response-uuid",
   "points_earned": 4,
-  "balance": 2504
+  "base_points": 4,
+  "deadline_bonus_points": 0,
+  "daily_cap_applied": false,
+  "balance": 2504,
+  "badge": null,
+  "result_access": true,
+  "balance_result": null
 }
 ```
 
@@ -655,20 +693,46 @@ X-Webhook-Secret: configured-webhook-secret
 이 엔드포인트의 `X-Webhook-Secret`은 SUNIVERSITY 내부 어댑터 인증용입니다. 운영 환경에서
 AdMob 원본 콜백을 받을 때는 그 앞단에서 Google SSV의 ECDSA 서명을 별도로 검증해야 합니다.
 
-## 13. 현재 명세에 없는 후속 API
+## 13. 참여·리워드·밸런스게임 API 요약
 
-다음 기능은 기획안에는 있지만 현재 MVP 코드에는 아직 구현되지 않았습니다.
+### 출석과 알림
 
-- 설문 수정·삭제·복제
-- 설문 끌어올리기와 24시간 프리미엄 노출
-- 기프티콘 상품 조회·교환
+- `GET /attendance/today`: 오늘 출석 여부, 연속 출석 수, 최근 7일 기록을 반환합니다.
+- `POST /attendance/check-in`: 한국 날짜 기준 하루 한 번 10P를 지급합니다. 재호출은
+  `already_checked_in: true`이며 중복 지급하지 않습니다.
+- `GET /notifications`: `items`, `unread_count`, `total`, 페이지 정보를 반환합니다.
+- 읽음 처리는 한 건 또는 전체에 대해 여러 번 호출해도 안전합니다.
+
+### 북마크와 기프티콘
+
+- `POST /surveys/{survey_id}/bookmark`는 현재 상태를 토글합니다.
+- 명시적 저장·해제는 같은 경로에 `PUT`, `DELETE`를 사용합니다.
+- `POST /rewards/exchanges` 요청은 `{ "product_id": "...", "quantity": 1 }`입니다.
+- 교환 성공 시 포인트가 차감되고 개발용 쿠폰 코드가 발급됩니다.
+
+### Mock 광고와 리포트
+
+- `POST /ads/rewarded/mock-complete` 요청의 `transaction_id`를 생략하면 서버가 생성합니다.
+  하루 최대 5번, 회당 10P이며 같은 거래 ID는 중복 지급하지 않습니다.
+- `POST /surveys/{survey_id}/reports/ppt`는 400P를 차감합니다. 같은 응답 버전의 리포트는
+  캐시되어 다시 차감되지 않습니다.
+- 현재 다운로드 파일은 연동 검증용 mock입니다. 운영용 실제 PowerPoint 생성기는
+  별도 파일 생성 작업으로 교체해야 합니다.
+
+### 밸런스게임
+
+- 목록과 상세는 비로그인 조회가 가능하며 토큰이 있으면 `my_choice`가 포함됩니다.
+- 투표 요청은 `{ "choice_id": "option-id" }`이며 결과 비율과 적립 포인트를 즉시 반환합니다.
+- 투표를 완료한 사용자만 토론 글·답글을 작성할 수 있고 선택한 팀은 서버가 지정합니다.
+
+## 14. 실제 서비스 전 후속 범위
+
+현재 JSON MVP 이후에 추가하거나 외부 서비스로 교체해야 하는 범위입니다.
+
+- 설문 복제와 유료 끌어올리기
 - 현금 출금과 지급대행
 - StoreKit·Google Play 결제 검증
-- 친구 초대
-- 알림 목록·읽음 처리·푸시 토큰 등록
-- 사용자 활동 내역·레벨·랭킹·AI 프로필 태그
+- 친구 초대와 실제 푸시 토큰 전송
 - 관리자 신고 심사·포인트 회수·회원 정지
-- CSV·Excel·PPT 보고서 파일 생성
-- 검색어 기반 설문 검색
-
-이 기능들은 API 경로와 데이터 규칙을 별도 버전에서 추가해야 합니다.
+- 실제 CSV·Excel·PowerPoint 파일 생성과 비동기 작업 큐
+- 운영용 AI 분석, SMS·학교 이메일, AdMob SSV 연동

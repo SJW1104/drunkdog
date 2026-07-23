@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import hmac
-import json
 import re
 import secrets
-import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -12,12 +10,24 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from .ai_provider import AIProviderError
+from .domain import (
+    add_notification,
+    assign_survey_badge,
+    business_date,
+    effective_status,
+    estimated_minutes,
+    level_from_points,
+    next_level_points,
+    point_entry_view,
+    reward_quote,
+    KOREA_TZ,
+    total_earned,
+)
 from .points import (
     InsufficientPointsError,
-    add_entry,
-    get_balance,
-    get_daily_reward_total,
-    participation_reward,
+    add_entry_to_data,
+    get_balance_from_data,
+    get_daily_reward_total_from_data,
 )
 from .schemas import (
     AdRewardEvent,
@@ -35,13 +45,20 @@ from .schemas import (
     SurveyDetail,
     SurveyResponseSubmit,
     SurveySummary,
+    SurveyUpdate,
     UniversityVerificationConfirm,
     UniversityVerificationRequest,
     UniversityView,
     UserUpdate,
     UserView,
 )
-from .security import get_current_user, hash_code, require_verified_user
+from .security import (
+    get_current_user,
+    get_optional_user,
+    hash_code,
+    require_verified_user,
+)
+from .store import JsonStore
 
 
 router = APIRouter(prefix="/api/v1")
@@ -69,134 +86,201 @@ def normalize_phone(value: str) -> str:
     return normalized
 
 
-def user_view(row: dict[str, Any] | sqlite3.Row) -> UserView:
-    data = dict(row)
-    data["university_verified"] = bool(data["university_verified"])
-    return UserView(**data)
+def find_by_id(data: dict[str, Any], collection: str, item_id: str) -> dict[str, Any] | None:
+    return next((item for item in data[collection] if item["id"] == item_id), None)
 
 
-def survey_summary_query(where: str = "") -> str:
-    return f"""
-        SELECT
-            s.*,
-            COUNT(DISTINCT r.id) AS response_count,
-            COUNT(DISTINCT l.user_id) AS like_count,
-            COUNT(DISTINCT q.id) AS question_count
-        FROM surveys s
-        LEFT JOIN survey_responses r ON r.survey_id = s.id
-        LEFT JOIN survey_likes l ON l.survey_id = s.id
-        LEFT JOIN survey_questions q ON q.survey_id = s.id
-        {where}
-        GROUP BY s.id
-    """
+def user_view(user: dict[str, Any]) -> UserView:
+    payload = dict(user)
+    payload["university_verified"] = bool(payload["university_verified"])
+    return UserView(**payload)
 
 
-def to_survey_summary(row: sqlite3.Row) -> SurveySummary:
+def university_name(data: dict[str, Any], university_id: str | None) -> str | None:
+    if not university_id:
+        return None
+    university = find_by_id(data, "universities", university_id)
+    return university["name"] if university else None
+
+
+def response_count(data: dict[str, Any], survey_id: str) -> int:
+    return sum(1 for item in data["responses"] if item["survey_id"] == survey_id)
+
+
+def like_count(data: dict[str, Any], survey_id: str) -> int:
+    return sum(1 for item in data["likes"] if item["survey_id"] == survey_id)
+
+
+def to_survey_summary(
+    data: dict[str, Any],
+    survey: dict[str, Any],
+    viewer_id: str | None = None,
+) -> SurveySummary:
+    author = find_by_id(data, "users", survey["author_id"])
+    status = effective_status(survey)
+    quote = reward_quote(survey)
+    completed = bool(
+        viewer_id
+        and any(
+            item["survey_id"] == survey["id"] and item["user_id"] == viewer_id
+            for item in data["responses"]
+        )
+    )
+    liked = bool(
+        viewer_id
+        and any(
+            item["survey_id"] == survey["id"] and item["user_id"] == viewer_id
+            for item in data["likes"]
+        )
+    )
+    bookmarked = bool(
+        viewer_id
+        and any(
+            item["survey_id"] == survey["id"] and item["user_id"] == viewer_id
+            for item in data["bookmarks"]
+        )
+    )
+    is_author = bool(viewer_id and survey["author_id"] == viewer_id)
+    viewer = find_by_id(data, "users", viewer_id) if viewer_id else None
+    purchased = bool(
+        viewer_id
+        and any(
+            entry["user_id"] == viewer_id
+            and entry.get("reference_type") == "paid_result_access"
+            and entry.get("reference_id") == survey["id"]
+            and int(entry["amount"]) < 0
+            for entry in data["point_ledger"]
+        )
+    )
+    visibility = survey.get("results_visibility", "after_participation")
+    can_view_results = bool(
+        is_author
+        or visibility == "public"
+        or (visibility == "after_participation" and completed)
+        or (visibility == "paid" and purchased)
+    )
+    target = survey.get("target_responses")
+    responses = response_count(data, survey["id"])
+    progress = (
+        min(100.0, round(responses * 100 / target, 1)) if target else None
+    )
+    claimable = None
+    if viewer_id:
+        claimable = max(
+            0,
+            min(
+                int(quote["reward_points"]),
+                1000 - get_daily_reward_total_from_data(data, viewer_id),
+            ),
+        )
     return SurveySummary(
-        id=row["id"],
-        author_id=row["author_id"],
-        title=row["title"],
-        description=row["description"],
-        category=row["category"],
-        survey_type=row["survey_type"],
-        status=row["status"],
-        results_visibility=row["results_visibility"],
-        target_responses=row["target_responses"],
-        deadline=row["deadline"],
-        response_count=int(row["response_count"]),
-        like_count=int(row["like_count"]),
-        question_count=int(row["question_count"]),
-        created_at=row["created_at"],
-        published_at=row["published_at"],
+        id=survey["id"],
+        author_id=survey["author_id"],
+        title=survey["title"],
+        description=survey.get("description", ""),
+        category=survey.get("category", "기타"),
+        survey_type=survey.get("survey_type", "standard"),
+        status=status,
+        results_visibility=survey.get("results_visibility", "after_participation"),
+        target_responses=survey.get("target_responses"),
+        deadline=survey.get("deadline"),
+        response_count=responses,
+        like_count=like_count(data, survey["id"]),
+        question_count=len(survey.get("questions", [])),
+        created_at=survey["created_at"],
+        published_at=survey.get("published_at"),
+        subcategory=survey.get("subcategory"),
+        result_price_points=int(survey.get("result_price_points", 0)),
+        reward_points=int(quote["reward_points"]),
+        estimated_minutes=estimated_minutes(survey),
+        author_nickname=author["nickname"] if author else None,
+        university_name=(
+            university_name(data, author.get("university_id")) if author else None
+        ),
+        is_completed=completed,
+        is_liked=liked,
+        is_bookmarked=bookmarked,
+        comment_count=sum(
+            1
+            for item in data["comments"]
+            if item["survey_id"] == survey["id"]
+            and item.get("deleted_at") is None
+        ),
+        progress_percentage=progress,
+        deadline_imminent=bool(quote["deadline_imminent"]),
+        base_reward_points=int(quote["base_reward_points"]),
+        reward_multiplier=float(quote["reward_multiplier"]),
+        claimable_reward_points=claimable,
+        viewer_is_author=is_author,
+        viewer_can_respond=bool(
+            viewer
+            and viewer.get("university_verified")
+            and status == "published"
+            and not completed
+            and not is_author
+        ),
+        viewer_can_view_results=can_view_results,
     )
 
 
-def load_survey_detail(db: Any, survey_id: str) -> SurveyDetail:
-    with db.connect() as connection:
-        survey = connection.execute(
-            survey_summary_query("WHERE s.id = ?"), (survey_id,)
-        ).fetchone()
-        if survey is None:
-            raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
-        question_rows = connection.execute(
-            "SELECT * FROM survey_questions WHERE survey_id = ? ORDER BY position",
-            (survey_id,),
-        ).fetchall()
-        option_rows = connection.execute(
-            """
-            SELECT o.* FROM survey_options o
-            JOIN survey_questions q ON q.id = o.question_id
-            WHERE q.survey_id = ? ORDER BY q.position, o.position
-            """,
-            (survey_id,),
-        ).fetchall()
-
-    options_by_question: dict[str, list[dict[str, Any]]] = {}
-    for option in option_rows:
-        options_by_question.setdefault(option["question_id"], []).append(
-            {"id": option["id"], "label": option["label"], "position": option["position"]}
-        )
-    summary = to_survey_summary(survey).model_dump()
+def load_survey_detail(
+    store: JsonStore, survey_id: str, viewer_id: str | None = None
+) -> SurveyDetail:
+    data = store.snapshot()
+    survey = find_by_id(data, "surveys", survey_id)
+    if survey is None:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
+    summary = to_survey_summary(data, survey, viewer_id).model_dump()
     return SurveyDetail(
         **summary,
-        result_price_points=int(survey["result_price_points"]),
-        questions=[
-            {
-                "id": question["id"],
-                "position": question["position"],
-                "question_type": question["question_type"],
-                "prompt": question["prompt"],
-                "required": bool(question["required"]),
-                "min_choices": question["min_choices"],
-                "max_choices": question["max_choices"],
-                "options": options_by_question.get(question["id"], []),
-            }
-            for question in question_rows
-        ],
+        questions=survey.get("questions", []),
     )
 
 
-def calculate_results(db: Any, survey_id: str, *, include_text: bool) -> dict[str, Any]:
-    with db.connect() as connection:
-        survey = connection.execute(
-            "SELECT id, title FROM surveys WHERE id = ?", (survey_id,)
-        ).fetchone()
-        if survey is None:
-            raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
-        response_count = connection.execute(
-            "SELECT COUNT(*) AS count FROM survey_responses WHERE survey_id = ?",
-            (survey_id,),
-        ).fetchone()["count"]
-        questions = connection.execute(
-            "SELECT * FROM survey_questions WHERE survey_id = ? ORDER BY position",
-            (survey_id,),
-        ).fetchall()
-        option_rows = connection.execute(
-            """
-            SELECT o.* FROM survey_options o
-            JOIN survey_questions q ON q.id = o.question_id
-            WHERE q.survey_id = ? ORDER BY o.position
-            """,
-            (survey_id,),
-        ).fetchall()
-        answer_rows = connection.execute(
-            """
-            SELECT a.* FROM survey_answers a
-            JOIN survey_responses r ON r.id = a.response_id
-            WHERE r.survey_id = ?
-            """,
-            (survey_id,),
-        ).fetchall()
+def build_questions(questions: list[Any]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for position, question in enumerate(questions, start=1):
+        question_id = str(uuid.uuid4())
+        output.append(
+            {
+                "id": question_id,
+                "position": position,
+                "question_type": question.question_type,
+                "prompt": question.prompt,
+                "required": question.required,
+                "min_choices": question.min_choices,
+                "max_choices": question.max_choices,
+                "options": [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "label": option.label,
+                        "position": option_position,
+                    }
+                    for option_position, option in enumerate(
+                        question.options, start=1
+                    )
+                ],
+            }
+        )
+    return output
 
-    options_by_question: dict[str, list[sqlite3.Row]] = {}
-    for option in option_rows:
-        options_by_question.setdefault(option["question_id"], []).append(option)
-    answers_by_question: dict[str, list[sqlite3.Row]] = {}
-    for answer in answer_rows:
-        answers_by_question.setdefault(answer["question_id"], []).append(answer)
+
+def calculate_results(
+    data: dict[str, Any], survey_id: str, *, include_text: bool
+) -> dict[str, Any]:
+    survey = find_by_id(data, "surveys", survey_id)
+    if survey is None:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
+    responses = [
+        response for response in data["responses"] if response["survey_id"] == survey_id
+    ]
+    answers_by_question: dict[str, list[dict[str, Any]]] = {}
+    for response in responses:
+        for answer in response.get("answers", []):
+            answers_by_question.setdefault(answer["question_id"], []).append(answer)
 
     output_questions: list[dict[str, Any]] = []
-    for question in questions:
+    for question in survey.get("questions", []):
         answers = answers_by_question.get(question["id"], [])
         item: dict[str, Any] = {
             "question_id": question["id"],
@@ -205,11 +289,9 @@ def calculate_results(db: Any, survey_id: str, *, include_text: bool) -> dict[st
             "answer_count": len(answers),
         }
         if question["question_type"] in {"single", "multiple", "scale", "balance"}:
-            counts: dict[str, int] = {
-                option["id"]: 0 for option in options_by_question.get(question["id"], [])
-            }
+            counts = {option["id"]: 0 for option in question.get("options", [])}
             for answer in answers:
-                for option_id in json.loads(answer["option_ids"] or "[]"):
+                for option_id in answer.get("option_ids", []):
                     if option_id in counts:
                         counts[option_id] += 1
             denominator = max(1, len(answers))
@@ -218,40 +300,87 @@ def calculate_results(db: Any, survey_id: str, *, include_text: bool) -> dict[st
                     "option_id": option["id"],
                     "label": option["label"],
                     "count": counts[option["id"]],
-                    "percentage": round(counts[option["id"]] * 100 / denominator, 1),
+                    "percentage": round(
+                        counts[option["id"]] * 100 / denominator, 1
+                    ),
                 }
-                for option in options_by_question.get(question["id"], [])
+                for option in question.get("options", [])
             ]
         elif question["question_type"] == "number":
-            numbers = [answer["value_number"] for answer in answers if answer["value_number"] is not None]
-            item["average"] = round(sum(numbers) / len(numbers), 2) if numbers else None
+            numbers = [
+                answer["value_number"]
+                for answer in answers
+                if answer.get("value_number") is not None
+            ]
+            item["average"] = (
+                round(sum(numbers) / len(numbers), 2) if numbers else None
+            )
             item["minimum"] = min(numbers) if numbers else None
             item["maximum"] = max(numbers) if numbers else None
         elif include_text:
             item["responses"] = [
-                answer["value_text"] for answer in answers if answer["value_text"]
+                answer["value_text"]
+                for answer in answers
+                if answer.get("value_text")
             ][:100]
         output_questions.append(item)
 
     return {
         "survey_id": survey_id,
         "title": survey["title"],
-        "response_count": int(response_count),
+        "response_count": len(responses),
         "questions": output_questions,
     }
 
 
+def ensure_results_access(
+    data: dict[str, Any], survey: dict[str, Any], user_id: str
+) -> None:
+    visibility = survey.get("results_visibility", "after_participation")
+    if survey["author_id"] == user_id or visibility == "public":
+        return
+    if visibility == "after_participation":
+        participated = any(
+            response["survey_id"] == survey["id"]
+            and response["user_id"] == user_id
+            for response in data["responses"]
+        )
+        if participated:
+            return
+    if visibility == "paid":
+        purchased = any(
+            entry["user_id"] == user_id
+            and entry.get("reference_type") == "paid_result_access"
+            and entry.get("reference_id") == survey["id"]
+            and int(entry["amount"]) < 0
+            for entry in data["point_ledger"]
+        )
+        if purchased:
+            return
+        raise HTTPException(status_code=402, detail="결과 열람권 구매가 필요합니다.")
+    raise HTTPException(status_code=403, detail="이 설문 결과를 열람할 수 없습니다.")
+
+
+def ensure_development(request: Request) -> None:
+    if request.app.state.settings.environment == "production":
+        raise HTTPException(status_code=404, detail="개발 전용 기능입니다.")
+
+
 @router.get("/health", tags=["system"])
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "storage": "json"}
 
 
 @router.get("/universities", response_model=list[UniversityView], tags=["auth"])
 def list_universities(request: Request) -> list[UniversityView]:
-    with request.app.state.db.connect() as connection:
-        rows = connection.execute("SELECT * FROM universities ORDER BY name").fetchall()
+    data = request.app.state.store.snapshot()
+    rows = sorted(data["universities"], key=lambda item: item["name"])
     return [
-        UniversityView(id=row["id"], name=row["name"], email_domains=json.loads(row["email_domains"]))
+        UniversityView(
+            id=row["id"],
+            name=row["name"],
+            email_domains=row["email_domains"],
+        )
         for row in rows
     ]
 
@@ -259,21 +388,27 @@ def list_universities(request: Request) -> list[UniversityView]:
 @router.post("/auth/phone/request", response_model=OtpIssued, tags=["auth"])
 def request_phone_otp(payload: PhoneRequest, request: Request) -> OtpIssued:
     if request.app.state.settings.environment == "production":
-        raise HTTPException(status_code=503, detail="운영 SMS 어댑터가 아직 설정되지 않았습니다.")
+        raise HTTPException(
+            status_code=503, detail="운영 SMS 어댑터가 아직 설정되지 않았습니다."
+        )
     phone = normalize_phone(payload.phone)
     code = f"{secrets.randbelow(1_000_000):06d}"
-    expires = utc_now() + timedelta(seconds=request.app.state.settings.otp_ttl_seconds)
-    with request.app.state.db.connect() as connection:
-        connection.execute(
-            "INSERT INTO phone_otps(id, phone, code_hash, expires_at) VALUES (?, ?, ?, ?)",
-            (
-                str(uuid.uuid4()),
-                phone,
-                hash_code(request.app.state.settings.token_secret, code),
-                expires.isoformat(),
-            ),
+    expires = utc_now() + timedelta(
+        seconds=request.app.state.settings.otp_ttl_seconds
+    )
+    with request.app.state.store.transaction() as data:
+        data["phone_otps"].append(
+            {
+                "id": str(uuid.uuid4()),
+                "phone": phone,
+                "code_hash": hash_code(
+                    request.app.state.settings.token_secret, code
+                ),
+                "expires_at": expires.isoformat(),
+                "consumed_at": None,
+                "created_at": iso_now(),
+            }
         )
-        connection.commit()
     return OtpIssued(
         expires_in_seconds=request.app.state.settings.otp_ttl_seconds,
         dev_code=code,
@@ -283,31 +418,47 @@ def request_phone_otp(payload: PhoneRequest, request: Request) -> OtpIssued:
 @router.post("/auth/phone/verify", response_model=AuthResult, tags=["auth"])
 def verify_phone_otp(payload: PhoneVerify, request: Request) -> AuthResult:
     phone = normalize_phone(payload.phone)
-    now = iso_now()
-    with request.app.state.db.connect() as connection:
-        otp = connection.execute(
-            """
-            SELECT * FROM phone_otps
-            WHERE phone = ? AND consumed_at IS NULL AND expires_at > ?
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (phone, now),
-        ).fetchone()
-        if otp is None or not hmac.compare_digest(
-            otp["code_hash"], hash_code(request.app.state.settings.token_secret, payload.code)
-        ):
-            raise HTTPException(status_code=400, detail="인증번호가 올바르지 않습니다.")
-        connection.execute("UPDATE phone_otps SET consumed_at = ? WHERE id = ?", (now, otp["id"]))
-        user = connection.execute("SELECT * FROM users WHERE phone = ?", (phone,)).fetchone()
+    now = utc_now()
+    with request.app.state.store.transaction() as data:
+        candidates = sorted(
+            (
+                otp
+                for otp in data["phone_otps"]
+                if otp["phone"] == phone
+                and otp.get("consumed_at") is None
+                and parse_datetime(otp["expires_at"]) > now
+            ),
+            key=lambda item: item["created_at"],
+            reverse=True,
+        )
+        otp = candidates[0] if candidates else None
+        expected = hash_code(
+            request.app.state.settings.token_secret, payload.code
+        )
+        if otp is None or not hmac.compare_digest(otp["code_hash"], expected):
+            raise HTTPException(
+                status_code=400, detail="인증번호가 올바르지 않습니다."
+            )
+        otp["consumed_at"] = iso_now()
+        user = next(
+            (item for item in data["users"] if item["phone"] == phone), None
+        )
         if user is None:
             user_id = str(uuid.uuid4())
             phone_digits = re.sub(r"\D", "", phone)
-            connection.execute(
-                "INSERT INTO users(id, phone, nickname) VALUES (?, ?, ?)",
-                (user_id, phone, f"수니{phone_digits[-4:]}"),
-            )
-            user = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        connection.commit()
+            user = {
+                "id": user_id,
+                "phone": phone,
+                "nickname": f"수니{phone_digits[-4:]}",
+                "email": None,
+                "university_id": None,
+                "university_verified": False,
+                "role": "user",
+                "status": "active",
+                "created_at": iso_now(),
+                "updated_at": iso_now(),
+            }
+            data["users"].append(user)
     token = request.app.state.tokens.create(user["id"])
     return AuthResult(access_token=token, user=user_view(user))
 
@@ -319,36 +470,43 @@ def request_university_otp(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> OtpIssued:
     if request.app.state.settings.environment == "production":
-        raise HTTPException(status_code=503, detail="운영 이메일 어댑터가 아직 설정되지 않았습니다.")
-    email = payload.email.strip().lower()
-    with request.app.state.db.connect() as connection:
-        university = connection.execute(
-            "SELECT * FROM universities WHERE id = ?", (payload.university_id,)
-        ).fetchone()
-        if university is None:
-            raise HTTPException(status_code=404, detail="대학교를 찾을 수 없습니다.")
-        domains = json.loads(university["email_domains"])
-        if not any(email.endswith(f"@{domain}") for domain in domains):
-            raise HTTPException(status_code=422, detail="해당 학교 이메일 도메인이 아닙니다.")
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        expires = utc_now() + timedelta(seconds=request.app.state.settings.otp_ttl_seconds)
-        connection.execute(
-            """
-            INSERT INTO university_otps(
-                id, user_id, university_id, email, code_hash, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                str(uuid.uuid4()),
-                user["id"],
-                payload.university_id,
-                email,
-                hash_code(request.app.state.settings.token_secret, code),
-                expires.isoformat(),
-            ),
+        raise HTTPException(
+            status_code=503, detail="운영 이메일 어댑터가 아직 설정되지 않았습니다."
         )
-        connection.commit()
-    return OtpIssued(expires_in_seconds=request.app.state.settings.otp_ttl_seconds, dev_code=code)
+    email = payload.email.strip().lower()
+    data = request.app.state.store.snapshot()
+    university = find_by_id(data, "universities", payload.university_id)
+    if university is None:
+        raise HTTPException(status_code=404, detail="대학교를 찾을 수 없습니다.")
+    if not any(
+        email.endswith(f"@{domain}") for domain in university["email_domains"]
+    ):
+        raise HTTPException(
+            status_code=422, detail="해당 학교 이메일 도메인이 아닙니다."
+        )
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    expires = utc_now() + timedelta(
+        seconds=request.app.state.settings.otp_ttl_seconds
+    )
+    with request.app.state.store.transaction() as writable:
+        writable["university_otps"].append(
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "university_id": payload.university_id,
+                "email": email,
+                "code_hash": hash_code(
+                    request.app.state.settings.token_secret, code
+                ),
+                "expires_at": expires.isoformat(),
+                "consumed_at": None,
+                "created_at": iso_now(),
+            }
+        )
+    return OtpIssued(
+        expires_in_seconds=request.app.state.settings.otp_ttl_seconds,
+        dev_code=code,
+    )
 
 
 @router.post("/auth/university/verify", response_model=UserView, tags=["auth"])
@@ -358,41 +516,61 @@ def verify_university_otp(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> UserView:
     email = payload.email.strip().lower()
-    now = iso_now()
-    with request.app.state.db.connect() as connection:
-        otp = connection.execute(
-            """
-            SELECT * FROM university_otps
-            WHERE user_id = ? AND email = ? AND consumed_at IS NULL AND expires_at > ?
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (user["id"], email, now),
-        ).fetchone()
-        if otp is None or not hmac.compare_digest(
-            otp["code_hash"], hash_code(request.app.state.settings.token_secret, payload.code)
-        ):
-            raise HTTPException(status_code=400, detail="인증번호가 올바르지 않습니다.")
-        connection.execute("UPDATE university_otps SET consumed_at = ? WHERE id = ?", (now, otp["id"]))
-        connection.execute(
-            """
-            UPDATE users SET email = ?, university_id = ?, university_verified = 1,
-                             updated_at = ?
-            WHERE id = ?
-            """,
-            (email, otp["university_id"], now, user["id"]),
+    now = utc_now()
+    with request.app.state.store.transaction() as data:
+        candidates = sorted(
+            (
+                otp
+                for otp in data["university_otps"]
+                if otp["user_id"] == user["id"]
+                and otp["email"] == email
+                and otp.get("consumed_at") is None
+                and parse_datetime(otp["expires_at"]) > now
+            ),
+            key=lambda item: item["created_at"],
+            reverse=True,
         )
-        connection.commit()
-    add_entry(
-        request.app.state.db,
-        user_id=user["id"],
-        amount=2500,
-        entry_type="university_verified_bonus",
-        reference_type="user",
-        reference_id=user["id"],
-        idempotency_key=f"university-bonus:{user['id']}",
-    )
-    with request.app.state.db.connect() as connection:
-        updated = connection.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+        otp = candidates[0] if candidates else None
+        expected = hash_code(
+            request.app.state.settings.token_secret, payload.code
+        )
+        if otp is None or not hmac.compare_digest(otp["code_hash"], expected):
+            raise HTTPException(
+                status_code=400, detail="인증번호가 올바르지 않습니다."
+            )
+        duplicate = next(
+            (
+                item
+                for item in data["users"]
+                if item.get("email") == email and item["id"] != user["id"]
+            ),
+            None,
+        )
+        if duplicate:
+            raise HTTPException(
+                status_code=409, detail="이미 인증에 사용된 이메일입니다."
+            )
+        otp["consumed_at"] = iso_now()
+        updated = find_by_id(data, "users", user["id"])
+        if updated is None:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+        updated.update(
+            {
+                "email": email,
+                "university_id": otp["university_id"],
+                "university_verified": True,
+                "updated_at": iso_now(),
+            }
+        )
+        add_entry_to_data(
+            data,
+            user_id=user["id"],
+            amount=2500,
+            entry_type="university_verified_bonus",
+            reference_type="user",
+            reference_id=user["id"],
+            idempotency_key=f"university-bonus:{user['id']}",
+        )
     return user_view(updated)
 
 
@@ -407,14 +585,145 @@ def update_me(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> UserView:
-    with request.app.state.db.connect() as connection:
-        connection.execute(
-            "UPDATE users SET nickname = ?, updated_at = ? WHERE id = ?",
-            (payload.nickname, iso_now(), user["id"]),
-        )
-        connection.commit()
-        updated = connection.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+    with request.app.state.store.transaction() as data:
+        updated = find_by_id(data, "users", user["id"])
+        if updated is None:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+        updated["nickname"] = payload.nickname
+        updated["updated_at"] = iso_now()
     return user_view(updated)
+
+
+@router.get("/users/me/profile", tags=["users"])
+def get_my_profile(
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    data = request.app.state.store.snapshot()
+    created = [
+        survey for survey in data["surveys"] if survey["author_id"] == user["id"]
+    ]
+    participated_ids = {
+        response["survey_id"]
+        for response in data["responses"]
+        if response["user_id"] == user["id"]
+    }
+    earned = total_earned(data, user["id"])
+    level = level_from_points(earned)
+    badges = []
+    for owned in data["user_badges"]:
+        if owned["user_id"] != user["id"]:
+            continue
+        badge = find_by_id(data, "badges", owned["badge_id"])
+        if badge:
+            badges.append(
+                {
+                    **badge,
+                    "earned_at": owned["earned_at"],
+                    "survey_id": owned.get("survey_id"),
+                }
+            )
+    ranked_users = sorted(
+        data["users"],
+        key=lambda item: (
+            total_earned(data, item["id"]),
+            item["nickname"],
+        ),
+        reverse=True,
+    )
+    overall_rank = next(
+        (
+            index
+            for index, item in enumerate(ranked_users, start=1)
+            if item["id"] == user["id"]
+        ),
+        None,
+    )
+    school_users = [
+        item
+        for item in ranked_users
+        if item.get("university_id") == user.get("university_id")
+    ]
+    university_rank = next(
+        (
+            index
+            for index, item in enumerate(school_users, start=1)
+            if item["id"] == user["id"]
+        ),
+        None,
+    )
+    return {
+        "user": user_view(user).model_dump(),
+        "university_name": university_name(data, user.get("university_id")),
+        "balance": get_balance_from_data(data, user["id"]),
+        "total_earned": earned,
+        "level": level,
+        "next_level_at": next_level_points(earned),
+        "points_to_next_level": max(0, next_level_points(earned) - earned),
+        "interests": user.get("interests", []),
+        "notifications_enabled": user.get("notifications_enabled", True),
+        "selected_title": user.get("selected_title"),
+        "badges": badges,
+        "overall_rank": overall_rank,
+        "university_rank": university_rank,
+        "bookmark_count": sum(
+            1
+            for bookmark in data["bookmarks"]
+            if bookmark["user_id"] == user["id"]
+        ),
+        "created_survey_count": len(created),
+        "draft_count": sum(1 for survey in created if survey["status"] == "draft"),
+        "participated_survey_count": len(participated_ids),
+    }
+
+
+@router.get("/users/me/surveys", response_model=list[SurveySummary], tags=["users"])
+def get_my_surveys(
+    request: Request,
+    role: str = Query(default="created", pattern="^(created|participated)$"),
+    status_filter: str | None = Query(default=None, alias="status"),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[SurveySummary]:
+    data = request.app.state.store.snapshot()
+    if role == "created":
+        surveys = [
+            survey
+            for survey in data["surveys"]
+            if survey["author_id"] == user["id"]
+        ]
+    else:
+        survey_ids = {
+            response["survey_id"]
+            for response in data["responses"]
+            if response["user_id"] == user["id"]
+        }
+        surveys = [
+            survey for survey in data["surveys"] if survey["id"] in survey_ids
+        ]
+    if status_filter:
+        surveys = [
+            survey
+            for survey in surveys
+            if effective_status(survey) == status_filter
+        ]
+    surveys.sort(key=lambda item: item["created_at"], reverse=True)
+    return [
+        to_survey_summary(data, survey, user["id"]) for survey in surveys
+    ]
+
+
+@router.get("/survey-categories", tags=["surveys"])
+def list_survey_categories(request: Request) -> list[dict[str, Any]]:
+    data = request.app.state.store.snapshot()
+    counts: dict[str, int] = {}
+    for survey in data["surveys"]:
+        if effective_status(survey) == "published":
+            category = survey.get("category", "기타")
+            counts[category] = counts.get(category, 0) + 1
+    return [
+        {"name": category, "survey_count": count}
+        for category, count in sorted(counts.items())
+    ]
 
 
 @router.post("/surveys", response_model=SurveyDetail, status_code=201, tags=["surveys"])
@@ -427,55 +736,31 @@ def create_survey(
     deadline = payload.deadline
     if deadline and deadline.tzinfo is None:
         deadline = deadline.replace(tzinfo=UTC)
-    with request.app.state.db.connect() as connection:
-        connection.execute("BEGIN")
-        connection.execute(
-            """
-            INSERT INTO surveys(
-                id, author_id, title, description, category, survey_type,
-                results_visibility, result_price_points, target_responses, deadline
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                survey_id,
-                user["id"],
-                payload.title,
-                payload.description,
-                payload.category,
-                payload.survey_type,
-                payload.results_visibility,
-                payload.result_price_points,
-                payload.target_responses,
-                deadline.isoformat() if deadline else None,
-            ),
-        )
-        for position, question in enumerate(payload.questions, start=1):
-            question_id = str(uuid.uuid4())
-            connection.execute(
-                """
-                INSERT INTO survey_questions(
-                    id, survey_id, position, question_type, prompt, required,
-                    min_choices, max_choices
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    question_id,
-                    survey_id,
-                    position,
-                    question.question_type,
-                    question.prompt,
-                    int(question.required),
-                    question.min_choices,
-                    question.max_choices,
-                ),
-            )
-            for option_position, option in enumerate(question.options, start=1):
-                connection.execute(
-                    "INSERT INTO survey_options(id, question_id, position, label) VALUES (?, ?, ?, ?)",
-                    (str(uuid.uuid4()), question_id, option_position, option.label),
-                )
-        connection.commit()
-    return load_survey_detail(request.app.state.db, survey_id)
+    survey = {
+        "id": survey_id,
+        "author_id": user["id"],
+        "title": payload.title,
+        "description": payload.description,
+        "category": payload.category,
+        "subcategory": payload.subcategory,
+        "survey_type": payload.survey_type,
+        "status": "draft",
+        "results_visibility": payload.results_visibility,
+        "result_price_points": payload.result_price_points,
+        "reward_points": payload.reward_points,
+        "target_responses": payload.target_responses,
+        "deadline": deadline.isoformat() if deadline else None,
+        "questions": build_questions(payload.questions),
+        "bump_count": 0,
+        "bumped_at": None,
+        "published_at": None,
+        "closed_at": None,
+        "created_at": iso_now(),
+        "updated_at": iso_now(),
+    }
+    with request.app.state.store.transaction() as data:
+        data["surveys"].append(survey)
+    return load_survey_detail(request.app.state.store, survey_id, user["id"])
 
 
 @router.get("/surveys", response_model=list[SurveySummary], tags=["surveys"])
@@ -483,25 +768,66 @@ def list_surveys(
     request: Request,
     sort: str = Query(default="latest", pattern="^(latest|hot|deadline)$"),
     category: str | None = None,
+    survey_type: str | None = Query(
+        default=None, pattern="^(standard|balance)$"
+    ),
+    q: str | None = Query(default=None, min_length=1, max_length=100),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    user: dict[str, Any] | None = Depends(get_optional_user),
 ) -> list[SurveySummary]:
-    conditions = ["s.status = 'published'"]
-    params: list[Any] = []
+    data = request.app.state.store.snapshot()
+    now = utc_now()
+    surveys = [
+        survey
+        for survey in data["surveys"]
+        if effective_status(survey, now=now) == "published"
+    ]
     if category:
-        conditions.append("s.category = ?")
-        params.append(category)
-    where = "WHERE " + " AND ".join(conditions)
-    order = {
-        "latest": "COALESCE(s.bumped_at, s.published_at) DESC",
-        "hot": "response_count DESC, like_count DESC, s.published_at DESC",
-        "deadline": "CASE WHEN s.deadline IS NULL THEN 1 ELSE 0 END, s.deadline ASC",
-    }[sort]
-    query = survey_summary_query(where) + f" ORDER BY {order} LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-    with request.app.state.db.connect() as connection:
-        rows = connection.execute(query, params).fetchall()
-    return [to_survey_summary(row) for row in rows]
+        surveys = [
+            survey for survey in surveys if survey.get("category") == category
+        ]
+    if survey_type:
+        surveys = [
+            survey
+            for survey in surveys
+            if survey.get("survey_type") == survey_type
+        ]
+    if q:
+        needle = q.casefold()
+        surveys = [
+            survey
+            for survey in surveys
+            if needle
+            in f"{survey['title']} {survey.get('description', '')}".casefold()
+        ]
+    if sort == "hot":
+        surveys.sort(
+            key=lambda item: (
+                response_count(data, item["id"]),
+                like_count(data, item["id"]),
+                item.get("published_at") or "",
+            ),
+            reverse=True,
+        )
+    elif sort == "deadline":
+        surveys.sort(
+            key=lambda item: (
+                item.get("deadline") is None,
+                item.get("deadline") or "9999-12-31T23:59:59+00:00",
+            )
+        )
+    else:
+        surveys.sort(
+            key=lambda item: item.get("bumped_at")
+            or item.get("published_at")
+            or item["created_at"],
+            reverse=True,
+        )
+    return [
+        to_survey_summary(data, survey, user["id"] if user else None)
+        for survey in surveys[offset : offset + limit]
+    ]
 
 
 @router.get("/surveys/{survey_id}", response_model=SurveyDetail, tags=["surveys"])
@@ -510,10 +836,81 @@ def get_survey(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> SurveyDetail:
-    detail = load_survey_detail(request.app.state.db, survey_id)
+    detail = load_survey_detail(
+        request.app.state.store, survey_id, user["id"]
+    )
     if detail.status == "draft" and detail.author_id != user["id"]:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
     return detail
+
+
+@router.patch("/surveys/{survey_id}", response_model=SurveyDetail, tags=["surveys"])
+def update_survey(
+    survey_id: str,
+    payload: SurveyUpdate,
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> SurveyDetail:
+    updates = payload.model_dump(exclude_unset=True)
+    with request.app.state.store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
+        if (
+            survey is None
+            or survey["author_id"] != user["id"]
+            or survey["status"] != "draft"
+        ):
+            raise HTTPException(
+                status_code=404, detail="수정할 임시저장 설문을 찾을 수 없습니다."
+            )
+        if "questions" in updates and payload.questions is not None:
+            survey["questions"] = build_questions(payload.questions)
+            updates.pop("questions", None)
+        if "deadline" in updates:
+            deadline = payload.deadline
+            if deadline and deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=UTC)
+            updates["deadline"] = deadline.isoformat() if deadline else None
+        survey.update(updates)
+        if (
+            survey.get("results_visibility") == "paid"
+            and int(survey.get("result_price_points") or 0) <= 0
+        ):
+            raise HTTPException(
+                status_code=422, detail="유료 결과에는 열람 포인트가 필요합니다."
+            )
+        if survey.get("survey_type") == "balance":
+            questions = survey.get("questions", [])
+            if (
+                len(questions) != 1
+                or questions[0].get("question_type") != "balance"
+                or len(questions[0].get("options", [])) != 2
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="밸런스게임은 선택지 2개의 balance 문항 하나로 구성해야 합니다.",
+                )
+        survey["updated_at"] = iso_now()
+    return load_survey_detail(request.app.state.store, survey_id, user["id"])
+
+
+@router.delete("/surveys/{survey_id}", tags=["surveys"])
+def delete_survey(
+    survey_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    with request.app.state.store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
+        if (
+            survey is None
+            or survey["author_id"] != user["id"]
+            or survey["status"] != "draft"
+        ):
+            raise HTTPException(
+                status_code=404, detail="삭제할 임시저장 설문을 찾을 수 없습니다."
+            )
+        data["surveys"].remove(survey)
+    return {"deleted": True, "survey_id": survey_id}
 
 
 @router.post("/surveys/{survey_id}/publish", response_model=SurveyDetail, tags=["surveys"])
@@ -522,18 +919,43 @@ def publish_survey(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> SurveyDetail:
-    with request.app.state.db.connect() as connection:
-        survey = connection.execute("SELECT * FROM surveys WHERE id = ?", (survey_id,)).fetchone()
+    with request.app.state.store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
         if survey is None or survey["author_id"] != user["id"]:
             raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
         if survey["status"] != "draft":
-            raise HTTPException(status_code=409, detail="임시저장 상태의 설문만 게시할 수 있습니다.")
-        connection.execute(
-            "UPDATE surveys SET status = 'published', published_at = ?, updated_at = ? WHERE id = ?",
-            (iso_now(), iso_now(), survey_id),
-        )
-        connection.commit()
-    return load_survey_detail(request.app.state.db, survey_id)
+            raise HTTPException(
+                status_code=409, detail="임시저장 상태의 설문만 게시할 수 있습니다."
+            )
+        if survey.get("deadline") and parse_datetime(survey["deadline"]) <= utc_now():
+            raise HTTPException(
+                status_code=409, detail="마감일이 지난 설문은 게시할 수 없습니다."
+            )
+        survey["status"] = "published"
+        survey["published_at"] = iso_now()
+        survey["updated_at"] = iso_now()
+        for recipient in data["users"]:
+            if (
+                recipient["id"] == user["id"]
+                or not recipient.get("university_verified")
+            ):
+                continue
+            interests = recipient.get("interests", [])
+            interested = not interests or survey.get("category") in interests
+            if interested:
+                add_notification(
+                    data,
+                    user_id=recipient["id"],
+                    notification_type="survey_recommendation",
+                    title="관심 설문이 새로 올라왔어요",
+                    body=f"{survey.get('category', '기타')} · {survey['title']}",
+                    target={
+                        "screen": "survey_detail",
+                        "resource_id": survey_id,
+                    },
+                    idempotency_key=f"survey-published:{survey_id}:{recipient['id']}",
+                )
+    return load_survey_detail(request.app.state.store, survey_id, user["id"])
 
 
 @router.post("/surveys/{survey_id}/close", response_model=SurveyDetail, tags=["surveys"])
@@ -542,26 +964,31 @@ def close_survey(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> SurveyDetail:
-    with request.app.state.db.connect() as connection:
-        cursor = connection.execute(
-            """
-            UPDATE surveys SET status = 'closed', closed_at = ?, updated_at = ?
-            WHERE id = ? AND author_id = ? AND status = 'published'
-            """,
-            (iso_now(), iso_now(), survey_id, user["id"]),
-        )
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="마감할 설문을 찾을 수 없습니다.")
-        connection.commit()
-    return load_survey_detail(request.app.state.db, survey_id)
+    with request.app.state.store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
+        if (
+            survey is None
+            or survey["author_id"] != user["id"]
+            or survey["status"] != "published"
+        ):
+            raise HTTPException(
+                status_code=404, detail="마감할 설문을 찾을 수 없습니다."
+            )
+        survey["status"] = "closed"
+        survey["closed_at"] = iso_now()
+        survey["updated_at"] = iso_now()
+    return load_survey_detail(request.app.state.store, survey_id, user["id"])
 
 
 @router.get("/surveys/{survey_id}/progress", tags=["surveys"])
 def survey_progress(survey_id: str, request: Request) -> dict[str, Any]:
-    detail = load_survey_detail(request.app.state.db, survey_id)
+    detail = load_survey_detail(request.app.state.store, survey_id)
     percentage = None
     if detail.target_responses:
-        percentage = min(100.0, round(detail.response_count * 100 / detail.target_responses, 1))
+        percentage = min(
+            100.0,
+            round(detail.response_count * 100 / detail.target_responses, 1),
+        )
     return {
         "survey_id": survey_id,
         "response_count": detail.response_count,
@@ -582,129 +1009,192 @@ def submit_response(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> ResponseReceipt:
-    db = request.app.state.db
-    with db.connect() as connection:
-        survey = connection.execute("SELECT * FROM surveys WHERE id = ?", (survey_id,)).fetchone()
-        if survey is None or survey["status"] != "published":
-            raise HTTPException(status_code=404, detail="참여 가능한 설문을 찾을 수 없습니다.")
-        deadline = parse_datetime(survey["deadline"])
+    store = request.app.state.store
+    with store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
+        if survey is None or effective_status(survey) != "published":
+            raise HTTPException(
+                status_code=404, detail="참여 가능한 설문을 찾을 수 없습니다."
+            )
+        if survey["author_id"] == user["id"]:
+            raise HTTPException(
+                status_code=409, detail="자신이 작성한 설문에는 참여할 수 없습니다."
+            )
+        deadline = parse_datetime(survey.get("deadline"))
         if deadline and deadline <= utc_now():
             raise HTTPException(status_code=409, detail="마감된 설문입니다.")
-        questions = connection.execute(
-            "SELECT * FROM survey_questions WHERE survey_id = ? ORDER BY position",
-            (survey_id,),
-        ).fetchall()
-        option_rows = connection.execute(
-            """
-            SELECT o.* FROM survey_options o JOIN survey_questions q ON q.id = o.question_id
-            WHERE q.survey_id = ?
-            """,
-            (survey_id,),
-        ).fetchall()
+        if any(
+            response["survey_id"] == survey_id
+            and response["user_id"] == user["id"]
+            for response in data["responses"]
+        ):
+            raise HTTPException(status_code=409, detail="이미 참여한 설문입니다.")
 
-    question_map = {row["id"]: row for row in questions}
-    option_map: dict[str, set[str]] = {}
-    for option in option_rows:
-        option_map.setdefault(option["question_id"], set()).add(option["id"])
-    submitted = {answer.question_id: answer for answer in payload.answers}
-    unknown = set(submitted) - set(question_map)
-    if unknown:
-        raise HTTPException(status_code=422, detail="설문에 속하지 않은 문항이 포함되어 있습니다.")
-
-    for question_id, question in question_map.items():
-        answer = submitted.get(question_id)
-        if answer is None:
-            if question["required"]:
-                raise HTTPException(status_code=422, detail=f"필수 문항 응답이 없습니다: {question['prompt']}")
-            continue
-        question_type = question["question_type"]
-        if question_type in {"single", "scale", "balance"} and len(answer.option_ids) != 1:
-            raise HTTPException(status_code=422, detail="단일 선택 문항은 하나만 선택해야 합니다.")
-        if question_type == "multiple":
-            if question["min_choices"] and len(answer.option_ids) < question["min_choices"]:
-                raise HTTPException(status_code=422, detail="최소 선택 개수를 충족하지 못했습니다.")
-            if question["max_choices"] and len(answer.option_ids) > question["max_choices"]:
-                raise HTTPException(status_code=422, detail="최대 선택 개수를 초과했습니다.")
-        if question_type in {"single", "multiple", "scale", "balance"}:
-            if not set(answer.option_ids).issubset(option_map.get(question_id, set())):
-                raise HTTPException(status_code=422, detail="유효하지 않은 선택지가 포함되어 있습니다.")
-        if question_type == "text" and question["required"] and not (answer.value_text or "").strip():
-            raise HTTPException(status_code=422, detail="필수 주관식 응답이 비어 있습니다.")
-        if question_type == "number" and question["required"] and answer.value_number is None:
-            raise HTTPException(status_code=422, detail="필수 숫자 응답이 비어 있습니다.")
-
-    response_id = str(uuid.uuid4())
-    try:
-        with db.connect() as connection:
-            connection.execute("BEGIN")
-            connection.execute(
-                "INSERT INTO survey_responses(id, survey_id, user_id) VALUES (?, ?, ?)",
-                (response_id, survey_id, user["id"]),
+        questions = survey.get("questions", [])
+        question_map = {question["id"]: question for question in questions}
+        submitted = {answer.question_id: answer for answer in payload.answers}
+        if set(submitted) - set(question_map):
+            raise HTTPException(
+                status_code=422,
+                detail="설문에 속하지 않은 문항이 포함되어 있습니다.",
             )
-            for answer in payload.answers:
-                connection.execute(
-                    """
-                    INSERT INTO survey_answers(
-                        id, response_id, question_id, option_ids, value_text, value_number
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(uuid.uuid4()),
-                        response_id,
-                        answer.question_id,
-                        json.dumps(answer.option_ids),
-                        answer.value_text,
-                        answer.value_number,
-                    ),
+        for question_id, question in question_map.items():
+            answer = submitted.get(question_id)
+            if answer is None:
+                if question.get("required", True):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"필수 문항 응답이 없습니다: {question['prompt']}",
+                    )
+                continue
+            question_type = question["question_type"]
+            if question_type in {"single", "scale", "balance"} and len(
+                answer.option_ids
+            ) != 1:
+                raise HTTPException(
+                    status_code=422,
+                    detail="단일 선택 문항은 하나만 선택해야 합니다.",
                 )
-            connection.commit()
-    except sqlite3.IntegrityError as exc:
-        raise HTTPException(status_code=409, detail="이미 참여한 설문입니다.") from exc
+            if question_type == "multiple":
+                minimum = question.get("min_choices")
+                if minimum is None and question.get("required", True):
+                    minimum = 1
+                if minimum and len(answer.option_ids) < minimum:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="최소 선택 개수를 충족하지 못했습니다.",
+                    )
+                if question.get("max_choices") and len(
+                    answer.option_ids
+                ) > question["max_choices"]:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="최대 선택 개수를 초과했습니다.",
+                    )
+            if question_type in {"single", "multiple", "scale", "balance"}:
+                valid_options = {
+                    option["id"] for option in question.get("options", [])
+                }
+                if not set(answer.option_ids).issubset(valid_options):
+                    raise HTTPException(
+                        status_code=422,
+                        detail="유효하지 않은 선택지가 포함되어 있습니다.",
+                    )
+                if answer.value_text is not None or answer.value_number is not None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="선택형 문항에는 선택지 응답만 제출할 수 있습니다.",
+                    )
+            if question_type == "text" and (
+                answer.option_ids or answer.value_number is not None
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="주관식 문항에는 문자열 응답만 제출할 수 있습니다.",
+                )
+            if question_type == "number" and (
+                answer.option_ids or answer.value_text is not None
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="숫자 문항에는 숫자 응답만 제출할 수 있습니다.",
+                )
+            if (
+                question_type == "text"
+                and question.get("required", True)
+                and not (answer.value_text or "").strip()
+            ):
+                raise HTTPException(
+                    status_code=422, detail="필수 주관식 응답이 비어 있습니다."
+                )
+            if (
+                question_type == "number"
+                and question.get("required", True)
+                and answer.value_number is None
+            ):
+                raise HTTPException(
+                    status_code=422, detail="필수 숫자 응답이 비어 있습니다."
+                )
 
-    reward = participation_reward(len(questions))
-    if deadline and deadline - utc_now() <= timedelta(hours=24):
-        reward = int(reward * 1.5)
-    reward = max(0, min(reward, 1000 - get_daily_reward_total(db, user["id"])))
-    if reward:
-        ledger = add_entry(
-            db,
-            user_id=user["id"],
-            amount=reward,
-            entry_type="survey_participation",
-            reference_type="survey_response",
-            reference_id=response_id,
-            idempotency_key=f"survey-response:{response_id}",
+        quote = reward_quote(survey)
+        nominal_reward = int(quote["reward_points"])
+        reward = max(
+            0,
+            min(
+                nominal_reward,
+                1000
+                - get_daily_reward_total_from_data(data, user["id"]),
+            ),
         )
-        balance = ledger.balance
-    else:
-        balance = get_balance(db, user["id"])
-    return ResponseReceipt(response_id=response_id, points_earned=reward, balance=balance)
-
-
-def ensure_results_access(db: Any, survey: sqlite3.Row, user_id: str) -> None:
-    if survey["author_id"] == user_id or survey["results_visibility"] == "public":
-        return
-    with db.connect() as connection:
-        if survey["results_visibility"] == "after_participation":
-            participated = connection.execute(
-                "SELECT 1 FROM survey_responses WHERE survey_id = ? AND user_id = ?",
-                (survey["id"], user_id),
-            ).fetchone()
-            if participated:
-                return
-        if survey["results_visibility"] == "paid":
-            purchased = connection.execute(
-                """
-                SELECT 1 FROM point_ledger
-                WHERE user_id = ? AND reference_type = 'paid_result_access'
-                  AND reference_id = ? AND amount < 0
-                """,
-                (user_id, survey["id"]),
-            ).fetchone()
-            if purchased:
-                return
-            raise HTTPException(status_code=402, detail="결과 열람권 구매가 필요합니다.")
-    raise HTTPException(status_code=403, detail="이 설문 결과를 열람할 수 없습니다.")
+        response_id = str(uuid.uuid4())
+        data["responses"].append(
+            {
+                "id": response_id,
+                "survey_id": survey_id,
+                "user_id": user["id"],
+                "answers": [
+                    answer.model_dump() for answer in payload.answers
+                ],
+                "points_earned": reward,
+                "submitted_at": iso_now(),
+            }
+        )
+        if reward:
+            ledger = add_entry_to_data(
+                data,
+                user_id=user["id"],
+                amount=reward,
+                entry_type="survey_participation",
+                reference_type="survey_response",
+                reference_id=response_id,
+                idempotency_key=f"survey-response:{response_id}",
+            )
+            balance = ledger.balance
+        else:
+            balance = get_balance_from_data(data, user["id"])
+        badge = assign_survey_badge(
+            data, user_id=user["id"], survey=survey
+        )
+        if survey["author_id"] != user["id"]:
+            add_notification(
+                data,
+                user_id=survey["author_id"],
+                notification_type="survey_response",
+                title="내 설문에 새로운 응답이 도착했어요",
+                body=f"'{survey['title']}' 응답이 {response_count(data, survey_id)}개 모였어요.",
+                target={
+                    "screen": "survey_results",
+                    "resource_id": survey_id,
+                },
+                idempotency_key=f"survey-response-notice:{response_id}",
+            )
+        visibility = survey.get(
+            "results_visibility", "after_participation"
+        )
+        result_access = {
+            "allowed": visibility in {"public", "after_participation"},
+            "requires_purchase": visibility == "paid",
+            "price_points": int(survey.get("result_price_points", 0)),
+        }
+        balance_result = (
+            calculate_results(data, survey_id, include_text=False)
+            if survey.get("survey_type") == "balance"
+            else None
+        )
+    return ResponseReceipt(
+        response_id=response_id,
+        points_earned=reward,
+        balance=balance,
+        base_points=int(quote["base_reward_points"]),
+        deadline_bonus_points=max(
+            0,
+            nominal_reward - int(quote["base_reward_points"]),
+        ),
+        daily_cap_applied=reward < nominal_reward,
+        badge=badge,
+        result_access=result_access,
+        balance_result=balance_result,
+    )
 
 
 @router.get("/surveys/{survey_id}/results", tags=["results"])
@@ -713,13 +1203,13 @@ def get_results(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    with request.app.state.db.connect() as connection:
-        survey = connection.execute("SELECT * FROM surveys WHERE id = ?", (survey_id,)).fetchone()
+    data = request.app.state.store.snapshot()
+    survey = find_by_id(data, "surveys", survey_id)
     if survey is None:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
-    ensure_results_access(request.app.state.db, survey, user["id"])
+    ensure_results_access(data, survey, user["id"])
     return calculate_results(
-        request.app.state.db,
+        data,
         survey_id,
         include_text=survey["author_id"] == user["id"],
     )
@@ -731,66 +1221,102 @@ def purchase_results(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
-    db = request.app.state.db
-    with db.connect() as connection:
-        survey = connection.execute("SELECT * FROM surveys WHERE id = ?", (survey_id,)).fetchone()
-    if survey is None or survey["results_visibility"] != "paid":
-        raise HTTPException(status_code=404, detail="유료 결과 설문을 찾을 수 없습니다.")
-    if survey["author_id"] == user["id"]:
-        return {"purchased": False, "balance": get_balance(db, user["id"]), "owner": True}
-    price = int(survey["result_price_points"])
-    try:
-        debit = add_entry(
-            db,
-            user_id=user["id"],
-            amount=-price,
-            entry_type="paid_result_purchase",
-            reference_type="paid_result_access",
-            reference_id=survey_id,
-            idempotency_key=f"result-purchase:{survey_id}:{user['id']}",
-        )
-    except InsufficientPointsError as exc:
-        raise HTTPException(status_code=402, detail="포인트가 부족합니다.") from exc
-    if debit.created:
-        creator_share = price * 70 // 100
-        add_entry(
-            db,
-            user_id=survey["author_id"],
-            amount=creator_share,
-            entry_type="paid_result_creator_share",
-            reference_type="paid_result_sale",
-            reference_id=survey_id,
-            idempotency_key=f"result-sale:{survey_id}:{user['id']}",
-        )
+    with request.app.state.store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
+        if survey is None or survey.get("results_visibility") != "paid":
+            raise HTTPException(
+                status_code=404, detail="유료 결과 설문을 찾을 수 없습니다."
+            )
+        if survey["author_id"] == user["id"]:
+            return {
+                "purchased": False,
+                "balance": get_balance_from_data(data, user["id"]),
+                "owner": True,
+            }
+        price = int(survey.get("result_price_points", 0))
+        try:
+            debit = add_entry_to_data(
+                data,
+                user_id=user["id"],
+                amount=-price,
+                entry_type="paid_result_purchase",
+                reference_type="paid_result_access",
+                reference_id=survey_id,
+                idempotency_key=f"result-purchase:{survey_id}:{user['id']}",
+            )
+        except InsufficientPointsError as exc:
+            raise HTTPException(
+                status_code=402, detail="포인트가 부족합니다."
+            ) from exc
+        if debit.created:
+            add_entry_to_data(
+                data,
+                user_id=survey["author_id"],
+                amount=price * 70 // 100,
+                entry_type="paid_result_creator_share",
+                reference_type="paid_result_sale",
+                reference_id=survey_id,
+                idempotency_key=f"result-sale:{survey_id}:{user['id']}",
+            )
+            add_notification(
+                data,
+                user_id=survey["author_id"],
+                notification_type="paid_result_sale",
+                title="설문 결과가 판매됐어요",
+                body=(
+                    f"'{survey['title']}' 결과 판매로 "
+                    f"{price * 70 // 100}P를 받았어요."
+                ),
+                target={
+                    "screen": "wallet",
+                    "resource_id": survey_id,
+                },
+                idempotency_key=f"result-sale-notice:{survey_id}:{user['id']}",
+            )
     return {"purchased": debit.created, "balance": debit.balance}
 
 
-@router.get("/surveys/{survey_id}/comments", response_model=list[CommentView], tags=["community"])
+@router.get(
+    "/surveys/{survey_id}/comments",
+    response_model=list[CommentView],
+    tags=["community"],
+)
 def list_comments(survey_id: str, request: Request) -> list[CommentView]:
-    with request.app.state.db.connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT c.*, u.nickname, uni.name AS university_name
-            FROM comments c
-            JOIN users u ON u.id = c.user_id
-            LEFT JOIN universities uni ON uni.id = u.university_id
-            WHERE c.survey_id = ? AND c.deleted_at IS NULL
-            ORDER BY c.created_at
-            """,
-            (survey_id,),
-        ).fetchall()
-    return [
-        CommentView(
-            id=row["id"],
-            survey_id=row["survey_id"],
-            parent_id=row["parent_id"],
-            body=row["body"],
-            display_name="익명" if row["display_mode"] == "anonymous" else row["nickname"],
-            university_name=None if row["display_mode"] == "anonymous" else row["university_name"],
-            created_at=row["created_at"],
+    data = request.app.state.store.snapshot()
+    survey = find_by_id(data, "surveys", survey_id)
+    if survey is None or effective_status(survey) == "draft":
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
+    rows = sorted(
+        (
+            comment
+            for comment in data["comments"]
+            if comment["survey_id"] == survey_id
+            and comment.get("deleted_at") is None
+        ),
+        key=lambda item: item["created_at"],
+    )
+    output: list[CommentView] = []
+    for row in rows:
+        author = find_by_id(data, "users", row["user_id"])
+        if author is None:
+            continue
+        anonymous = row.get("display_mode") == "anonymous"
+        output.append(
+            CommentView(
+                id=row["id"],
+                survey_id=row["survey_id"],
+                parent_id=row.get("parent_id"),
+                body=row["body"],
+                display_name="익명" if anonymous else author["nickname"],
+                university_name=(
+                    None
+                    if anonymous
+                    else university_name(data, author.get("university_id"))
+                ),
+                created_at=row["created_at"],
+            )
         )
-        for row in rows
-    ]
+    return output
 
 
 @router.post(
@@ -806,38 +1332,71 @@ def create_comment(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> CommentView:
     comment_id = str(uuid.uuid4())
-    with request.app.state.db.connect() as connection:
-        survey = connection.execute("SELECT 1 FROM surveys WHERE id = ?", (survey_id,)).fetchone()
-        if survey is None:
+    created_at = iso_now()
+    with request.app.state.store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
+        if survey is None or effective_status(survey) == "draft":
             raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
+        parent = None
         if payload.parent_id:
-            parent = connection.execute(
-                "SELECT 1 FROM comments WHERE id = ? AND survey_id = ? AND deleted_at IS NULL",
-                (payload.parent_id, survey_id),
-            ).fetchone()
+            parent = next(
+                (
+                    comment
+                    for comment in data["comments"]
+                    if comment["id"] == payload.parent_id
+                    and comment["survey_id"] == survey_id
+                    and comment.get("deleted_at") is None
+                ),
+                None,
+            )
             if parent is None:
-                raise HTTPException(status_code=422, detail="대댓글 대상이 올바르지 않습니다.")
-        connection.execute(
-            """
-            INSERT INTO comments(id, survey_id, user_id, parent_id, body, display_mode)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (comment_id, survey_id, user["id"], payload.parent_id, payload.body, payload.display_mode),
+                raise HTTPException(
+                    status_code=422, detail="대댓글 대상이 올바르지 않습니다."
+                )
+            if parent.get("parent_id") is not None:
+                raise HTTPException(
+                    status_code=422, detail="대댓글에는 다시 답글을 달 수 없습니다."
+                )
+        data["comments"].append(
+            {
+                "id": comment_id,
+                "survey_id": survey_id,
+                "user_id": user["id"],
+                "parent_id": payload.parent_id,
+                "body": payload.body,
+                "display_mode": payload.display_mode,
+                "created_at": created_at,
+                "deleted_at": None,
+            }
         )
-        connection.commit()
-        university = connection.execute(
-            "SELECT name FROM universities WHERE id = ?", (user["university_id"],)
-        ).fetchone()
+        school_name = university_name(data, user.get("university_id"))
+        notice_user_id = (
+            parent["user_id"]
+            if parent and parent["user_id"] != user["id"]
+            else survey["author_id"]
+        )
+        if notice_user_id != user["id"]:
+            add_notification(
+                data,
+                user_id=notice_user_id,
+                notification_type="comment",
+                title="새 댓글이 달렸어요",
+                body=payload.body[:80],
+                target={
+                    "screen": "survey_detail",
+                    "resource_id": survey_id,
+                },
+                idempotency_key=f"comment-notice:{comment_id}:{notice_user_id}",
+            )
+    anonymous = payload.display_mode == "anonymous"
     return CommentView(
         id=comment_id,
         survey_id=survey_id,
         parent_id=payload.parent_id,
         body=payload.body,
-        display_name="익명" if payload.display_mode == "anonymous" else user["nickname"],
-        university_name=(
-            None if payload.display_mode == "anonymous" or university is None else university["name"]
-        ),
-        created_at=iso_now(),
+        display_name="익명" if anonymous else user["nickname"],
+        university_name=None if anonymous else school_name,
+        created_at=created_at,
     )
 
 
@@ -847,31 +1406,33 @@ def toggle_like(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
-    with request.app.state.db.connect() as connection:
-        existing = connection.execute(
-            "SELECT 1 FROM survey_likes WHERE survey_id = ? AND user_id = ?",
-            (survey_id, user["id"]),
-        ).fetchone()
+    with request.app.state.store.transaction() as data:
+        survey = find_by_id(data, "surveys", survey_id)
+        if survey is None or effective_status(survey) == "draft":
+            raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
+        existing = next(
+            (
+                item
+                for item in data["likes"]
+                if item["survey_id"] == survey_id
+                and item["user_id"] == user["id"]
+            ),
+            None,
+        )
         if existing:
-            connection.execute(
-                "DELETE FROM survey_likes WHERE survey_id = ? AND user_id = ?",
-                (survey_id, user["id"]),
-            )
+            data["likes"].remove(existing)
             liked = False
         else:
-            try:
-                connection.execute(
-                    "INSERT INTO survey_likes(survey_id, user_id) VALUES (?, ?)",
-                    (survey_id, user["id"]),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.") from exc
+            data["likes"].append(
+                {
+                    "survey_id": survey_id,
+                    "user_id": user["id"],
+                    "created_at": iso_now(),
+                }
+            )
             liked = True
-        connection.commit()
-        count = connection.execute(
-            "SELECT COUNT(*) AS count FROM survey_likes WHERE survey_id = ?", (survey_id,)
-        ).fetchone()["count"]
-    return {"liked": liked, "like_count": int(count)}
+        count = like_count(data, survey_id)
+    return {"liked": liked, "like_count": count}
 
 
 @router.post("/reports", status_code=201, tags=["community"])
@@ -881,12 +1442,18 @@ def create_report(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, str]:
     report_id = str(uuid.uuid4())
-    with request.app.state.db.connect() as connection:
-        connection.execute(
-            "INSERT INTO reports(id, reporter_id, target_type, target_id, reason) VALUES (?, ?, ?, ?, ?)",
-            (report_id, user["id"], payload.target_type, payload.target_id, payload.reason),
+    with request.app.state.store.transaction() as data:
+        data["reports"].append(
+            {
+                "id": report_id,
+                "reporter_id": user["id"],
+                "target_type": payload.target_type,
+                "target_id": payload.target_id,
+                "reason": payload.reason,
+                "status": "pending",
+                "created_at": iso_now(),
+            }
         )
-        connection.commit()
     return {"report_id": report_id, "status": "pending"}
 
 
@@ -896,25 +1463,79 @@ def wallet(
     user: dict[str, Any] = Depends(get_current_user),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, Any]:
-    with request.app.state.db.connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT id, amount, entry_type, reference_type, reference_id,
-                   balance_after, created_at
-            FROM point_ledger WHERE user_id = ?
-            ORDER BY created_at DESC LIMIT ?
-            """,
-            (user["id"], limit),
-        ).fetchall()
+    data = request.app.state.store.snapshot()
+    rows = sorted(
+        (
+            entry
+            for entry in data["point_ledger"]
+            if entry["user_id"] == user["id"]
+        ),
+        key=lambda item: item["created_at"],
+        reverse=True,
+    )[:limit]
     return {
-        "balance": get_balance(request.app.state.db, user["id"]),
-        "daily_reward_total": get_daily_reward_total(request.app.state.db, user["id"]),
+        "balance": get_balance_from_data(data, user["id"]),
+        "daily_reward_total": get_daily_reward_total_from_data(
+            data, user["id"]
+        ),
         "daily_reward_limit": 1000,
-        "transactions": [dict(row) for row in rows],
+        "transactions": [point_entry_view(entry) for entry in rows],
     }
 
 
-@router.post("/ai/survey-drafts", response_model=AiSurveyDraft, tags=["ai"])
+@router.get("/rankings", tags=["wallet"])
+def rankings(
+    request: Request,
+    scope: str = Query(default="all", pattern="^(all|university)$"),
+    limit: int = Query(default=30, ge=1, le=100),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    data = request.app.state.store.snapshot()
+    candidates = [
+        candidate
+        for candidate in data["users"]
+        if candidate.get("status", "active") == "active"
+        and (
+            scope == "all"
+            or candidate.get("university_id") == user.get("university_id")
+        )
+    ]
+    entries: list[dict[str, Any]] = []
+    for candidate in candidates:
+        earned = total_earned(data, candidate["id"])
+        level = level_from_points(earned)
+        entries.append(
+            {
+                "user_id": candidate["id"],
+                "nickname": candidate["nickname"],
+                "university_name": university_name(
+                    data, candidate.get("university_id")
+                ),
+                "total_earned": earned,
+                "level": level,
+                "next_level_at": next_level_points(earned),
+                "points_to_next_level": max(
+                    0, next_level_points(earned) - earned
+                ),
+            }
+        )
+    entries.sort(
+        key=lambda item: (item["total_earned"], item["nickname"]),
+        reverse=True,
+    )
+    for rank, entry in enumerate(entries, start=1):
+        entry["rank"] = rank
+    me = next(
+        (entry for entry in entries if entry["user_id"] == user["id"]), None
+    )
+    return {"scope": scope, "me": me, "leaders": entries[:limit]}
+
+
+@router.post(
+    "/ai/survey-drafts",
+    response_model=AiSurveyDraft,
+    tags=["ai"],
+)
 def ai_survey_draft(
     payload: AiSurveyDraftRequest,
     request: Request,
@@ -930,15 +1551,19 @@ def ai_survey_draft(
         validated = AiSurveyDraft.model_validate(draft)
     except (AIProviderError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    with request.app.state.db.connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO ai_usage(id, user_id, feature, points_charged, provider, status)
-            VALUES (?, ?, 'survey_draft', 0, ?, 'success')
-            """,
-            (str(uuid.uuid4()), user["id"], request.app.state.ai.provider_name),
+    with request.app.state.store.transaction() as data:
+        data["ai_usage"].append(
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "feature": "survey_draft",
+                "survey_id": None,
+                "points_charged": 0,
+                "provider": request.app.state.ai.provider_name,
+                "status": "success",
+                "created_at": iso_now(),
+            }
         )
-        connection.commit()
     return validated
 
 
@@ -948,41 +1573,107 @@ def ai_survey_analysis(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
-    db = request.app.state.db
-    with db.connect() as connection:
-        survey = connection.execute("SELECT * FROM surveys WHERE id = ?", (survey_id,)).fetchone()
+    store = request.app.state.store
+    snapshot = store.snapshot()
+    survey = find_by_id(snapshot, "surveys", survey_id)
     if survey is None or survey["author_id"] != user["id"]:
-        raise HTTPException(status_code=404, detail="분석할 설문을 찾을 수 없습니다.")
-    if get_balance(db, user["id"]) < 200:
-        raise HTTPException(status_code=402, detail="AI 심층 분석에 필요한 200P가 부족합니다.")
-    results = calculate_results(db, survey_id, include_text=False)
+        raise HTTPException(
+            status_code=404, detail="분석할 설문을 찾을 수 없습니다."
+        )
+    survey_responses = [
+        item
+        for item in snapshot["responses"]
+        if item["survey_id"] == survey_id
+    ]
+    if not survey_responses:
+        raise HTTPException(
+            status_code=409, detail="응답이 한 건 이상 모인 뒤 분석할 수 있습니다."
+        )
+    latest_response_at = max(
+        item["submitted_at"] for item in survey_responses
+    )
+    analysis_key = (
+        f"ai-analysis:{survey_id}:{len(survey_responses)}:{latest_response_at}"
+    )
+    cached = next(
+        (
+            item
+            for item in snapshot["ai_usage"]
+            if item.get("idempotency_key") == analysis_key
+            and item.get("status") == "success"
+        ),
+        None,
+    )
+    if cached:
+        return {
+            "analysis": cached["result"],
+            "points_charged": 0,
+            "balance": get_balance_from_data(snapshot, user["id"]),
+            "cached": True,
+        }
+    if get_balance_from_data(snapshot, user["id"]) < 200:
+        raise HTTPException(
+            status_code=402, detail="AI 심층 분석에 필요한 200P가 부족합니다."
+        )
+    results = calculate_results(snapshot, survey_id, include_text=False)
     try:
-        analysis = request.app.state.ai.analyze_results(title=survey["title"], results=results)
+        analysis = request.app.state.ai.analyze_results(
+            title=survey["title"], results=results
+        )
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     usage_id = str(uuid.uuid4())
-    try:
-        debit = add_entry(
-            db,
-            user_id=user["id"],
-            amount=-200,
-            entry_type="ai_deep_analysis",
-            reference_type="ai_usage",
-            reference_id=usage_id,
-            idempotency_key=f"ai-analysis:{usage_id}",
+    with store.transaction() as data:
+        cached = next(
+            (
+                item
+                for item in data["ai_usage"]
+                if item.get("idempotency_key") == analysis_key
+                and item.get("status") == "success"
+            ),
+            None,
         )
-    except InsufficientPointsError as exc:
-        raise HTTPException(status_code=402, detail="포인트가 부족합니다.") from exc
-    with db.connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO ai_usage(id, user_id, feature, survey_id, points_charged, provider, status)
-            VALUES (?, ?, 'deep_analysis', ?, 200, ?, 'success')
-            """,
-            (usage_id, user["id"], survey_id, request.app.state.ai.provider_name),
+        if cached:
+            return {
+                "analysis": cached["result"],
+                "points_charged": 0,
+                "balance": get_balance_from_data(data, user["id"]),
+                "cached": True,
+            }
+        try:
+            debit = add_entry_to_data(
+                data,
+                user_id=user["id"],
+                amount=-200,
+                entry_type="ai_deep_analysis",
+                reference_type="ai_usage",
+                reference_id=usage_id,
+                idempotency_key=analysis_key,
+            )
+        except InsufficientPointsError as exc:
+            raise HTTPException(
+                status_code=402, detail="포인트가 부족합니다."
+            ) from exc
+        data["ai_usage"].append(
+            {
+                "id": usage_id,
+                "user_id": user["id"],
+                "feature": "deep_analysis",
+                "survey_id": survey_id,
+                "points_charged": 200,
+                "provider": request.app.state.ai.provider_name,
+                "status": "success",
+                "idempotency_key": analysis_key,
+                "result": analysis,
+                "created_at": iso_now(),
+            }
         )
-        connection.commit()
-    return {"analysis": analysis, "points_charged": 200, "balance": debit.balance}
+    return {
+        "analysis": analysis,
+        "points_charged": 200,
+        "balance": debit.balance,
+        "cached": False,
+    }
 
 
 @router.post("/integrations/admob/rewarded", tags=["integrations"])
@@ -991,55 +1682,123 @@ def admob_rewarded_callback(
     request: Request,
     x_webhook_secret: str = Header(),
 ) -> dict[str, Any]:
-    if not hmac.compare_digest(x_webhook_secret, request.app.state.settings.webhook_secret):
-        raise HTTPException(status_code=401, detail="웹훅 인증에 실패했습니다.")
-    db = request.app.state.db
-    with db.connect() as connection:
-        user = connection.execute("SELECT 1 FROM users WHERE id = ?", (payload.user_id,)).fetchone()
-        if user is None:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-        count = connection.execute(
-            """
-            SELECT COUNT(*) AS count FROM ad_reward_events
-            WHERE user_id = ? AND date(created_at) = date('now')
-            """,
-            (payload.user_id,),
-        ).fetchone()["count"]
-        existing = connection.execute(
-            "SELECT reward_amount FROM ad_reward_events WHERE transaction_id = ?",
-            (payload.transaction_id,),
-        ).fetchone()
-    if existing:
-        return {
-            "accepted": True,
-            "reward": int(existing["reward_amount"]),
-            "balance": get_balance(db, payload.user_id),
-            "duplicate": True,
-        }
-    if count >= 5:
-        raise HTTPException(status_code=429, detail="하루 광고 보상 한도는 5회입니다.")
-    reward = max(0, min(10, 1000 - get_daily_reward_total(db, payload.user_id)))
-    if reward:
-        ledger = add_entry(
-            db,
-            user_id=payload.user_id,
-            amount=reward,
-            entry_type="rewarded_ad",
-            reference_type="admob_transaction",
-            reference_id=payload.transaction_id,
-            idempotency_key=f"admob:{payload.transaction_id}",
+    if not hmac.compare_digest(
+        x_webhook_secret, request.app.state.settings.webhook_secret
+    ):
+        raise HTTPException(
+            status_code=401, detail="웹훅 인증에 실패했습니다."
         )
-        balance = ledger.balance
-    else:
-        balance = get_balance(db, payload.user_id)
-    with db.connect() as connection:
-        connection.execute(
-            """
-            INSERT OR IGNORE INTO ad_reward_events(transaction_id, user_id, reward_amount)
-            VALUES (?, ?, ?)
-            """,
-            (payload.transaction_id, payload.user_id, reward),
+    with request.app.state.store.transaction() as data:
+        if find_by_id(data, "users", payload.user_id) is None:
+            raise HTTPException(
+                status_code=404, detail="사용자를 찾을 수 없습니다."
+            )
+        existing = next(
+            (
+                event
+                for event in data["ad_reward_events"]
+                if event["transaction_id"] == payload.transaction_id
+            ),
+            None,
         )
-        connection.commit()
-    return {"accepted": True, "reward": reward, "balance": balance, "duplicate": False}
+        if existing:
+            return {
+                "accepted": True,
+                "reward": int(existing["reward_amount"]),
+                "balance": get_balance_from_data(data, payload.user_id),
+                "duplicate": True,
+            }
+        today = business_date()
+        count = sum(
+            1
+            for event in data["ad_reward_events"]
+            if event["user_id"] == payload.user_id
+            and parse_datetime(event["created_at"])
+            .astimezone(KOREA_TZ)
+            .date()
+            == today
+        )
+        if count >= 5:
+            raise HTTPException(
+                status_code=429, detail="하루 광고 보상 한도는 5회입니다."
+            )
+        reward = max(
+            0,
+            min(
+                10,
+                1000
+                - get_daily_reward_total_from_data(data, payload.user_id),
+            ),
+        )
+        if reward:
+            ledger = add_entry_to_data(
+                data,
+                user_id=payload.user_id,
+                amount=reward,
+                entry_type="rewarded_ad",
+                reference_type="admob_transaction",
+                reference_id=payload.transaction_id,
+                idempotency_key=f"admob:{payload.transaction_id}",
+            )
+            balance = ledger.balance
+        else:
+            balance = get_balance_from_data(data, payload.user_id)
+        data["ad_reward_events"].append(
+            {
+                "transaction_id": payload.transaction_id,
+                "user_id": payload.user_id,
+                "reward_amount": reward,
+                "created_at": iso_now(),
+            }
+        )
+    return {
+        "accepted": True,
+        "reward": reward,
+        "balance": balance,
+        "duplicate": False,
+    }
 
+
+@router.get("/dev/dummy-users", tags=["development"])
+def list_dummy_users(request: Request) -> list[dict[str, Any]]:
+    ensure_development(request)
+    data = request.app.state.store.snapshot()
+    return [
+        {
+            "id": user["id"],
+            "phone": user["phone"],
+            "nickname": user["nickname"],
+            "university_verified": user["university_verified"],
+        }
+        for user in data["users"]
+    ]
+
+
+@router.post(
+    "/dev/login",
+    response_model=AuthResult,
+    tags=["development"],
+)
+def dev_login(
+    request: Request,
+    user_id: str = Query(default="demo-student"),
+) -> AuthResult:
+    ensure_development(request)
+    data = request.app.state.store.snapshot()
+    user = find_by_id(data, "users", user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="더미 사용자를 찾을 수 없습니다.")
+    token = request.app.state.tokens.create(user["id"])
+    return AuthResult(access_token=token, user=user_view(user))
+
+
+@router.post("/dev/reset", tags=["development"])
+def reset_dummy_data(request: Request) -> dict[str, Any]:
+    ensure_development(request)
+    data = request.app.state.store.reset()
+    return {
+        "reset": True,
+        "users": len(data["users"]),
+        "surveys": len(data["surveys"]),
+        "responses": len(data["responses"]),
+    }

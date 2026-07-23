@@ -72,13 +72,39 @@ def get_current_user(
     if credentials is None:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     payload = request.app.state.tokens.verify(credentials.credentials)
-    with request.app.state.db.connect() as connection:
-        row = connection.execute(
-            "SELECT * FROM users WHERE id = ? AND status = 'active'", (payload["sub"],)
-        ).fetchone()
-    if row is None:
+    data = request.app.state.store.snapshot()
+    user = next(
+        (
+            item
+            for item in data["users"]
+            if item["id"] == payload["sub"] and item.get("status", "active") == "active"
+        ),
+        None,
+    )
+    if user is None:
         raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
-    return dict(row)
+    return user
+
+
+def get_optional_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, Any] | None:
+    if credentials is None:
+        return None
+    payload = request.app.state.tokens.verify(credentials.credentials)
+    data = request.app.state.store.snapshot()
+    user = next(
+        (
+            item
+            for item in data["users"]
+            if item["id"] == payload["sub"] and item.get("status", "active") == "active"
+        ),
+        None,
+    )
+    if user is None:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+    return user
 
 
 def require_verified_user(
