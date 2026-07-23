@@ -1,0 +1,17 @@
+# Frontend
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+frontend/.env
+
+# Backend
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.venv/
+backend/**/*.pyc
+backend/data/*.db
+backend/.env
+
+# Generated inspection and Office temp files
+*.inspect.ndjson
+~$*.xlsx
