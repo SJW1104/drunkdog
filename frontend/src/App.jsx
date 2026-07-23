@@ -11,6 +11,7 @@ const navItems = [
   { id: 'ranking', label: '랭킹' },
   { id: 'points', label: '포인트' },
 ]
+const bottomNavScreens = new Set(navItems.map((item) => item.id))
 
 function IconButton({ children, label, onClick, badge }) {
   return (
@@ -85,8 +86,9 @@ function TopBar({ title, onBack, right, brand = false }) {
 }
 
 function BottomNav({ active, navigate }) {
+  const activeIndex = Math.max(0, navItems.findIndex((item) => item.id === active))
   return (
-    <nav className="bottom-nav" aria-label="주요 메뉴">
+    <nav className="bottom-nav" aria-label="주요 메뉴" style={{ '--active-index': activeIndex }}>
       {navItems.map((item) => (
         <button
           key={item.id}
@@ -217,7 +219,6 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
       </main>
 
       <button className="fab" type="button" onClick={() => navigate('create')}>＋ 설문 등록</button>
-      <BottomNav active="home" navigate={navigate} />
       {searchOpen ? <div className="search-overlay"><div className="search-overlay-head"><button type="button" onClick={() => { setSearchOpen(false); setHomeSearchQuery('') }}>‹</button><label><SearchIcon /><input autoFocus value={homeSearchQuery} onChange={(event) => setHomeSearchQuery(event.target.value)} placeholder="설문 제목이나 카테고리 검색" /></label></div><main><div className="search-suggestions"><span>추천 검색어</span>{['AI', '취업', '팀플', '소비'].map((keyword) => <button type="button" key={keyword} onClick={() => setHomeSearchQuery(keyword)}>{keyword}</button>)}</div><div className="search-result-head"><b>{homeSearchQuery.trim() ? `'${homeSearchQuery}' 검색 결과` : '추천 설문'}</b><small>{searchResults.length}개</small></div><div className="search-result-list">{searchResults.map((survey) => <button type="button" key={survey.id} className={completedSurveys.includes(survey.id) ? 'is-completed' : ''} onClick={() => { setSearchOpen(false); setHomeSearchQuery(''); onParticipate(survey.id) }}><span><small>{survey.category}</small><b>{survey.title}</b></span><strong>{completedSurveys.includes(survey.id) ? '참여 완료' : `+${survey.point}P`}</strong></button>)}{searchResults.length === 0 ? <div className="empty-state"><b>검색 결과가 없어요</b><p>다른 검색어를 입력해 보세요.</p></div> : null}</div></main></div> : null}
       {notificationOpen ? <div className="notification-popover-backdrop" role="presentation" onClick={() => setNotificationOpen(false)}><section className="notification-popover" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><div className="notification-popover-head"><span><b>알림</b><small>새 소식을 빠르게 확인해 보세요.</small></span><button type="button" onClick={readAllNotices}>모두 읽음</button></div>{noticesLoading ? <div className="loading-state"><i /><i /><i /></div> : <div className="notification-popover-list">{homeNotices.map((notice) => <button type="button" key={notice.id} className={readNotices.includes(notice.id) ? 'is-read' : ''} onClick={() => openNotice(notice)}><i /><span><b>{notice.title}</b><small>{notice.body}</small></span><time>{notice.time}</time></button>)}</div>}<button className="notification-close" type="button" onClick={() => setNotificationOpen(false)}>닫기</button></section></div> : null}
       {checkinOpen ? <div className="modal-backdrop" role="presentation" onClick={() => setCheckinOpen(false)}>
@@ -276,7 +277,6 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
             ))}
           </div>
         </main>
-        <BottomNav active="surveys" navigate={navigate} />
       </div>
     )
   }
@@ -309,7 +309,6 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
           ))}
         </div>
       </main>
-      <BottomNav active="surveys" navigate={navigate} />
     </div>
   )
 }
@@ -640,7 +639,6 @@ function BalanceGameScreen({ navigate, onVote, selectedTitle }) {
           </button>)}
         </div>
       </main>
-      <BottomNav active="balance" navigate={navigate} />
     </div>
   )
 
@@ -680,7 +678,6 @@ function BalanceGameScreen({ navigate, onVote, selectedTitle }) {
           </section>
         </>}
       </main>
-      <BottomNav active="balance" navigate={navigate} />
     </div>
   )
 }
@@ -750,7 +747,7 @@ function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, o
     setCoupons(next); localStorage.setItem('suniversity-coupons', JSON.stringify(next))
   }
   const giftCard = (gift) => <button className="gift-card" type="button" key={gift.id} onClick={() => setConfirmGift(gift)}><div className="gift-image">{gift.icon}</div><span><b>{gift.name}</b><small>{gift.detail}</small></span><strong>{gift.price.toLocaleString()}P</strong></button>
-  return <div className="screen with-nav"><TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="쿠폰함" onClick={() => setCouponOpen(true)}><TicketIcon /></IconButton>} /><main className="screen-content points-content"><div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div><SectionHeader title="포인트 더 모으기" count="" action={`${adEarned.toLocaleString()}/1,000P`} /><div className="watch-card"><b>광고 보고 100P 받기</b><small>{adSeconds ? `광고 재생 중 · ${adSeconds}초 남음` : `오늘 광고 보상 ${adEarned.toLocaleString()}P / 1,000P`}</small><div className="daily-ad-progress"><span style={{ width: adSeconds ? `${(30 - adSeconds) / 30 * 100}%` : `${Math.min(100, adEarned / 10)}%` }} /></div><button type="button" disabled={adEarned >= 1000 || adSeconds > 0} onClick={startAd}>{adEarned >= 1000 ? '오늘 한도 달성' : adSeconds ? `${adSeconds}초 후 보상 지급` : '30초 광고 시청'}</button></div><div className="gift-heading"><b>기프티콘 교환</b><button type="button" onClick={() => setCatalogOpen(true)}>전체보기</button></div>{gifts.slice(0, 2).map(giftCard)}<p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div></main><BottomNav active="points" navigate={navigate} />{catalogOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCatalogOpen(false)}><section className="gift-catalog" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCatalogOpen(false)} type="button">×</button><h2>기프티콘 전체보기</h2><p>모은 포인트로 원하는 상품을 교환해 보세요.</p>{gifts.map(giftCard)}</section></div> : null}{couponOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCouponOpen(false)}><section className="gift-catalog coupon-wallet" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCouponOpen(false)} type="button">×</button><h2>내 쿠폰함</h2><p>교환한 모바일 쿠폰을 확인하세요.</p>{coupons.length ? coupons.map((coupon) => <article className={coupon.used ? 'is-used' : ''} key={coupon.couponId}><span>{coupon.icon}</span><div><b>{coupon.name}</b><small>{coupon.code}</small></div><button type="button" disabled={coupon.used} onClick={() => markCouponUsed(coupon.couponId)}>{coupon.used ? '사용 완료' : '사용하기'}</button></article>) : <div className="empty-state"><b>보유한 쿠폰이 없어요</b></div>}</section></div> : null}{confirmGift ? <div className="modal-backdrop" onClick={() => setConfirmGift(null)}><section className="exchange-confirm" onClick={(event) => event.stopPropagation()}><span>{confirmGift.icon}</span><h2>{confirmGift.name}</h2><p>{confirmGift.price.toLocaleString()}P를 사용해 교환할까요?<br />현재 {points.toLocaleString()}P 보유 중이에요.</p><div><button type="button" onClick={() => setConfirmGift(null)}>취소</button><button type="button" disabled={points < confirmGift.price} onClick={exchange}>{points < confirmGift.price ? '포인트 부족' : '교환하기'}</button></div></section></div> : null}</div>
+  return <div className="screen with-nav"><TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="쿠폰함" onClick={() => setCouponOpen(true)}><TicketIcon /></IconButton>} /><main className="screen-content points-content"><div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div><SectionHeader title="포인트 더 모으기" count="" action={`${adEarned.toLocaleString()}/1,000P`} /><div className="watch-card"><b>광고 보고 100P 받기</b><small>{adSeconds ? `광고 재생 중 · ${adSeconds}초 남음` : `오늘 광고 보상 ${adEarned.toLocaleString()}P / 1,000P`}</small><div className="daily-ad-progress"><span style={{ width: adSeconds ? `${(30 - adSeconds) / 30 * 100}%` : `${Math.min(100, adEarned / 10)}%` }} /></div><button type="button" disabled={adEarned >= 1000 || adSeconds > 0} onClick={startAd}>{adEarned >= 1000 ? '오늘 한도 달성' : adSeconds ? `${adSeconds}초 후 보상 지급` : '30초 광고 시청'}</button></div><div className="gift-heading"><b>기프티콘 교환</b><button type="button" onClick={() => setCatalogOpen(true)}>전체보기</button></div>{gifts.slice(0, 2).map(giftCard)}<p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div></main>{catalogOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCatalogOpen(false)}><section className="gift-catalog" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCatalogOpen(false)} type="button">×</button><h2>기프티콘 전체보기</h2><p>모은 포인트로 원하는 상품을 교환해 보세요.</p>{gifts.map(giftCard)}</section></div> : null}{couponOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCouponOpen(false)}><section className="gift-catalog coupon-wallet" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCouponOpen(false)} type="button">×</button><h2>내 쿠폰함</h2><p>교환한 모바일 쿠폰을 확인하세요.</p>{coupons.length ? coupons.map((coupon) => <article className={coupon.used ? 'is-used' : ''} key={coupon.couponId}><span>{coupon.icon}</span><div><b>{coupon.name}</b><small>{coupon.code}</small></div><button type="button" disabled={coupon.used} onClick={() => markCouponUsed(coupon.couponId)}>{coupon.used ? '사용 완료' : '사용하기'}</button></article>) : <div className="empty-state"><b>보유한 쿠폰이 없어요</b></div>}</section></div> : null}{confirmGift ? <div className="modal-backdrop" onClick={() => setConfirmGift(null)}><section className="exchange-confirm" onClick={(event) => event.stopPropagation()}><span>{confirmGift.icon}</span><h2>{confirmGift.name}</h2><p>{confirmGift.price.toLocaleString()}P를 사용해 교환할까요?<br />현재 {points.toLocaleString()}P 보유 중이에요.</p><div><button type="button" onClick={() => setConfirmGift(null)}>취소</button><button type="button" disabled={points < confirmGift.price} onClick={exchange}>{points < confirmGift.price ? '포인트 부족' : '교환하기'}</button></div></section></div> : null}</div>
 }
 function RankingScreen({ navigate, selectedTitle }) {
   const [rankingFilter, setRankingFilter] = useState('all')
@@ -778,7 +775,6 @@ function RankingScreen({ navigate, selectedTitle }) {
         </div>
         <div className="weekly-card"><b>이번 주 도전</b><p>설문 3개 더 참여하고 레벨업 보상 100P를 받아보세요.</p></div>
       </main>
-      <BottomNav active="ranking" navigate={navigate} />
     </div>
   )
 }
@@ -1153,7 +1149,10 @@ function App() {
         <span className="device-camera" aria-hidden="true" />
         <span className="device-button device-button--volume" aria-hidden="true" />
         <span className="device-button device-button--power" aria-hidden="true" />
-        <div className="phone-frame">{screens[screen] || screens.home}</div>
+        <div className="phone-frame">
+          {screens[screen] || screens.home}
+          {bottomNavScreens.has(screen) ? <BottomNav active={screen} navigate={navigate} /> : null}
+        </div>
       </div>
     </div>
   )
