@@ -628,7 +628,7 @@ function TeamAvatar({ team, name, small = false }) {
   return <span className={`team-avatar team-${team.toLowerCase()} ${small ? 'is-small' : ''}`}>{name.slice(0, 1)}</span>
 }
 
-function BalanceGameScreen({ navigate, onVote }) {
+function BalanceGameScreen({ navigate, onVote, selectedTitle }) {
   const [activeGame, setActiveGame] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [votes, setVotes] = useState(() => {
@@ -639,6 +639,7 @@ function BalanceGameScreen({ navigate, onVote }) {
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyDraft, setReplyDraft] = useState('')
   const selected = activeGame ? votes[activeGame.id] : null
+  const myDisplayName = selectedTitle ? `나 · ${selectedTitle}` : '나'
 
   const vote = (choice) => {
     if (selected) return
@@ -649,12 +650,12 @@ function BalanceGameScreen({ navigate, onVote }) {
   }
   const addPost = () => {
     if (!draft.trim() || !selected) return
-    setPosts([{ id: Date.now(), gameId: activeGame.id, team: selected, author: '나', text: draft.trim(), likes: 0, replies: [] }, ...posts])
+    setPosts([{ id: Date.now(), gameId: activeGame.id, team: selected, author: myDisplayName, text: draft.trim(), likes: 0, replies: [] }, ...posts])
     setDraft('')
   }
   const addReply = (postId) => {
     if (!replyDraft.trim() || !selected) return
-    setPosts(posts.map((post) => post.id === postId ? { ...post, replies: [...post.replies, { id: Date.now(), author: '나', text: replyDraft.trim(), team: selected }] } : post))
+    setPosts(posts.map((post) => post.id === postId ? { ...post, replies: [...post.replies, { id: Date.now(), author: myDisplayName, text: replyDraft.trim(), team: selected }] } : post))
     setReplyDraft('')
     setReplyingTo(null)
   }
@@ -708,10 +709,10 @@ function BalanceGameScreen({ navigate, onVote }) {
           <button type="button" className={selected === 'B' ? 'poll-side poll-red is-selected' : 'poll-side poll-red'} onClick={() => vote('B')} style={selected ? { '--fill': `${100 - activeGame.aPercent}%` } : undefined}><small>B · {activeGame.bLabel}</small><b>{activeGame.b}</b>{selected ? <strong>{100 - activeGame.aPercent}%</strong> : <span>선택하기</span>}</button>
         </div>
         {!selected ? <p className="vote-guide">하나를 선택하면 실시간 비율과 진영별 토론장이 열려요.</p> : <>
-          <div className={`my-team-banner team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><span><small>내 선택</small><b>{selected === 'A' ? activeGame.aLabel : activeGame.bLabel} 토론에 참여 중</b></span><strong>참여 완료</strong></div>
+          <div className={`my-team-banner team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name={myDisplayName} /><span><small>{myDisplayName}</small><b>{selected === 'A' ? activeGame.aLabel : activeGame.bLabel} 토론에 참여 중</b></span><strong>참여 완료</strong></div>
           <section className="debate-section">
             <div className="debate-title"><span>찬성과 반대, 서로의 생각을 확인해보세요</span><b>의견 토론장</b></div>
-            <div className={`debate-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`${selected === 'A' ? activeGame.aLabel : activeGame.bLabel}을 선택한 이유를 남겨보세요`} /><button type="button" onClick={addPost}>등록</button></div>
+            <div className={`debate-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name={myDisplayName} /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`${selected === 'A' ? activeGame.aLabel : activeGame.bLabel}을 선택한 이유를 남겨보세요`} /><button type="button" onClick={addPost}>등록</button></div>
             <div className="debate-columns">
               {['A', 'B'].map((team) => {
                 const teamPosts = gamePosts.filter((post) => post.team === team)
@@ -722,7 +723,7 @@ function BalanceGameScreen({ navigate, onVote }) {
                       <div className="post-head"><TeamAvatar team={post.team} name={post.author} /><span><b>{post.author}</b><small>{post.team === 'A' ? activeGame.aLabel : activeGame.bLabel}</small></span></div>
                       <p>{post.text}</p><div className="post-actions"><button type="button">공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button></div>
                       {post.replies.map((reply) => <div className={`debate-reply team-${(reply.team || post.team).toLowerCase()}`} key={reply.id}><TeamAvatar team={reply.team || post.team} name={reply.author} small /><span><b>{reply.author}</b><p>{reply.text}</p></span></div>)}
-                      {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글 입력" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
+                      {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name={myDisplayName} small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글 입력" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
                     </article>) : <div className="empty-debate">아직 의견이 없어요.</div>}
                   </div>
                 </div>
@@ -734,9 +735,9 @@ function BalanceGameScreen({ navigate, onVote }) {
     </div>
   )
 }
-function ResultScreen({ spendPoints, badge, onBack }) {
+function ResultScreen({ spendPoints, badge, onBack, initiallyUnlocked = false }) {
   const [shareMessage, setShareMessage] = useState('')
-  const [analysisUnlocked, setAnalysisUnlocked] = useState(false)
+  const [analysisUnlocked, setAnalysisUnlocked] = useState(initiallyUnlocked)
   const [pptState, setPptState] = useState('idle')
   const shareResult = async () => {
     const shareData = { title: 'suniversity 설문 결과', text: `내 설문 별명은 “${badge}”예요! 나와 같은 답을 고른 사람은 68%였어요.`, url: window.location.href }
@@ -759,6 +760,11 @@ function ResultScreen({ spendPoints, badge, onBack }) {
   const unlockAnalysis = () => {
     if (analysisUnlocked || !spendPoints(200, 'AI 심층 분석')) return
     setAnalysisUnlocked(true)
+    const viewedHistory = (() => {
+      try { return JSON.parse(localStorage.getItem('suniversity-viewed-surveys') || '[]') } catch { return [] }
+    })()
+    const viewedSurvey = { id: `viewed-${badge}`, title: '대학생의 AI 활용과 취업 준비', category: '심층 분석', status: '분석 열람 완료', questions: 5, createdAt: new Date().toLocaleDateString('ko-KR'), badge }
+    localStorage.setItem('suniversity-viewed-surveys', JSON.stringify([viewedSurvey, ...viewedHistory.filter((item) => item.id !== viewedSurvey.id)]))
     setShareMessage('심층 분석을 열었어요.')
     window.setTimeout(() => setShareMessage(''), 1800)
   }
@@ -808,7 +814,7 @@ function PointsScreen({ points, transactions, spendPoints, adEarned, onWatchAd, 
   )
 }
 
-function RankingScreen({ navigate }) {
+function RankingScreen({ navigate, selectedTitle }) {
   const [rankingFilter, setRankingFilter] = useState('all')
   const [showHelp, setShowHelp] = useState(false)
   const names = ['설문요정', '응답왕', '과제구조대', '통계마스터', '논문졸업', '척척응답', '리서치캣', '데이터덕', '마감수호대', '표본장인', '인사이트', '응답부자', '캠퍼스픽', '분석너드', '질문대장', '설문홀릭', '답변척척', '포인트왕', '논문한줄', '통계요정', '리서치룸', '표본천재', '응답착착', '데이터숲', '설문러버', '분석한입', '캠퍼스톡', '과제탈출', '질문봇', '응답완료']
@@ -826,7 +832,7 @@ function RankingScreen({ navigate }) {
         <div className="chips ranking-tabs"><button className={rankingFilter === 'all' ? 'chip is-active' : 'chip'} type="button" onClick={() => setRankingFilter('all')}>전체</button><button className={rankingFilter === 'school' ? 'chip is-active' : 'chip'} type="button" onClick={() => setRankingFilter('school')}>우리 학교</button></div>
         <div className="rank-stack">
           <div className="rank-neighbor rank-neighbor--previous"><span className="neighbor-rank">{neighbors[0].rank}</span><span><b>{neighbors[0].name}</b><small>{neighbors[0].school}</small></span><strong>{neighbors[0].points}</strong></div>
-          <div className="my-rank"><span className="my-rank-label">MY RANK</span><span className="rank-circle">{myRank}</span><span><b>나 · LEVEL 7</b><small>다음 레벨까지 460P</small></span><strong>5,540P</strong></div>
+          <div className="my-rank"><span className="my-rank-label">MY RANK</span><span className="rank-circle">{myRank}</span><span><b>나 · {selectedTitle || '설문요정'}</b><small>LEVEL 7 · 다음 레벨까지 460P</small></span><strong>5,540P</strong></div>
           <div className="rank-neighbor rank-neighbor--next"><span className="neighbor-rank">{neighbors[1].rank}</span><span><b>{neighbors[1].name}</b><small>{neighbors[1].school}</small></span><strong>{neighbors[1].points}</strong></div>
         </div>
         <div className="hall-heading"><span>HALL OF FAME</span><h2>{rankingFilter === 'school' ? '고려대학교 명예의 전당' : '명예의 전당'}</h2><small>{rankingFilter === 'school' ? '인증된 고려대학교 학생 랭킹' : '이번 시즌 가장 활발한 응답자 30명'}</small></div>
@@ -978,8 +984,11 @@ function SurveyLibraryScreen({ navigate, mode, publishedSurveys }) {
   ]
   const ownedSurveys = [...publishedSurveys.map((survey) => ({ ...survey, category: survey.eyebrow?.replace('새 설문 · ', '') || '기타', status: survey.count || '응답 0명', questions: survey.questionCount || 3, createdAt: '오늘' })), ...mockOwned]
   const drafts = savedDraft ? [{ id: 'saved-draft', title: savedDraft.title || '제목 없는 설문', category: savedDraft.category || '미분류', status: '작성 중', questions: savedDraft.questions?.length || 0, createdAt: '최근 저장' }] : []
-  const items = mode === 'drafts' ? drafts : ownedSurveys
-  const title = mode === 'drafts' ? '임시저장 설문' : '내가 만든 설문'
+  const viewedSurveys = (() => {
+    try { return JSON.parse(localStorage.getItem('suniversity-viewed-surveys') || '[]') } catch { return [] }
+  })()
+  const items = mode === 'drafts' ? drafts : mode === 'viewed' ? viewedSurveys : ownedSurveys
+  const title = mode === 'drafts' ? '임시저장 설문' : mode === 'viewed' ? '내가 열람한 설문' : '내가 만든 설문'
 
   if (selectedSurvey) return (
     <div className="screen">
@@ -987,8 +996,8 @@ function SurveyLibraryScreen({ navigate, mode, publishedSurveys }) {
       <main className="screen-content survey-library-detail">
         <span>{selectedSurvey.category}</span><h1>{selectedSurvey.title}</h1>
         <div className="review-grid"><div><small>상태</small><b>{selectedSurvey.status}</b></div><div><small>문항 수</small><b>{selectedSurvey.questions}개</b></div><div><small>저장·등록</small><b>{selectedSurvey.createdAt}</b></div><div><small>결과 공개</small><b>공개</b></div></div>
-        <div className="review-card"><small>설문 관리</small><b>{mode === 'drafts' ? '이어서 작성하거나 삭제할 수 있어요.' : '응답 현황과 상세 결과를 확인할 수 있어요.'}</b></div>
-        <button className="primary-button" type="button" onClick={() => navigate(mode === 'drafts' ? 'create' : 'result')}>{mode === 'drafts' ? '이어서 작성하기' : '응답 결과 보기'}</button>
+        <div className="review-card"><small>설문 관리</small><b>{mode === 'drafts' ? '이어서 작성하거나 삭제할 수 있어요.' : mode === 'viewed' ? '결제한 심층 분석 결과를 다시 확인할 수 있어요.' : '응답 현황과 상세 결과를 확인할 수 있어요.'}</b></div>
+        <button className="primary-button" type="button" onClick={() => navigate(mode === 'drafts' ? 'create' : 'result')}>{mode === 'drafts' ? '이어서 작성하기' : mode === 'viewed' ? '심층 분석 다시 보기' : '응답 결과 보기'}</button>
       </main>
     </div>
   )
@@ -997,17 +1006,20 @@ function SurveyLibraryScreen({ navigate, mode, publishedSurveys }) {
     <div className="screen">
       <TopBar title={title} onBack={() => navigate('profile')} />
       <main className="screen-content survey-library">
-        <span className="category-kicker">{mode === 'drafts' ? 'DRAFTS' : 'MY SURVEYS'}</span>
-        <h1>{title}</h1><p>{mode === 'drafts' ? '작성 중인 설문을 이어서 완성해 보세요.' : '설문을 눌러 응답 현황과 상세 내용을 확인하세요.'}</p>
-        {items.length ? <div className="survey-library-list">{items.map((survey) => <button type="button" key={survey.id || survey.title} onClick={() => setSelectedSurvey(survey)}><span><small>{survey.category}</small><b>{survey.title}</b><em>{survey.status} · {survey.questions}문항</em></span><strong>›</strong></button>)}</div> : <div className="empty-state"><b>임시저장한 설문이 없어요</b><p>새 설문을 만들다가 저장하면 여기에 표시돼요.</p><button type="button" onClick={() => navigate('create')}>설문 만들기</button></div>}
+        <span className="category-kicker">{mode === 'drafts' ? 'DRAFTS' : mode === 'viewed' ? 'VIEWED' : 'MY SURVEYS'}</span>
+        <h1>{title}</h1><p>{mode === 'drafts' ? '작성 중인 설문을 이어서 완성해 보세요.' : mode === 'viewed' ? '포인트로 열람한 심층 분석 결과를 모아볼 수 있어요.' : '설문을 눌러 응답 현황과 상세 내용을 확인하세요.'}</p>
+        {items.length ? <div className="survey-library-list">{items.map((survey) => <button type="button" key={survey.id || survey.title} onClick={() => setSelectedSurvey(survey)}><span><small>{survey.category}</small><b>{survey.title}</b><em>{survey.status} · {survey.questions}문항</em></span><strong>›</strong></button>)}</div> : <div className="empty-state"><b>{mode === 'viewed' ? '열람한 심층 분석이 없어요' : '임시저장한 설문이 없어요'}</b><p>{mode === 'viewed' ? '설문 결과에서 심층 분석을 열면 여기에 자동으로 저장돼요.' : '새 설문을 만들다가 저장하면 여기에 표시돼요.'}</p>{mode !== 'viewed' ? <button type="button" onClick={() => navigate('create')}>설문 만들기</button> : null}</div>}
       </main>
     </div>
   )
 }
 
-function ProfileScreen({ navigate, points, hasDraft, badges, onOpenPointHistory }) {
+function ProfileScreen({ navigate, points, hasDraft, badges, selectedTitle, onSelectTitle, onOpenPointHistory }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('suniversity-notifications-enabled') !== 'false')
   const schoolVerified = localStorage.getItem('suniversity-school-verified') === 'true'
+  const viewedSurveyCount = (() => {
+    try { return JSON.parse(localStorage.getItem('suniversity-viewed-surveys') || '[]').length } catch { return 0 }
+  })()
   const toggleNotifications = () => {
     const next = !notificationsEnabled
     setNotificationsEnabled(next)
@@ -1022,7 +1034,7 @@ function ProfileScreen({ navigate, points, hasDraft, badges, onOpenPointHistory 
           <span><b>설문요정</b><small>고려대학교 세종캠퍼스 · 인증 완료</small></span>
         </div>
         <div className="profile-stats"><div><b>{points.toLocaleString()}P</b><small>보유 포인트</small></div><div><b>LEVEL 7</b><small>현재 레벨</small></div><div><b>18위</b><small>전체 랭킹</small></div></div>
-        {badges.length ? <section className="profile-badges"><div><b>내 설문 별명</b><small>설문에 참여할수록 새로운 별명이 쌓여요.</small></div><div>{badges.map((badge) => <span key={badge}>{badge}</span>)}</div></section> : null}
+        {badges.length ? <section className="profile-badges"><div><b>내 설문 별명</b><small>대표 호칭을 고르면 랭킹과 밸런스 게임 토론에 표시돼요.</small>{selectedTitle ? <em>현재 호칭 · {selectedTitle}</em> : null}</div><div>{badges.map((badge) => <button type="button" className={selectedTitle === badge ? 'is-selected' : ''} key={badge} onClick={() => onSelectTitle(badge)}>{badge}{selectedTitle === badge ? ' ✓' : ''}</button>)}</div></section> : null}
         <section className="settings-group">
           <button type="button" className={schoolVerified ? 'setting-verified' : ''} disabled={schoolVerified} onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>{schoolVerified ? '인증 완료 ✓' : '인증하기 ›'}</b></button>
           <button type="button" onClick={() => navigate('phoneChange')}><span><UiIcon name="phone" /> 전화번호 변경</span><b>›</b></button>
@@ -1033,6 +1045,7 @@ function ProfileScreen({ navigate, points, hasDraft, badges, onOpenPointHistory 
         <section className="settings-group">
           <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 ›</b></button>
           <button type="button" onClick={() => navigate('drafts')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
+          <button type="button" onClick={() => navigate('viewedSurveys')}><span><UiIcon name="all" /> 내가 열람한 설문</span><b>{viewedSurveyCount ? `${viewedSurveyCount}개` : '없음'} ›</b></button>
           <button type="button" onClick={onOpenPointHistory}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b>›</b></button>
         </section>
         <button className="logout-button" type="button" onClick={() => navigate('auth')}>로그아웃</button>
@@ -1064,6 +1077,7 @@ function App() {
   })
   const [publishedSurveys, setPublishedSurveys] = useState([])
   const [badges, setBadges] = useState(() => JSON.parse(localStorage.getItem('suniversity-survey-badges') || '[]'))
+  const [selectedTitle, setSelectedTitle] = useState(() => localStorage.getItem('suniversity-selected-title') || '')
   const [lastBadge, setLastBadge] = useState(() => localStorage.getItem('suniversity-last-survey-badge') || 'AI 활용 만렙 새내기')
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('suniversity-transactions')
@@ -1148,6 +1162,10 @@ function App() {
     earnPoints(10, '광고 시청 보상')
   }
   const voteBalance = () => earnPoints(2, '밸런스게임 참여')
+  const selectProfileTitle = (title) => {
+    setSelectedTitle(title)
+    localStorage.setItem('suniversity-selected-title', title)
+  }
 
   const completeVerification = (interests) => {
     if (localStorage.getItem('suniversity-school-verified') !== 'true') {
@@ -1170,15 +1188,16 @@ function App() {
     participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} resultBadge={surveyBadge} />,
     create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} onExit={() => navigate(createSource)} />,
     resultAccess: <ResultAccessScreen navigate={navigate} points={points} unlockResult={(price) => { if (spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
-    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} badge={lastBadge} onBack={() => navigate(resultSource === 'participate' ? participationSource : resultSource)} />,
+    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} badge={lastBadge} initiallyUnlocked={resultSource === 'viewedSurveys'} onBack={() => navigate(resultSource === 'participate' ? participationSource : resultSource)} />,
     points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} onBack={() => navigate(pointsSource)} />,
-    ranking: <RankingScreen navigate={navigate} />,
-    balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
+    ranking: <RankingScreen navigate={navigate} selectedTitle={selectedTitle} />,
+    balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} selectedTitle={selectedTitle} />,
     verify: <VerifyScreen onBack={() => navigate(verifySource)} onVerify={completeVerification} />,
     notifications: <NotificationsScreen navigate={navigate} onBack={() => navigate(notificationSource)} />,
-    profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} onOpenPointHistory={openPointHistory} />,
+    profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} selectedTitle={selectedTitle} onSelectTitle={selectProfileTitle} onOpenPointHistory={openPointHistory} />,
     mySurveys: <SurveyLibraryScreen navigate={navigate} mode="owned" publishedSurveys={publishedSurveys} />,
     drafts: <SurveyLibraryScreen navigate={navigate} mode="drafts" publishedSurveys={publishedSurveys} />,
+    viewedSurveys: <SurveyLibraryScreen navigate={navigate} mode="viewed" publishedSurveys={publishedSurveys} />,
     phoneChange: <PhoneChangeScreen navigate={navigate} />,
     passwordChange: <PasswordChangeScreen navigate={navigate} />,
   }
