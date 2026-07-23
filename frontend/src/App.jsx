@@ -900,7 +900,14 @@ function App() {
   const [activeSurveyId, setActiveSurveyId] = useState(() => localStorage.getItem('suniversity-active-survey'))
   const [completedSurveys, setCompletedSurveys] = useState(() => JSON.parse(localStorage.getItem('suniversity-completed-surveys') || '[]'))
   const [savedSurveys, setSavedSurveys] = useState(() => JSON.parse(localStorage.getItem('suniversity-saved-surveys') || '[]'))
-  const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
+  const [points, setPoints] = useState(() => {
+    if (localStorage.getItem('suniversity-test-balance-50000') !== 'applied') {
+      localStorage.setItem('suniversity-test-balance-50000', 'applied')
+      localStorage.setItem('suniversity-points', '50000')
+      return 50000
+    }
+    return Number(localStorage.getItem('suniversity-points')) || 50000
+  })
   const [adReward, setAdReward] = useState(() => {
     const today = new Date().toISOString().slice(0, 10)
     try {
