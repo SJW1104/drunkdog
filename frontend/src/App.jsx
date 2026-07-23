@@ -28,6 +28,9 @@ function SearchIcon() {
 function TicketIcon() {
   return <svg className="ticket-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16v3a2.5 2.5 0 0 0 0 5v3H4v-3a2.5 2.5 0 0 0 0-5v-3Z" /><path d="M9 8.5v7M12 8.5h4M12 12h4M12 15.5h3" /></svg>
 }
+function ChevronRightIcon() {
+  return <svg className="chevron-right-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+}
 function BellIcon() {
   return (
     <svg className="bell-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -300,7 +303,7 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
         {!isLoading && !error && filteredSurveys.length === 0 ? <div className="empty-state"><b>조건에 맞는 설문이 없어요</b><p>검색어나 카테고리를 바꿔보세요.</p><button type="button" onClick={() => { setQuery(''); setCategory('전체'); setShowCategories(true) }}>필터 초기화</button></div> : null}
         <div className="survey-card-list">
           {!isLoading && !error && filteredSurveys.map((survey, index) => (
-            <button className={completedSurveys.includes(String(survey.id || survey.title)) ? 'survey-card is-completed' : 'survey-card'} key={survey.title} type="button" onClick={() => onParticipate(String(survey.id || survey.title))}>
+            <button className={`${completedSurveys.includes(String(survey.id || survey.title)) ? 'survey-card is-completed' : 'survey-card'} tone-${survey.tone || 'blue'}`} key={survey.title} type="button" onClick={() => onParticipate(String(survey.id || survey.title))}>
               <span className={'survey-eyebrow ' + survey.tone}>{survey.eyebrow}</span>{completedSurveys.includes(String(survey.id || survey.title)) ? <span className="completed-label">참여 완료</span> : null}
               <div className="survey-title-row"><strong>{survey.title}</strong><PointPill value={survey.point} /></div>
               <div className="survey-meta"><span>{survey.meta}</span><span>{survey.count}</span></div>
@@ -574,7 +577,8 @@ const initialDebates = [
 ]
 
 function TeamAvatar({ team, name, small = false }) {
-  return <span className={`team-avatar team-${team.toLowerCase()} ${small ? 'is-small' : ''}`}>{name.slice(0, 1)}</span>
+  const isMe = name.startsWith('나')
+  return <span className={`team-avatar team-${team.toLowerCase()} ${small ? 'is-small' : ''}`}>{isMe ? <svg className="avatar-person-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.2" /><path d="M5.5 19c.7-4 3-6 6.5-6s5.8 2 6.5 6" /></svg> : name.slice(0, 1)}</span>
 }
 
 function BalanceGameScreen({ navigate, onVote, selectedTitle }) {
@@ -659,21 +663,14 @@ function BalanceGameScreen({ navigate, onVote, selectedTitle }) {
           <section className="debate-section">
             <div className="debate-title"><span>찬성과 반대, 서로의 생각을 확인해보세요</span><b>의견 토론장</b></div>
             <div className={`debate-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name={myDisplayName} /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`${selected === 'A' ? activeGame.aLabel : activeGame.bLabel}을 선택한 이유를 남겨보세요`} /><button type="button" onClick={addPost}>등록</button></div>
-            <div className="debate-columns">
-              {['A', 'B'].map((team) => {
-                const teamPosts = gamePosts.filter((post) => post.team === team)
-                return <div className={`debate-lane team-${team.toLowerCase()}`} key={team}>
-                  <div className="debate-lane-head"><small>{team === 'A' ? '찬성' : '반대'}</small><b>{team === 'A' ? activeGame.aLabel : activeGame.bLabel}</b><span>{teamPosts.length}개 의견</span></div>
-                  <div className="debate-list">
-                    {teamPosts.length ? teamPosts.map((post) => <article className={`debate-post team-${post.team.toLowerCase()}`} key={post.id}>
-                      <div className="post-head"><TeamAvatar team={post.team} name={post.author} /><span><b>{post.author}</b><small>{post.team === 'A' ? activeGame.aLabel : activeGame.bLabel}</small></span></div>
-                      <p>{post.text}</p><div className="post-actions"><button type="button" className={likedPosts.includes(post.id) ? 'is-liked' : ''} onClick={() => togglePostLike(post.id)}>공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button>{post.author.startsWith('나') ? <button type="button" onClick={() => deletePost(post.id)}>삭제</button> : <button type="button" onClick={() => window.alert('신고가 접수됐어요.')}>신고</button>}</div>
-                      {post.replies.map((reply) => <div className={`debate-reply team-${(reply.team || post.team).toLowerCase()}`} key={reply.id}><TeamAvatar team={reply.team || post.team} name={reply.author} small /><span><b>{reply.author}</b><p>{reply.text}</p></span></div>)}
-                      {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name={myDisplayName} small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글 입력" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
-                    </article>) : <div className="empty-debate">아직 의견이 없어요.</div>}
-                  </div>
-                </div>
-              })}
+            <div className="debate-feed-head"><span>전체 의견</span><b>{gamePosts.length}개</b></div>
+            <div className="debate-list debate-list-unified">
+              {gamePosts.length ? gamePosts.map((post) => <article className={`debate-post team-${post.team.toLowerCase()}`} key={post.id}>
+                <div className="post-head"><TeamAvatar team={post.team} name={post.author} /><span><b>{post.author}</b><small>{post.team === 'A' ? activeGame.aLabel : activeGame.bLabel}</small></span></div>
+                <p>{post.text}</p><div className="post-actions"><button type="button" className={likedPosts.includes(post.id) ? 'is-liked' : ''} onClick={() => togglePostLike(post.id)}>공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button>{post.author.startsWith('나') ? <button type="button" onClick={() => deletePost(post.id)}>삭제</button> : <button type="button" onClick={() => window.alert('신고가 접수됐어요.')}>신고</button>}</div>
+                {post.replies.map((reply) => <div className={`debate-reply team-${(reply.team || post.team).toLowerCase()}`} key={reply.id}><TeamAvatar team={reply.team || post.team} name={reply.author} small /><span><b>{reply.author}</b><p>{reply.text}</p></span></div>)}
+                {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name={myDisplayName} small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글 입력" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
+              </article>) : <div className="empty-debate">아직 의견이 없어요. 첫 의견을 남겨보세요.</div>}
             </div>
           </section>
         </>}
@@ -966,18 +963,18 @@ function ProfileScreen({ navigate, points, hasDraft, badges, savedCount, selecte
         <div className="profile-stats"><div><b>{points.toLocaleString()}P</b><small>보유 포인트</small></div><div><b>LEVEL 7</b><small>현재 레벨</small></div><div><b>18위</b><small>전체 랭킹</small></div></div>
         {badges.length ? <section className="profile-badges"><div><b>내 설문 별명</b><small>대표 호칭을 고르면 랭킹과 밸런스게임 토론에 표시돼요.</small>{selectedTitle ? <em>현재 호칭 · {selectedTitle}</em> : null}</div><div>{badges.map((badge) => <button type="button" className={selectedTitle === badge ? 'is-selected' : ''} key={badge} onClick={() => onSelectTitle(badge)}>{badge}{selectedTitle === badge ? ' ✓' : ''}</button>)}</div></section> : null}
         <section className="settings-group">
-          <button type="button" onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>완료 ›</b></button>
-          <button type="button" onClick={() => navigate('phoneChange')}><span><UiIcon name="phone" /> 전화번호 변경</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>완료 <ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('phoneChange')}><span><UiIcon name="phone" /> 전화번호 변경</span><b><ChevronRightIcon /></b></button>
           <button type="button" onClick={toggleNotifications}><span><UiIcon name="bell" /> 알림 설정</span><b>{notificationEnabled ? 'ON' : 'OFF'} ›</b></button>
-          <button type="button" onClick={() => navigate('passwordChange')}><span><UiIcon name="lock" /> 비밀번호 변경</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('passwordChange')}><span><UiIcon name="lock" /> 비밀번호 변경</span><b><ChevronRightIcon /></b></button>
         </section>
 
         <section className="settings-group">
-          <button type="button" onClick={() => navigate('savedSurveys')}><span><UiIcon name="bell" /> 관심 설문</span><b>{savedCount ? `${savedCount}개` : '없음'} ›</b></button>
-          <button type="button" onClick={() => navigate('viewedSurveys')}><span><UiIcon name="all" /> 내가 열람한 설문</span><b>›</b></button>
-          <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 ›</b></button>
-          <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
-          <button type="button" onClick={() => navigate('points')}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('savedSurveys')}><span><UiIcon name="bell" /> 관심 설문</span><b>{savedCount ? `${savedCount}개` : '없음'} <ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('viewedSurveys')}><span><UiIcon name="all" /> 내가 열람한 설문</span><b><ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 <ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} <ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('points')}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b><ChevronRightIcon /></b></button>
         </section>
         <button className="logout-button" type="button" onClick={() => navigate('auth')}>로그아웃</button><button className="withdraw-button" type="button" onClick={() => { if (window.confirm('정말 탈퇴할까요? 저장된 참여 기록이 삭제됩니다.')) { localStorage.clear(); navigate('auth') } }}>회원 탈퇴</button>
       </main>

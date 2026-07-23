@@ -2594,3 +2594,26 @@ button:focus-visible {
 .send-code { width: 100%; margin: 4px 0 2px; padding: 12px; border-radius: 10px; background: var(--blue-soft); color: var(--blue); font-size: 9px; font-weight: 850; }.setting-message { margin: 12px 0 0 !important; padding: 10px; border-radius: 9px; background: #f1f6ff; color: var(--blue) !important; font-size: 9px !important; }.setting-message.is-error { background: #fff2f3; color: #df4557 !important; }
 .setting-complete { display: grid; justify-items: center; padding-top: 70px; text-align: center; }.setting-complete i { display: grid; width: 68px; height: 68px; place-items: center; border-radius: 50%; background: #20b879; color: #fff; font-size: 28px; font-style: normal; box-shadow: 0 13px 28px rgba(32,184,121,.24); }.setting-complete .primary-button { width: 100%; }
 .viewed-survey-detail { padding-top: 28px; }.viewed-survey-detail > h1 { margin: 8px 0; font-size: 23px; line-height: 1.35; }.viewed-survey-detail > p { margin: 0 0 20px; color: var(--muted); font-size: 10px; line-height: 1.6; }.viewed-survey-detail .review-card { margin-top: 12px; }.viewed-survey-detail .primary-button { margin-top: 18px; }
+
+/* Latest mobile-app-ui refinements */
+.settings-group button > b { display: inline-flex; align-items: center; gap: 5px; }
+.chevron-right-icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 180ms ease; }
+.settings-group button:not(:disabled):hover .chevron-right-icon { transform: translateX(2px); }
+.survey-card:not(.is-completed) { background: #fbfcff; transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+.survey-card:not(.is-completed).tone-blue { border-color: #dfe9fa; background: #f8fbff; }
+.survey-card:not(.is-completed).tone-orange { border-color: #f6e2d9; background: #fffaf7; }
+.survey-card:not(.is-completed).tone-purple { border-color: #e7e0fa; background: #fbf9ff; }
+.survey-card:not(.is-completed):hover { box-shadow: 0 9px 22px rgba(31,43,66,.08); transform: translateY(-1px); }
+.avatar-person-icon { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.team-avatar.is-small .avatar-person-icon { width: 15px; height: 15px; }
+.debate-feed-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 2px 9px; }
+.debate-feed-head span { color: #343c4b; font-size: 10px; font-weight: 850; }
+.debate-feed-head b { padding: 4px 7px; border-radius: 99px; background: var(--surface); color: var(--muted); font-size: 8px; }
+.debate-list-unified { display: grid; gap: 10px; margin-top: 0; }
+.debate-list-unified .debate-post { padding: 14px; border: 1px solid var(--line); border-left: 0; border-radius: 15px; background: #fff; box-shadow: 0 7px 20px rgba(30,43,65,.05); }
+.debate-list-unified .post-head { align-items: flex-start; gap: 8px; }
+.debate-list-unified .post-head > span { min-width: 0; gap: 3px; padding-left: 9px; border-left: 3px solid var(--team); }
+.debate-list-unified .post-head small { width: fit-content; padding: 3px 7px; border-radius: 99px; background: color-mix(in srgb, var(--team) 9%, white); color: var(--team); }
+.debate-list-unified .debate-post > p { margin: 13px 0; overflow-wrap: anywhere; font-size: 10px; line-height: 1.65; }
+.debate-list-unified .post-actions { flex-wrap: wrap; gap: 8px; }
+.debate-list-unified .debate-reply { margin-left: 0; padding: 10px; border-radius: 11px; }
