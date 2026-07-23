@@ -362,7 +362,7 @@ function ParticipateScreen({ onComplete, onExit, surveyId }) {
         <div className="survey-progress"><span style={{ width: ((questionIndex + 1) / questions.length * 100) + '%' }} /></div>
         <p className="required-label">{surveyTitle} · 지금까지의 응답</p>
         <h1 className="question-title">{question.title}</h1>
-        <div className="option-list">{question.options.map((option, index) => <button type="button" key={option} className={selected === index ? 'answer-option is-selected' : 'answer-option'} onClick={() => selectAnswer(index)}><span>{option}{selected === index ? ' ✓' : ''}</span>{selected !== undefined ? <span className="live-rate"><i style={{ width: `${question.rates[index]}%` }} /><b>{question.rates[index]}%</b></span> : null}</button>)}</div>
+        <div className="option-list">{question.options.map((option, index) => <button type="button" key={option} className={`answer-option${selected === index ? ' is-selected' : ''}${selected !== undefined ? ' has-rate' : ''}`} onClick={() => selectAnswer(index)}><span>{option}{selected === index ? ' ✓' : ''}</span>{selected !== undefined ? <span className="live-rate"><i style={{ width: `${question.rates[index]}%` }} /><b>{question.rates[index]}%</b></span> : null}</button>)}</div>
         <div className="reward-banner"><strong>30P</strong><span>끝까지 응답하면<br /><b>포인트와 나만의 별명을 받아요</b></span></div>
         <button className="primary-button" disabled={selected === undefined} type="button" onClick={goNext}>{isLast ? '응답 완료하고 결과 분석하기' : '다음 질문'}</button>
         <p className="privacy-note">응답은 익명으로 안전하게 저장됩니다.</p>
