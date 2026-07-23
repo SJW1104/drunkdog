@@ -418,7 +418,7 @@ function ParticipateScreen({ onComplete, onExit, resultBadge }) {
     </div>
   )
 }
-function CreateScreen({ navigate, onPublish, points, spendPoints }) {
+function CreateScreen({ navigate, onPublish, points, spendPoints, onExit }) {
   const [savedDraft] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('suniversity-survey-draft')) || {}
@@ -499,7 +499,7 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
 
   return (
     <div className="screen">
-      <TopBar title="새 설문 만들기" onBack={() => step > 1 ? setStep(step - 1) : navigate('home')} right={<button className="text-action" type="button" onClick={saveDraft}>{saveLabel}</button>} />
+      <TopBar title="새 설문 만들기" onBack={() => step > 1 ? setStep(step - 1) : onExit()} right={<button className="text-action" type="button" onClick={saveDraft}>{saveLabel}</button>} />
       {showGuide ? <div className="modal-backdrop builder-guide-backdrop"><section className="builder-guide"><button className="modal-close" type="button" onClick={() => setShowGuide(false)}>×</button><span>설문 작성 가이드</span><h2>친구에게 묻듯<br />쉽게 써보세요</h2><ul><li>어려운 전문용어 대신 익숙한 말을 사용해요.</li><li>한 문항에는 한 가지 내용만 물어봐요.</li><li>짧고 자연스러운 대화체가 응답률을 높여요.</li></ul><button className="primary-button" type="button" onClick={() => setShowGuide(false)}>가이드 확인했어요</button></section></div> : null}
       <div className="step-progress"><span /><span className={step >= 2 ? '' : 'pending'} /><span className={step >= 3 ? '' : 'pending'} /></div>
       <main className="screen-content create-content">
@@ -581,11 +581,34 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
     </div>
   )
 }
+const balanceCategories = [
+  { id: '연애', icon: '❤️', description: '썸·연애·이별 사이의 선택' },
+  { id: '대학생활', icon: '🎓', description: '수업·팀플·캠퍼스 생활' },
+  { id: '일상', icon: '😂', description: '매일 마주치는 사소한 고민' },
+  { id: 'MBTI·성격', icon: '🧠', description: '성격과 관계 속 선택' },
+  { id: 'SNS·트렌드', icon: '📱', description: '요즘 유행과 온라인 생활' },
+  { id: '돈', icon: '💸', description: '소비·저축·연봉의 우선순위' },
+  { id: '취미', icon: '🎮', description: '게임·운동·여행·콘텐츠' },
+  { id: '병맛·극한선택', icon: '🤣', description: '둘 다 어렵지만 하나만 고르기' },
+]
+
 const balanceGames = [
-  { id: 1, category: '학교생활', question: '팀플에서 더 힘든 상황은?', a: '회의에는 오지만 아무것도 안 하는 팀원', b: '연락은 없지만 결과물은 잘 내는 팀원', aLabel: '참여파', bLabel: '결과파', aPercent: 58, participants: '1,284' },
+  { id: 1, category: '대학생활', question: '팀플에서 더 힘든 상황은?', a: '회의에는 오지만 아무것도 안 하는 팀원', b: '연락은 없지만 결과물은 잘 내는 팀원', aLabel: '참여파', bLabel: '결과파', aPercent: 58, participants: '1,284' },
   { id: 2, category: '연애', question: '연인과 다툰 뒤, 더 나은 선택은?', a: '그날 바로 끝까지 대화하기', b: '하루 식히고 차분하게 말하기', aLabel: '직진파', bLabel: '숙고파', aPercent: 46, participants: '932' },
-  { id: 3, category: '진로', question: '첫 직장을 고를 때 더 중요한 것은?', a: '배울 것이 많은 낮은 연봉', b: '업무는 익숙하지만 높은 연봉', aLabel: '성장파', bLabel: '보상파', aPercent: 63, participants: '2,106' },
-  { id: 4, category: '소비', question: '여행에서 하나만 포기해야 한다면?', a: '숙소의 편안함', b: '맛집과 먹거리', aLabel: '맛집파', bLabel: '숙소파', aPercent: 52, participants: '786' },
+  { id: 3, category: '돈', question: '첫 직장을 고를 때 더 중요한 것은?', a: '배울 것이 많은 낮은 연봉', b: '업무는 익숙하지만 높은 연봉', aLabel: '성장파', bLabel: '보상파', aPercent: 63, participants: '2,106' },
+  { id: 4, category: '취미', question: '여행에서 하나만 포기해야 한다면?', a: '숙소의 편안함', b: '맛집과 먹거리', aLabel: '맛집파', bLabel: '숙소파', aPercent: 52, participants: '786' },
+  { id: 5, category: '일상', question: '평생 하나만 가능하다면?', a: '매일 5시간만 자기', b: '매일 왕복 3시간 통학하기', aLabel: '짧은잠파', bLabel: '장거리파', aPercent: 41, participants: '1,543' },
+  { id: 6, category: 'MBTI·성격', question: '처음 보는 모임에서 나는?', a: '먼저 말을 걸고 분위기를 띄운다', b: '누가 말 걸어줄 때까지 기다린다', aLabel: '먼저파', bLabel: '관찰파', aPercent: 47, participants: '1,108' },
+  { id: 7, category: 'SNS·트렌드', question: 'SNS를 딱 하나만 남긴다면?', a: '짧고 빠른 숏폼 콘텐츠', b: '사진과 글 중심의 피드', aLabel: '숏폼파', bLabel: '피드파', aPercent: 61, participants: '2,341' },
+  { id: 8, category: '병맛·극한선택', question: '시험 전날 하나를 견뎌야 한다면?', a: '밤새 모기 한 마리와 같은 방', b: '옆집 공사 소리와 아침 맞기', aLabel: '모기파', bLabel: '공사파', aPercent: 54, participants: '1,879' },
+  { id: 9, category: '연애', question: '소개팅 상대에게 더 설레는 순간은?', a: '집에 도착했냐고 먼저 묻기', b: '다음 약속을 바로 잡기', aLabel: '다정파', bLabel: '직진파', aPercent: 44, participants: '1,476' },
+  { id: 10, category: '대학생활', question: '공강 한 시간, 더 좋은 선택은?', a: '도서관에서 과제 끝내기', b: '친구와 카페에서 수다 떨기', aLabel: '알뜰파', bLabel: '충전파', aPercent: 49, participants: '864' },
+  { id: 11, category: '일상', question: '아침에 하나만 포기한다면?', a: '10분 더 자기', b: '아침밥 챙겨 먹기', aLabel: '잠파', bLabel: '밥파', aPercent: 67, participants: '1,625' },
+  { id: 12, category: 'MBTI·성격', question: '친구가 고민을 말할 때 나는?', a: '해결 방법부터 같이 찾는다', b: '속상한 마음부터 공감한다', aLabel: '해결파', bLabel: '공감파', aPercent: 38, participants: '2,087' },
+  { id: 13, category: 'SNS·트렌드', question: '하루 동안 하나만 볼 수 있다면?', a: '친구들의 실시간 스토리', b: '알고리즘 추천 영상', aLabel: '친구파', bLabel: '추천파', aPercent: 43, participants: '1,932' },
+  { id: 14, category: '돈', question: '뜻밖의 10만 원이 생긴다면?', a: '갖고 싶던 물건을 산다', b: '일단 통장에 저축한다', aLabel: '소비파', bLabel: '저축파', aPercent: 36, participants: '2,514' },
+  { id: 15, category: '취미', question: '주말 하루를 온전히 쓴다면?', a: '집에서 게임과 콘텐츠 정주행', b: '밖으로 나가 새로운 곳 탐방', aLabel: '집콕파', bLabel: '탐방파', aPercent: 55, participants: '1,347' },
+  { id: 16, category: '병맛·극한선택', question: '평생 하나의 알림음만 써야 한다면?', a: '매번 닭 울음소리', b: '매번 내 목소리 녹음', aLabel: '꼬끼오파', bLabel: '내목소리파', aPercent: 59, participants: '1,721' },
 ]
 
 const initialDebates = [
@@ -599,6 +622,7 @@ function TeamAvatar({ team, name, small = false }) {
 
 function BalanceGameScreen({ navigate, onVote }) {
   const [activeGame, setActiveGame] = useState(null)
+  const [selectedCategory, setSelectedCategory] = useState(null)
   const [votes, setVotes] = useState(() => {
     try { return JSON.parse(localStorage.getItem('suniversity-balance-votes') || '{}') } catch { return {} }
   })
@@ -627,13 +651,33 @@ function BalanceGameScreen({ navigate, onVote }) {
     setReplyingTo(null)
   }
 
-  if (!activeGame) return (
+  if (!selectedCategory) return (
     <div className="screen with-nav">
       <TopBar title="밸런스 게임" onBack={() => navigate('home')} />
+      <main className="screen-content category-home balance-category-home">
+        <span className="category-kicker">생각이 갈리는 순간</span>
+        <h1>어떤 주제로<br />골라볼까요?</h1>
+        <p>카테고리를 선택하면 재미있는 양자택일 게임을 모아볼 수 있어요.</p>
+        <div className="category-grid balance-category-grid">
+          {balanceCategories.map((category) => (
+            <button className="category-card balance-category-card" type="button" key={category.id} onClick={() => setSelectedCategory(category.id)}>
+              <span className="category-emoji" aria-hidden="true">{category.icon}</span>
+              <b>{category.id}</b>
+              <small>{category.description}</small>
+            </button>
+          ))}
+        </div>
+      </main>
+    </div>
+  )
+
+  if (!activeGame) return (
+    <div className="screen with-nav">
+      <TopBar title={selectedCategory} onBack={() => setSelectedCategory(null)} />
       <main className="screen-content balance-feed">
         <div className="balance-feed-heading"><span>생각이 갈리는 순간</span><h1>당신의 선택은<br />어느 쪽인가요?</h1><p>카드를 골라 투표하고 같은 편과 의견을 나눠보세요.</p></div>
         <div className="balance-feed-grid">
-          {balanceGames.map((game) => <button className={votes[game.id] ? 'balance-feed-card is-completed' : 'balance-feed-card'} type="button" key={game.id} onClick={() => setActiveGame(game)}>
+          {balanceGames.filter((game) => game.category === selectedCategory).map((game) => <button className={votes[game.id] ? 'balance-feed-card is-completed' : 'balance-feed-card'} type="button" key={game.id} onClick={() => setActiveGame(game)}>
             <span className="balance-category">{game.category}</span><strong>{game.question}</strong>
             <div><span className="blue-preview">{game.a}</span><b>VS</b><span className="red-preview">{game.b}</span></div>
             <small>{votes[game.id] ? `참여 완료 · ${votes[game.id]} 선택 · 결과 보기 →` : `${game.participants}명 참여 · 의견 보기 →`}</small>
@@ -682,28 +726,39 @@ function BalanceGameScreen({ navigate, onVote }) {
     </div>
   )
 }
-function ResultScreen({ navigate, spendPoints, badge }) {
-  return (<div className="screen"><TopBar title="설문 결과" onBack={() => navigate('home')} right={<IconButton label="공유">↗</IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>{badge}</h1><p className="subtitle">내 답변을 바탕으로 발견한 결과예요. 이 별명은 프로필에도 차곡차곡 저장됐어요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>92%</strong><small>완료율</small></div><div><strong>3:12</strong><small>평균 시간</small></div></div><SectionHeader title="나와 같은 답을 고른 사람" count="" action="68%" /><div className="match-card"><strong>68%</strong><span>응답자 10명 중 약 7명이<br />나와 비슷하게 답했어요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action="Q3 기준" /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: '57%' }}>남 57%</span><span style={{ width: '43%' }}>여 43%</span></p><small>남학생의 주 1회 이상 활용 비율이 8%p 높아요.</small></article><article><b>학교 비교</b><p><span style={{ width: '64%' }}>우리 학교 64%</span><span style={{ width: '36%' }}>다른 학교 36%</span></p><small>우리 학교 학생이 코딩·분석 용도로 더 자주 사용해요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>응답자의 68%가 주 1회 이상 AI를 활용하며, 취업 준비 집단에서 활용 빈도가 더 높아요.</p></div><button className="primary-button" type="button" onClick={() => spendPoints(200, 'AI 심층 분석')}>심층 분석 보기 · 200P</button><button className="soft-button" type="button" onClick={() => spendPoints(400, 'PPT 자동 생성')}>PPT 자동 생성 · 400P</button></main></div>)
+function ResultScreen({ spendPoints, badge, onBack }) {
+  return (<div className="screen"><TopBar title="설문 결과" onBack={onBack} right={<IconButton label="공유">↗</IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>{badge}</h1><p className="subtitle">내 답변을 바탕으로 발견한 결과예요. 이 별명은 프로필에도 차곡차곡 저장됐어요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>92%</strong><small>완료율</small></div><div><strong>3:12</strong><small>평균 시간</small></div></div><SectionHeader title="나와 같은 답을 고른 사람" count="" action="68%" /><div className="match-card"><strong>68%</strong><span>응답자 10명 중 약 7명이<br />나와 비슷하게 답했어요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action="Q3 기준" /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: '57%' }}>남 57%</span><span style={{ width: '43%' }}>여 43%</span></p><small>남학생의 주 1회 이상 활용 비율이 8%p 높아요.</small></article><article><b>학교 비교</b><p><span style={{ width: '64%' }}>우리 학교 64%</span><span style={{ width: '36%' }}>다른 학교 36%</span></p><small>우리 학교 학생이 코딩·분석 용도로 더 자주 사용해요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>응답자의 68%가 주 1회 이상 AI를 활용하며, 취업 준비 집단에서 활용 빈도가 더 높아요.</p></div><button className="primary-button" type="button" onClick={() => spendPoints(200, 'AI 심층 분석')}>심층 분석 보기 · 200P</button><button className="soft-button" type="button" onClick={() => spendPoints(400, 'PPT 자동 생성')}>PPT 자동 생성 · 400P</button></main></div>)
 }
-function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, onWatchAd }) {
+function PointsScreen({ points, transactions, spendPoints, adEarned, onWatchAd, onBack }) {
+  const [showAllGifts, setShowAllGifts] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const gifts = [
+    { id: 'coffee', emoji: '☕', name: '아메리카노', description: '모바일 교환권', price: 3000, className: 'coffee' },
+    { id: 'store', emoji: '🏪', name: '편의점 상품권', description: '3,000원권', price: 3500, className: 'cone' },
+    { id: 'icecream', emoji: '🍦', name: '아이스크림 교환권', description: '싱글 레귤러', price: 4200, className: 'cone' },
+    { id: 'burger', emoji: '🍔', name: '햄버거 세트', description: '불고기 버거 세트', price: 6500, className: 'coffee' },
+    { id: 'culture', emoji: '🎬', name: '문화상품권', description: '온라인 5,000원권', price: 5800, className: 'cone' },
+    { id: 'bakery', emoji: '🥐', name: '베이커리 교환권', description: '5,000원권', price: 6000, className: 'coffee' },
+  ]
   return (
     <div className="screen with-nav">
-      <TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="도움말">?</IconButton>} />
+      <TopBar title="포인트" onBack={onBack} right={<IconButton label="포인트 도움말" onClick={() => setShowHelp(true)}>?</IconButton>} />
       <main className="screen-content points-content">
         <div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div>
         <SectionHeader title="포인트 더 모으기" count="" action={`${Math.floor(adEarned / 10)}/5회`} />
         <div className="watch-card"><b>광고 보고 10P 받기</b><small>오늘 광고로 {adEarned.toLocaleString()}P를 모았어요. 하루 최대 5회, 총 50P까지 받을 수 있어요.</small><div className="daily-ad-progress"><span style={{ width: `${Math.min(100, adEarned * 2)}%` }} /></div><button type="button" disabled={adEarned >= 50} onClick={onWatchAd}>{adEarned >= 50 ? '오늘 한도 달성' : '30초 광고 시청'}</button></div>
-        <SectionHeader title="기프티콘 교환" count="" action="전체보기" />
-        <button className="gift-card" type="button" onClick={() => spendPoints(3000, '아메리카노 교환')}><div className="gift-image coffee">☕</div><span><b>아메리카노</b><small>모바일 교환권</small></span><strong>3,000P</strong></button>
-        <div className="gift-card"><div className="gift-image cone">🍦</div><span><b>편의점 상품권</b><small>3,000원권</small></span><strong>3,500P</strong></div>
-        <p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div>
+        <SectionHeader title="기프티콘 교환" count={`${gifts.length}개`} action={showAllGifts ? '접기 ∧' : '전체보기 ›'} onAction={() => setShowAllGifts((value) => !value)} expanded={showAllGifts} />
+        <div className="gift-list">{gifts.slice(0, showAllGifts ? gifts.length : 2).map((gift) => <button className="gift-card" type="button" key={gift.id} onClick={() => spendPoints(gift.price, `${gift.name} 교환`)}><div className={`gift-image ${gift.className}`}>{gift.emoji}</div><span><b>{gift.name}</b><small>{gift.description}</small></span><strong>{gift.price.toLocaleString()}P</strong></button>)}</div>
+        <p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list" id="point-history"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div>
       </main>
+      {showHelp ? <div className="modal-backdrop info-modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="info-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><button className="modal-close" type="button" onClick={() => setShowHelp(false)}>×</button><span>POINT GUIDE</span><h2>포인트는 이렇게 사용해요</h2><ul><li>설문·밸런스 게임·출석으로 포인트를 모아요.</li><li>기프티콘 교환과 설문 등록 보상 예산에 사용할 수 있어요.</li><li>교환 버튼을 누르면 보유 포인트에서 즉시 차감돼요.</li></ul><button className="primary-button" type="button" onClick={() => setShowHelp(false)}>확인했어요</button></section></div> : null}
     </div>
   )
 }
 
 function RankingScreen({ navigate }) {
   const [rankingFilter, setRankingFilter] = useState('all')
+  const [showHelp, setShowHelp] = useState(false)
   const names = ['설문요정', '응답왕', '과제구조대', '통계마스터', '논문졸업', '척척응답', '리서치캣', '데이터덕', '마감수호대', '표본장인', '인사이트', '응답부자', '캠퍼스픽', '분석너드', '질문대장', '설문홀릭', '답변척척', '포인트왕', '논문한줄', '통계요정', '리서치룸', '표본천재', '응답착착', '데이터숲', '설문러버', '분석한입', '캠퍼스톡', '과제탈출', '질문봇', '응답완료']
   const schools = ['고려대학교', '홍익대학교', '연세대학교', '중앙대학교', '성균관대학교', '고려대학교', '한양대학교', '서울대학교', '고려대학교', '건국대학교', '이화여자대학교', '고려대학교', '경희대학교', '서강대학교', '고려대학교', '숙명여자대학교', '건국대학교', '고려대학교', '성균관대학교', '국민대학교', '고려대학교', '숭실대학교', '동국대학교', '고려대학교', '서울시립대학교', '한국외국어대학교', '고려대학교', '광운대학교', '세종대학교', '고려대학교']
   const allLeaders = names.map((name, index) => ({ id: index + 1, rank: index + 1, name, school: schools[index], points: 18920 - (index * 430) - (index > 2 ? index * 35 : 0) }))
@@ -714,7 +769,7 @@ function RankingScreen({ navigate }) {
     : [{ rank: 17, name: '답변척척', school: '건국대학교', points: '5,620P' }, { rank: 19, name: '논문한줄', school: '성균관대학교', points: '5,430P' }]
   return (
     <div className="screen with-nav">
-      <TopBar title="응답자 랭킹" onBack={() => navigate('home')} right={<IconButton label="정보">i</IconButton>} />
+      <TopBar title="응답자 랭킹" onBack={() => navigate('home')} right={<IconButton label="랭킹 도움말" onClick={() => setShowHelp(true)}>?</IconButton>} />
       <main className="screen-content ranking-content">
         <div className="chips ranking-tabs"><button className={rankingFilter === 'all' ? 'chip is-active' : 'chip'} type="button" onClick={() => setRankingFilter('all')}>전체</button><button className={rankingFilter === 'school' ? 'chip is-active' : 'chip'} type="button" onClick={() => setRankingFilter('school')}>우리 학교</button></div>
         <div className="rank-stack">
@@ -728,33 +783,81 @@ function RankingScreen({ navigate }) {
         </div>
         <div className="weekly-card"><b>이번 주 도전</b><p>설문 3개 더 참여하고 레벨업 보상 100P를 받아보세요.</p></div>
       </main>
+      {showHelp ? <div className="modal-backdrop info-modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="info-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><button className="modal-close" type="button" onClick={() => setShowHelp(false)}>×</button><span>RANKING GUIDE</span><h2>응답할수록 순위가 올라가요</h2><ul><li>설문 참여와 출석으로 얻은 활동 포인트를 기준으로 집계해요.</li><li>전체와 우리 학교 랭킹을 각각 확인할 수 있어요.</li><li>동점이면 최근 활동이 많은 사용자가 먼저 표시돼요.</li></ul><button className="primary-button" type="button" onClick={() => setShowHelp(false)}>확인했어요</button></section></div> : null}
     </div>
   )
 }
 
-function VerifyScreen({ navigate, onVerify }) {
-  const [phoneVerified, setPhoneVerified] = useState(true)
+function VerifyScreen({ onBack, onVerify }) {
+  const [phoneVerified] = useState(true)
+  const [studentIdUploaded, setStudentIdUploaded] = useState(false)
+  const [interests, setInterests] = useState(['취업', '소비'])
+  const interestOptions = ['취업', '학교생활', '소비', 'MBTI', '연애']
+  const toggleInterest = (interest) => setInterests((current) => current.includes(interest) ? current.filter((item) => item !== interest) : [...current, interest])
   return (
     <div className="screen">
-      <TopBar title="suniversity" brand onBack={() => navigate('home')} />
+      <TopBar title="suniversity" brand onBack={onBack} />
       <main className="screen-content verify-content">
         <h1>대학생 인증을<br />완료해 주세요</h1>
         <p className="subtitle">신뢰할 수 있는 응답자 커뮤니티를 위해<br />전화번호와 재학 정보를 확인합니다.</p>
         <label className="field-label">휴대전화</label>
-        <button className="phone-field" type="button" onClick={() => setPhoneVerified(true)}><span>010-1234-5678</span><b>{phoneVerified ? '인증 완료 ✓' : '인증하기'}</b></button>
-        <div className="student-card">
-          <div className="school-icon">🎓</div>
-          <h2>학생증 촬영 및 등록</h2>
-          <p>학교명과 재학 상태만 확인해요.<br />인증 이미지는 심사 후 안전하게 삭제됩니다.</p>
-          <button type="button">학생증 촬영하기</button>
+        <button className="phone-field" type="button"><span>{localStorage.getItem('suniversity-phone') || '010-1234-5678'}</span><b>{phoneVerified ? '인증 완료 ✓' : '인증하기'}</b></button>
+        <div className={studentIdUploaded ? 'student-card is-uploaded' : 'student-card'}>
+          <div className="school-icon">{studentIdUploaded ? '✓' : '🎓'}</div>
+          <h2>{studentIdUploaded ? '학생증 등록 완료' : '학생증 촬영 및 등록'}</h2>
+          <p>{studentIdUploaded ? '고려대학교 세종캠퍼스 학생증이 등록됐어요.' : <>학교명과 재학 상태만 확인해요.<br />인증 이미지는 심사 후 안전하게 삭제됩니다.</>}</p>
+          <button type="button" onClick={() => setStudentIdUploaded(true)}>{studentIdUploaded ? '학생증 다시 촬영하기' : '학생증 촬영하기'}</button>
         </div>
-        <div className="review-note">✓ 인증 심사 진행 중 · 최대 24시간</div>
+        <div className="review-note">{studentIdUploaded ? '✓ 인증 자료 제출 준비 완료' : '학생증을 등록하면 인증 심사가 시작돼요 · 최대 24시간'}</div>
         <label className="field-label">관심 분야 선택</label>
-        <div className="chips interest-chips"><button className="chip is-active" type="button">취업</button><button className="chip" type="button">학교생활</button><button className="chip is-active" type="button">소비</button><button className="chip" type="button">MBTI</button><button className="chip" type="button">연애</button></div>
-        <button className="primary-button" type="button" onClick={onVerify}>인증 완료하고 2,500P 받기</button>
+        <div className="chips interest-chips">{interestOptions.map((interest) => <button className={interests.includes(interest) ? 'chip is-active' : 'chip'} type="button" key={interest} onClick={() => toggleInterest(interest)}>{interest}</button>)}</div>
+        <button className="primary-button" type="button" disabled={!studentIdUploaded || interests.length === 0} onClick={() => onVerify(interests)}>{studentIdUploaded ? '인증 완료하고 2,500P 받기' : '학생증을 먼저 등록해 주세요'}</button>
       </main>
     </div>
   )
+}
+
+function PhoneChangeScreen({ navigate }) {
+  const [step, setStep] = useState(1)
+  const [code, setCode] = useState('')
+  const [newPhone, setNewPhone] = useState('')
+  const [message, setMessage] = useState('')
+  const currentPhone = localStorage.getItem('suniversity-phone') || '010-1234-5678'
+  const verifyCurrent = () => {
+    if (code !== '123456') { setMessage('인증번호 6자리를 확인해 주세요. 테스트 인증번호는 123456입니다.'); return }
+    setMessage(''); setCode(''); setStep(2)
+  }
+  const savePhone = () => {
+    if (!/^010-\d{4}-\d{4}$/.test(newPhone) || code !== '123456') { setMessage('새 전화번호와 인증번호를 정확히 입력해 주세요.'); return }
+    localStorage.setItem('suniversity-phone', newPhone)
+    setStep(3)
+  }
+  return <div className="screen"><TopBar title="전화번호 변경" onBack={() => step > 1 && step < 3 ? setStep(step - 1) : navigate('profile')} /><main className="screen-content secure-setting">
+    {step === 1 ? <><span>STEP 1</span><h1>현재 번호를<br />먼저 확인할게요</h1><p>{currentPhone}로 전송된 인증번호를 입력해 주세요.</p><button className="send-code" type="button" onClick={() => setMessage('인증번호를 전송했어요. 테스트 인증번호는 123456입니다.')}>인증번호 보내기</button><label>인증번호<input inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} placeholder="6자리 입력" /></label><button className="primary-button" type="button" onClick={verifyCurrent}>현재 번호 인증하기</button></> : null}
+    {step === 2 ? <><span>STEP 2</span><h1>새 전화번호를<br />인증해 주세요</h1><p>변경할 번호로 인증을 완료하면 바로 저장돼요.</p><label>새 전화번호<input value={newPhone} onChange={(event) => setNewPhone(event.target.value)} placeholder="010-0000-0000" /></label><button className="send-code" type="button" onClick={() => setMessage('새 번호로 인증번호를 전송했어요. 테스트 인증번호는 123456입니다.')}>새 번호로 인증번호 보내기</button><label>인증번호<input inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} placeholder="6자리 입력" /></label><button className="primary-button" type="button" onClick={savePhone}>인증하고 변경하기</button></> : null}
+    {step === 3 ? <div className="setting-complete"><i>✓</i><h1>전화번호를 변경했어요</h1><p>{newPhone}로 안전하게 변경되었습니다.</p><button className="primary-button" type="button" onClick={() => navigate('profile')}>설정으로 돌아가기</button></div> : null}
+    {message && step < 3 ? <p className="setting-message">{message}</p> : null}
+  </main></div>
+}
+
+function PasswordChangeScreen({ navigate }) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [message, setMessage] = useState('')
+  const [complete, setComplete] = useState(false)
+  const changePassword = () => {
+    const savedPassword = localStorage.getItem('suniversity-password') || 'password123'
+    if (currentPassword !== savedPassword) { setMessage('현재 비밀번호가 일치하지 않아요.'); return }
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) { setMessage('새 비밀번호는 영문과 숫자를 포함해 8자 이상이어야 해요.'); return }
+    if (newPassword !== confirmPassword) { setMessage('새 비밀번호 확인이 일치하지 않아요.'); return }
+    if (currentPassword === newPassword) { setMessage('현재 비밀번호와 다른 비밀번호를 사용해 주세요.'); return }
+    localStorage.setItem('suniversity-password', newPassword)
+    setComplete(true)
+  }
+  return <div className="screen"><TopBar title="비밀번호 변경" onBack={() => navigate('profile')} /><main className="screen-content secure-setting">
+    {!complete ? <><span>SECURITY</span><h1>새 비밀번호로<br />안전하게 바꿔요</h1><p>현재 비밀번호를 확인한 다음 새 비밀번호를 저장합니다.</p><label>현재 비밀번호<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="현재 비밀번호" /></label><label>새 비밀번호<input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="영문·숫자 포함 8자 이상" /></label><label>새 비밀번호 확인<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="새 비밀번호 다시 입력" /></label><button className="primary-button" type="button" onClick={changePassword}>비밀번호 변경하기</button>{message ? <p className="setting-message is-error">{message}</p> : null}</> : <div className="setting-complete"><i>✓</i><h1>비밀번호를 변경했어요</h1><p>다음 로그인부터 새 비밀번호를 사용해 주세요.</p><button className="primary-button" type="button" onClick={() => navigate('profile')}>설정으로 돌아가기</button></div>}
+  </main></div>
 }
 
 function AuthScreen({ navigate }) {
@@ -762,6 +865,10 @@ function AuthScreen({ navigate }) {
   const [form, setForm] = useState({ id: '', nickname: '', password: '', passwordConfirm: '' })
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value })
   const canSubmit = form.id && form.password && (mode === 'login' || (form.nickname && form.password === form.passwordConfirm))
+  const submitAuth = () => {
+    localStorage.setItem('suniversity-password', form.password)
+    navigate(mode === 'signup' ? 'verify' : 'home')
+  }
 
   return (
     <div className="screen auth-screen">
@@ -778,7 +885,7 @@ function AuthScreen({ navigate }) {
           <label>비밀번호<input type="password" value={form.password} onChange={update('password')} placeholder="8자 이상 입력" /></label>
           {mode === 'signup' ? <label>비밀번호 확인<input type="password" value={form.passwordConfirm} onChange={update('passwordConfirm')} placeholder="비밀번호를 다시 입력" /></label> : null}
         </div>
-        <button className="primary-button" disabled={!canSubmit} type="button" onClick={() => navigate(mode === 'signup' ? 'verify' : 'home')}>
+        <button className="primary-button" disabled={!canSubmit} type="button" onClick={submitAuth}>
           {mode === 'signup' ? '가입하고 대학생 인증하기' : '로그인'}
         </button>
         <button className="guest-button" type="button" onClick={() => navigate('home')}>프로토타입 둘러보기</button>
@@ -807,7 +914,53 @@ function NotificationsScreen({ navigate, onBack }) {
     </div>
   )
 }
-function ProfileScreen({ navigate, points, hasDraft, badges }) {
+function SurveyLibraryScreen({ navigate, mode, publishedSurveys }) {
+  const [selectedSurvey, setSelectedSurvey] = useState(null)
+  const savedDraft = (() => {
+    try { return JSON.parse(localStorage.getItem('suniversity-survey-draft')) } catch { return null }
+  })()
+  const mockOwned = [
+    { id: 'owned-ai', title: '대학생들은 AI를 어디까지 믿고 쓸까?', category: '연구 · 프로젝트', status: '응답 104명', questions: 5, createdAt: '2026. 7. 20' },
+    { id: 'owned-campus', title: '우리 학교 공강 시간, 다들 뭐 하고 지낼까?', category: '대학생활', status: '응답 68명', questions: 7, createdAt: '2026. 7. 16' },
+    { id: 'owned-delivery', title: '배달비가 얼마면 주문을 포기할까?', category: '소비', status: '응답 211명', questions: 4, createdAt: '2026. 7. 11' },
+  ]
+  const ownedSurveys = [...publishedSurveys.map((survey) => ({ ...survey, category: survey.eyebrow?.replace('새 설문 · ', '') || '기타', status: survey.count || '응답 0명', questions: survey.questionCount || 3, createdAt: '오늘' })), ...mockOwned]
+  const drafts = savedDraft ? [{ id: 'saved-draft', title: savedDraft.title || '제목 없는 설문', category: savedDraft.category || '미분류', status: '작성 중', questions: savedDraft.questions?.length || 0, createdAt: '최근 저장' }] : []
+  const items = mode === 'drafts' ? drafts : ownedSurveys
+  const title = mode === 'drafts' ? '임시저장 설문' : '내가 만든 설문'
+
+  if (selectedSurvey) return (
+    <div className="screen">
+      <TopBar title="설문 상세" onBack={() => setSelectedSurvey(null)} />
+      <main className="screen-content survey-library-detail">
+        <span>{selectedSurvey.category}</span><h1>{selectedSurvey.title}</h1>
+        <div className="review-grid"><div><small>상태</small><b>{selectedSurvey.status}</b></div><div><small>문항 수</small><b>{selectedSurvey.questions}개</b></div><div><small>저장·등록</small><b>{selectedSurvey.createdAt}</b></div><div><small>결과 공개</small><b>공개</b></div></div>
+        <div className="review-card"><small>설문 관리</small><b>{mode === 'drafts' ? '이어서 작성하거나 삭제할 수 있어요.' : '응답 현황과 상세 결과를 확인할 수 있어요.'}</b></div>
+        <button className="primary-button" type="button" onClick={() => navigate(mode === 'drafts' ? 'create' : 'result')}>{mode === 'drafts' ? '이어서 작성하기' : '응답 결과 보기'}</button>
+      </main>
+    </div>
+  )
+
+  return (
+    <div className="screen">
+      <TopBar title={title} onBack={() => navigate('profile')} />
+      <main className="screen-content survey-library">
+        <span className="category-kicker">{mode === 'drafts' ? 'DRAFTS' : 'MY SURVEYS'}</span>
+        <h1>{title}</h1><p>{mode === 'drafts' ? '작성 중인 설문을 이어서 완성해 보세요.' : '설문을 눌러 응답 현황과 상세 내용을 확인하세요.'}</p>
+        {items.length ? <div className="survey-library-list">{items.map((survey) => <button type="button" key={survey.id || survey.title} onClick={() => setSelectedSurvey(survey)}><span><small>{survey.category}</small><b>{survey.title}</b><em>{survey.status} · {survey.questions}문항</em></span><strong>›</strong></button>)}</div> : <div className="empty-state"><b>임시저장한 설문이 없어요</b><p>새 설문을 만들다가 저장하면 여기에 표시돼요.</p><button type="button" onClick={() => navigate('create')}>설문 만들기</button></div>}
+      </main>
+    </div>
+  )
+}
+
+function ProfileScreen({ navigate, points, hasDraft, badges, onOpenPointHistory }) {
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('suniversity-notifications-enabled') !== 'false')
+  const schoolVerified = localStorage.getItem('suniversity-school-verified') === 'true'
+  const toggleNotifications = () => {
+    const next = !notificationsEnabled
+    setNotificationsEnabled(next)
+    localStorage.setItem('suniversity-notifications-enabled', String(next))
+  }
   return (
     <div className="screen">
       <TopBar title="마이페이지" onBack={() => navigate('home')} />
@@ -819,16 +972,16 @@ function ProfileScreen({ navigate, points, hasDraft, badges }) {
         <div className="profile-stats"><div><b>{points.toLocaleString()}P</b><small>보유 포인트</small></div><div><b>LEVEL 7</b><small>현재 레벨</small></div><div><b>18위</b><small>전체 랭킹</small></div></div>
         {badges.length ? <section className="profile-badges"><div><b>내 설문 별명</b><small>설문에 참여할수록 새로운 별명이 쌓여요.</small></div><div>{badges.map((badge) => <span key={badge}>{badge}</span>)}</div></section> : null}
         <section className="settings-group">
-          <button type="button" onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>완료 ›</b></button>
-          <button type="button"><span><UiIcon name="phone" /> 전화번호 변경</span><b>›</b></button>
-          <button type="button"><span><UiIcon name="bell" /> 알림 설정</span><b>ON ›</b></button>
-          <button type="button"><span><UiIcon name="lock" /> 비밀번호 변경</span><b>›</b></button>
+          <button type="button" className={schoolVerified ? 'setting-verified' : ''} disabled={schoolVerified} onClick={() => navigate('verify')}><span><UiIcon name="school" /> 학교 인증 정보</span><b>{schoolVerified ? '인증 완료 ✓' : '인증하기 ›'}</b></button>
+          <button type="button" onClick={() => navigate('phoneChange')}><span><UiIcon name="phone" /> 전화번호 변경</span><b>›</b></button>
+          <button type="button" onClick={toggleNotifications}><span><UiIcon name="bell" /> 알림 설정</span><span className={notificationsEnabled ? 'setting-toggle is-on' : 'setting-toggle'} role="switch" aria-checked={notificationsEnabled}><i /></span></button>
+          <button type="button" onClick={() => navigate('passwordChange')}><span><UiIcon name="lock" /> 비밀번호 변경</span><b>›</b></button>
         </section>
 
         <section className="settings-group">
-          <button type="button" onClick={() => navigate('result')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 ›</b></button>
-          <button type="button" onClick={() => navigate('create')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
-          <button type="button" onClick={() => navigate('points')}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b>›</b></button>
+          <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 ›</b></button>
+          <button type="button" onClick={() => navigate('drafts')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
+          <button type="button" onClick={onOpenPointHistory}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b>›</b></button>
         </section>
         <button className="logout-button" type="button" onClick={() => navigate('auth')}>로그아웃</button>
       </main>
@@ -841,6 +994,10 @@ function App() {
   const [notificationSource, setNotificationSource] = useState('home')
   const [lastCheckin, setLastCheckin] = useState(() => localStorage.getItem('suniversity-last-checkin') || '')
   const [participationSource, setParticipationSource] = useState('surveys')
+  const [verifySource, setVerifySource] = useState('home')
+  const [pointsSource, setPointsSource] = useState('home')
+  const [resultSource, setResultSource] = useState('home')
+  const [createSource, setCreateSource] = useState('home')
   const [activeSurveyId, setActiveSurveyId] = useState(null)
   const [completedSurveys, setCompletedSurveys] = useState(() => JSON.parse(localStorage.getItem('suniversity-completed-surveys') || '[]'))
   const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
@@ -868,6 +1025,10 @@ function App() {
   const navigate = (next) => {
     if (next === 'participate') setParticipationSource(screen)
     if (next === 'notifications') setNotificationSource(screen)
+    if (next === 'verify') setVerifySource(screen)
+    if (next === 'points') setPointsSource(screen)
+    if (next === 'result') setResultSource(screen)
+    if (next === 'create') setCreateSource(screen)
     setScreen(next)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -935,9 +1096,18 @@ function App() {
   }
   const voteBalance = () => earnPoints(2, '밸런스게임 참여')
 
-  const completeVerification = () => {
-    earnPoints(2500, '학교 인증 가입 보상')
-    navigate('home')
+  const completeVerification = (interests) => {
+    if (localStorage.getItem('suniversity-school-verified') !== 'true') {
+      earnPoints(2500, '학교 인증 가입 보상')
+      localStorage.setItem('suniversity-school-verified', 'true')
+    }
+    localStorage.setItem('suniversity-interests', JSON.stringify(interests))
+    navigate(verifySource === 'auth' ? 'home' : verifySource)
+  }
+
+  const openPointHistory = () => {
+    navigate('points')
+    window.setTimeout(() => document.getElementById('point-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
   }
 
   const screens = {
@@ -945,15 +1115,19 @@ function App() {
     home: <HomeScreen navigate={navigate} isCheckedIn={lastCheckin === new Date().toISOString().slice(0, 10)} onCheckIn={checkInToday} onParticipate={startSurvey} />,
     surveys: <SurveyListScreen navigate={navigate} customSurveys={publishedSurveys} onParticipate={startSurvey} completedSurveys={completedSurveys} />,
     participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} resultBadge={surveyBadge} />,
-    create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} />,
+    create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} onExit={() => navigate(createSource)} />,
     resultAccess: <ResultAccessScreen navigate={navigate} points={points} unlockResult={(price) => { if (spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
-    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} badge={lastBadge} />,
-    points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} />,
+    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} badge={lastBadge} onBack={() => navigate(resultSource)} />,
+    points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} onBack={() => navigate(pointsSource)} />,
     ranking: <RankingScreen navigate={navigate} />,
     balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
-    verify: <VerifyScreen navigate={navigate} onVerify={completeVerification} />,
+    verify: <VerifyScreen onBack={() => navigate(verifySource)} onVerify={completeVerification} />,
     notifications: <NotificationsScreen navigate={navigate} onBack={() => navigate(notificationSource)} />,
-    profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} />,
+    profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} onOpenPointHistory={openPointHistory} />,
+    mySurveys: <SurveyLibraryScreen navigate={navigate} mode="owned" publishedSurveys={publishedSurveys} />,
+    drafts: <SurveyLibraryScreen navigate={navigate} mode="drafts" publishedSurveys={publishedSurveys} />,
+    phoneChange: <PhoneChangeScreen navigate={navigate} />,
+    passwordChange: <PasswordChangeScreen navigate={navigate} />,
   }
 
   return (
