@@ -119,6 +119,16 @@ button {
   stroke-linecap: round;
 }
 
+.copy-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .top-actions .icon-button:first-child {
   border: 1px solid #e5e9f0;
   background: #fff;
@@ -2354,6 +2364,19 @@ button:focus-visible {
 .survey-library-detail { padding-top: 28px; }
 .survey-library-detail > span { display: inline-flex; padding: 5px 8px; border-radius: 99px; background: var(--blue-soft); color: var(--blue); font-size: 8px; font-weight: 850; }
 .survey-library-detail h1 { margin: 12px 0 22px; font-size: 23px; line-height: 1.35; letter-spacing: -.04em; }
+
+.share-toast { position: absolute; z-index: 80; right: 18px; bottom: 22px; left: 18px; padding: 12px 14px; border-radius: 12px; background: rgba(27, 34, 47, .94); color: #fff; font-size: 10px; font-weight: 750; text-align: center; box-shadow: 0 12px 30px rgba(20,28,42,.24); animation: share-toast-in 220ms ease-out; }
+@keyframes share-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.deep-analysis-panel { margin: 2px 0 12px; padding: 16px; border: 1px solid #cfe0ff; border-radius: 15px; background: linear-gradient(145deg, #f7faff, #eef4ff); animation: deep-analysis-in 420ms cubic-bezier(.22,1,.36,1); }
+.deep-analysis-panel > span { color: var(--blue); font-size: 8px; font-weight: 900; letter-spacing: .09em; }
+.deep-analysis-panel h3 { margin: 7px 0; font-size: 14px; letter-spacing: -.025em; }
+.deep-analysis-panel > p { margin: 0; color: #596477; font-size: 9px; line-height: 1.65; }
+.deep-analysis-panel > div { display: grid; gap: 3px; margin-top: 12px; padding: 10px; border-radius: 10px; background: #fff; }
+.deep-analysis-panel b { color: var(--blue); font-size: 9px; }
+.deep-analysis-panel small { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.result-content .soft-button:disabled { cursor: wait; opacity: .65; }
+@keyframes deep-analysis-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
 /* Slim device proportions */
 .device-shell {
   width: min(100%, 396px);
@@ -2581,9 +2604,15 @@ button:focus-visible {
 /* Survey engagement, creation guide and result comparison */
 .answer-option { display: grid; gap: 7px; }
 .answer-option > span:first-child { display: flex; justify-content: space-between; }
-.live-rate { position: relative; display: block; height: 16px; overflow: hidden; border-radius: 8px; background: #eef2f8; text-align: right; }
-.live-rate i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: #cfe0ff; transition: width .45s ease; }
-.live-rate b { position: relative; z-index: 1; padding-right: 7px; color: var(--blue); font-size: 8px; line-height: 16px; }
+.live-rate { position: relative; display: block; height: 16px; overflow: hidden; border-radius: 8px; background: #eef2f8; text-align: right; animation: live-rate-enter 280ms ease-out var(--rate-delay) both; }
+.live-rate i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: #cfe0ff; transform: scaleX(0); transform-origin: left center; animation: live-rate-fill 720ms cubic-bezier(.22, 1, .36, 1) calc(var(--rate-delay) + 90ms) forwards; }
+.live-rate b { position: relative; z-index: 1; display: inline-block; padding-right: 7px; color: var(--blue); font-size: 8px; line-height: 16px; opacity: 0; animation: live-rate-number 320ms ease-out calc(var(--rate-delay) + 430ms) forwards; }
+@keyframes live-rate-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes live-rate-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes live-rate-number { from { opacity: 0; transform: translateX(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .live-rate, .live-rate i, .live-rate b { animation: none; opacity: 1; transform: none; }
+}
 .result-wait { display: grid; height: 100%; place-content: center; justify-items: center; text-align: center; }
 .result-wait-spinner { width: 62px; height: 62px; border: 7px solid #e9f1ff; border-top-color: var(--blue); border-radius: 50%; animation: survey-spin .8s linear infinite; }
 .result-wait h1 { margin: 20px 0 8px; font-size: 21px; }.result-wait p { color: var(--muted); font-size: 11px; line-height: 1.65; }

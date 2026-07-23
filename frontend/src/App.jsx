@@ -39,6 +39,14 @@ function SearchIcon() {
     </svg>
   )
 }
+function CopyIcon() {
+  return (
+    <svg className="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="8" y="8" width="11" height="11" rx="2.5" />
+      <path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8" />
+    </svg>
+  )
+}
 function BalanceScaleIcon() {
   return (
     <svg className="balance-scale-icon" viewBox="0 0 28 24" aria-hidden="true">
@@ -390,7 +398,7 @@ function ParticipateScreen({ onComplete, onExit, resultBadge }) {
         <div className="survey-progress"><span style={{ width: ((questionIndex + 1) / questions.length * 100) + '%' }} /></div>
         <p className="required-label">필수 질문 · 지금까지의 응답</p>
         <h1 className="question-title">{question.title}</h1>
-        <div className="option-list">{question.options.map((option, index) => <button type="button" key={option} className={selected === index ? 'answer-option is-selected' : 'answer-option'} onClick={() => selectAnswer(index)}><span>{option}{selected === index ? ' ✓' : ''}</span>{selected !== undefined ? <span className="live-rate"><i style={{ width: `${question.rates[index]}%` }} /><b>{question.rates[index]}%</b></span> : null}</button>)}</div>
+        <div className="option-list">{question.options.map((option, index) => <button type="button" key={option} className={selected === index ? 'answer-option is-selected' : 'answer-option'} onClick={() => selectAnswer(index)}><span>{option}{selected === index ? ' ✓' : ''}</span>{selected !== undefined ? <span className="live-rate" style={{ '--rate-delay': `${index * 70}ms` }}><i style={{ width: `${question.rates[index]}%` }} /><b>{question.rates[index]}%</b></span> : null}</button>)}</div>
         <div className="reward-banner"><strong>30P</strong><span>끝까지 응답하면<br /><b>포인트와 나만의 별명을 받아요</b></span></div>
         <button className="primary-button" disabled={selected === undefined} type="button" onClick={goNext}>{isLast ? '응답 완료하고 결과 분석하기' : '다음 질문'}</button>
         <p className="privacy-note">응답은 익명으로 안전하게 저장됩니다.</p>
@@ -727,7 +735,51 @@ function BalanceGameScreen({ navigate, onVote }) {
   )
 }
 function ResultScreen({ spendPoints, badge, onBack }) {
-  return (<div className="screen"><TopBar title="설문 결과" onBack={onBack} right={<IconButton label="공유">↗</IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>{badge}</h1><p className="subtitle">내 답변을 바탕으로 발견한 결과예요. 이 별명은 프로필에도 차곡차곡 저장됐어요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>92%</strong><small>완료율</small></div><div><strong>3:12</strong><small>평균 시간</small></div></div><SectionHeader title="나와 같은 답을 고른 사람" count="" action="68%" /><div className="match-card"><strong>68%</strong><span>응답자 10명 중 약 7명이<br />나와 비슷하게 답했어요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action="Q3 기준" /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: '57%' }}>남 57%</span><span style={{ width: '43%' }}>여 43%</span></p><small>남학생의 주 1회 이상 활용 비율이 8%p 높아요.</small></article><article><b>학교 비교</b><p><span style={{ width: '64%' }}>우리 학교 64%</span><span style={{ width: '36%' }}>다른 학교 36%</span></p><small>우리 학교 학생이 코딩·분석 용도로 더 자주 사용해요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>응답자의 68%가 주 1회 이상 AI를 활용하며, 취업 준비 집단에서 활용 빈도가 더 높아요.</p></div><button className="primary-button" type="button" onClick={() => spendPoints(200, 'AI 심층 분석')}>심층 분석 보기 · 200P</button><button className="soft-button" type="button" onClick={() => spendPoints(400, 'PPT 자동 생성')}>PPT 자동 생성 · 400P</button></main></div>)
+  const [shareMessage, setShareMessage] = useState('')
+  const [analysisUnlocked, setAnalysisUnlocked] = useState(false)
+  const [pptState, setPptState] = useState('idle')
+  const shareResult = async () => {
+    const shareData = { title: 'suniversity 설문 결과', text: `내 설문 별명은 “${badge}”예요! 나와 같은 답을 고른 사람은 68%였어요.`, url: window.location.href }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+        setShareMessage('설문 결과를 공유했어요.')
+      } else {
+        await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`)
+        setShareMessage('결과 링크를 복사했어요.')
+      }
+      window.setTimeout(() => setShareMessage(''), 2200)
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        setShareMessage('공유하지 못했어요. 잠시 후 다시 시도해 주세요.')
+        window.setTimeout(() => setShareMessage(''), 2200)
+      }
+    }
+  }
+  const unlockAnalysis = () => {
+    if (analysisUnlocked || !spendPoints(200, 'AI 심층 분석')) return
+    setAnalysisUnlocked(true)
+    setShareMessage('심층 분석을 열었어요.')
+    window.setTimeout(() => setShareMessage(''), 1800)
+  }
+  const downloadPpt = () => {
+    if (pptState === 'generating') return
+    if (pptState === 'idle' && !spendPoints(400, 'PPT 자동 생성')) return
+    setPptState('generating')
+    window.setTimeout(() => {
+      const report = `<html><head><meta charset="utf-8"><title>suniversity 설문 결과</title></head><body><h1>suniversity 설문 결과</h1><h2>${badge}</h2><p>총 응답 104명 · 완료율 92% · 평균 시간 3:12</p><h3>핵심 결과</h3><ul><li>나와 같은 답을 고른 사람 68%</li><li>남녀 비교: 남 57%, 여 43%</li><li>학교 비교: 우리 학교 64%, 다른 학교 36%</li></ul><p>응답자의 68%가 주 1회 이상 AI를 활용하며 취업 준비 집단에서 활용 빈도가 더 높습니다.</p></body></html>`
+      const url = URL.createObjectURL(new Blob([report], { type: 'application/vnd.ms-powerpoint;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'suniversity-survey-result.ppt'
+      link.click()
+      URL.revokeObjectURL(url)
+      setPptState('ready')
+      setShareMessage('PPT 결과 파일을 만들었어요.')
+      window.setTimeout(() => setShareMessage(''), 2200)
+    }, 1100)
+  }
+  return (<div className="screen"><TopBar title="설문 결과" onBack={onBack} right={<IconButton label="설문 결과 복사 및 공유" onClick={shareResult}><CopyIcon /></IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>{badge}</h1><p className="subtitle">내 답변을 바탕으로 발견한 결과예요. 이 별명은 프로필에도 차곡차곡 저장됐어요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>92%</strong><small>완료율</small></div><div><strong>3:12</strong><small>평균 시간</small></div></div><SectionHeader title="나와 같은 답을 고른 사람" count="" action="68%" /><div className="match-card"><strong>68%</strong><span>응답자 10명 중 약 7명이<br />나와 비슷하게 답했어요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action="Q3 기준" /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: '57%' }}>남 57%</span><span style={{ width: '43%' }}>여 43%</span></p><small>남학생의 주 1회 이상 활용 비율이 8%p 높아요.</small></article><article><b>학교 비교</b><p><span style={{ width: '64%' }}>우리 학교 64%</span><span style={{ width: '36%' }}>다른 학교 36%</span></p><small>우리 학교 학생이 코딩·분석 용도로 더 자주 사용해요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>응답자의 68%가 주 1회 이상 AI를 활용하며, 취업 준비 집단에서 활용 빈도가 더 높아요.</p></div>{analysisUnlocked ? <section className="deep-analysis-panel"><span>AI DEEP ANALYSIS</span><h3>취업 준비형 고빈도 사용자</h3><p>주 1회 이상 AI를 사용하는 응답자는 자료 탐색보다 글쓰기와 코딩에 더 적극적으로 활용했어요. 특히 취업 준비 중인 3·4학년 그룹은 다른 그룹보다 활용 빈도가 21% 높았습니다.</p><div><b>추천 인사이트</b><small>AI 활용법 콘텐츠와 취업 준비 설문에 높은 관심을 보일 가능성이 있어요.</small></div></section> : null}<button className="primary-button" type="button" onClick={unlockAnalysis}>{analysisUnlocked ? '심층 분석 열림 ✓' : '심층 분석 보기 · 200P'}</button><button className="soft-button" type="button" disabled={pptState === 'generating'} onClick={downloadPpt}>{pptState === 'generating' ? 'PPT 만드는 중…' : pptState === 'ready' ? 'PPT 다시 다운로드' : 'PPT 자동 생성 · 400P'}</button></main>{shareMessage ? <div className="share-toast" role="status">{shareMessage}</div> : null}</div>)
 }
 function PointsScreen({ points, transactions, spendPoints, adEarned, onWatchAd, onBack }) {
   const [showAllGifts, setShowAllGifts] = useState(false)
@@ -1023,7 +1075,6 @@ function App() {
   })
 
   const navigate = (next) => {
-    if (next === 'participate') setParticipationSource(screen)
     if (next === 'notifications') setNotificationSource(screen)
     if (next === 'verify') setVerifySource(screen)
     if (next === 'points') setPointsSource(screen)
@@ -1066,7 +1117,9 @@ function App() {
     if (badge && !badges.includes(badge)) { const next = [badge, ...badges]; setBadges(next); localStorage.setItem('suniversity-survey-badges', JSON.stringify(next)) }
     setLastBadge(badge)
     localStorage.setItem('suniversity-last-survey-badge', badge)
-    navigate('result')
+    setResultSource(participationSource)
+    setScreen('result')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const surveyBadge = (() => {
@@ -1117,7 +1170,7 @@ function App() {
     participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} resultBadge={surveyBadge} />,
     create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} onExit={() => navigate(createSource)} />,
     resultAccess: <ResultAccessScreen navigate={navigate} points={points} unlockResult={(price) => { if (spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
-    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} badge={lastBadge} onBack={() => navigate(resultSource)} />,
+    result: <ResultScreen navigate={navigate} spendPoints={spendPoints} badge={lastBadge} onBack={() => navigate(resultSource === 'participate' ? participationSource : resultSource)} />,
     points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} onBack={() => navigate(pointsSource)} />,
     ranking: <RankingScreen navigate={navigate} />,
     balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
