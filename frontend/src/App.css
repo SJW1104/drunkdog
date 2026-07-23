@@ -2508,3 +2508,4 @@ button:focus-visible {
 .saved-survey-list article em { color: var(--muted); font-size: 9px; font-style: normal; }
 .saved-survey-list article.is-completed { filter: grayscale(1); opacity: .58; }
 .saved-survey-remove { position: absolute; right: 12px; bottom: 11px; padding: 5px 7px; border-radius: 7px; background: #f2f4f7; color: #7d8797; font-size: 8px; }
+.post-actions button.is-liked { color: var(--blue); font-weight: 900; }
