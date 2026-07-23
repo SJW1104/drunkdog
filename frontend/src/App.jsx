@@ -29,6 +29,14 @@ function BellIcon() {
     </svg>
   )
 }
+function SearchIcon() {
+  return (
+    <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.8" cy="10.8" r="6.3" />
+      <path d="m15.5 15.5 4.2 4.2" />
+    </svg>
+  )
+}
 function BalanceScaleIcon() {
   return (
     <svg className="balance-scale-icon" viewBox="0 0 28 24" aria-hidden="true">
@@ -112,24 +120,65 @@ function SurveyRow({ title, meta, point, onClick }) {
   )
 }
 
-function SectionHeader({ icon, title, count, action }) {
+function SectionHeader({ icon, title, count, action, onAction, expanded = false }) {
   return (
     <div className="section-header">
       <strong><span>{icon}</span> {title} <small>{count}</small></strong>
-      {action ? <button type="button" className={action.includes('1.5배') ? 'section-action is-boost' : 'section-action'}>{action}</button> : null}
+      {action ? <button type="button" className="section-action" onClick={onAction} aria-expanded={onAction ? expanded : undefined}>{action}</button> : null}
     </div>
   )
+}
+
+const homeSurveySections = {
+  hot: [
+    { id: 'home-ai', title: '대학생의 AI 활용과 취업 준비', meta: '82 / 100명 · 약 3분', point: 20 },
+    { id: 'home-delivery', title: '배달앱 선택 기준과 소비 습관', meta: '211명 참여 · 약 2분', point: 15 },
+    { id: 'home-campus-food', title: '우리 학교 학식 만족도', meta: '168명 참여 · 약 2분', point: 20 },
+    { id: 'home-ott', title: '대학생 OTT 이용 트렌드', meta: '143명 참여 · 약 3분', point: 25 },
+    { id: 'home-side-job', title: '대학생 아르바이트 실태', meta: '97 / 120명 · 약 4분', point: 30 },
+  ],
+  deadline: [
+    { id: 'home-capstone', title: '캡스톤 협업 경험', meta: '2시간 남음', point: 45 },
+    { id: 'home-commute', title: '통학 만족도 조사', meta: '오늘 마감', point: 30 },
+    { id: 'home-sleep', title: '시험 기간 수면 습관', meta: '오늘 마감', point: 25 },
+    { id: 'home-library', title: '도서관 이용 경험', meta: '내일 마감', point: 20 },
+  ],
+  newest: [
+    { id: 'home-date', title: '데이트 비용 인식', meta: '방금 등록', point: 10 },
+    { id: 'home-contest', title: '공모전 참여 경험', meta: '5분 전', point: 20 },
+    { id: 'home-coffee', title: '캠퍼스 카페 이용 습관', meta: '12분 전', point: 15 },
+    { id: 'home-team-project', title: '팀플 역할 분담 방식', meta: '18분 전', point: 25 },
+    { id: 'home-short-form', title: '숏폼 콘텐츠 시청 습관', meta: '24분 전', point: 20 },
+    { id: 'home-travel', title: '대학생 여행 선호도', meta: '31분 전', point: 30 },
+    { id: 'home-payment', title: '간편결제 서비스 만족도', meta: '42분 전', point: 15 },
+    { id: 'home-club', title: '교내 동아리 활동 경험', meta: '55분 전', point: 20 },
+  ],
+  interest: [
+    { id: 'home-subscription', title: 'Z세대 구독 서비스 이용 행태', meta: '관심사 일치 92% · 약 4분', point: 30 },
+    { id: 'home-career-cost', title: '대학생 취업 준비 비용 조사', meta: '관심사 일치 87% · 약 3분', point: 20 },
+    { id: 'home-portfolio', title: '취업 포트폴리오 준비 현황', meta: '관심사 일치 84% · 약 3분', point: 25 },
+    { id: 'home-shopping', title: '온라인 쇼핑 구매 결정 요인', meta: '관심사 일치 81% · 약 2분', point: 15 },
+    { id: 'home-internship', title: '인턴십 선택 기준 조사', meta: '관심사 일치 78% · 약 4분', point: 35 },
+  ],
 }
 
 function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate }) {
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [notificationOpen, setNotificationOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [expandedSections, setExpandedSections] = useState({})
   const [readNotices, setReadNotices] = useState(() => JSON.parse(localStorage.getItem('suniversity-read-notices') || '[]'))
   const { data: homeNoticeData, isLoading: noticesLoading } = useAsyncData(mockApi.getNotifications)
   const homeNotices = homeNoticeData || []
   const unreadCount = homeNotices.filter((notice) => !readNotices.includes(notice.id)).length
   const openNotice = (notice) => { const next = [...new Set([...readNotices, notice.id])]; setReadNotices(next); localStorage.setItem('suniversity-read-notices', JSON.stringify(next)); setNotificationOpen(false); navigate(notice.target) }
   const readAllNotices = () => { const next = homeNotices.map((notice) => notice.id); setReadNotices(next); localStorage.setItem('suniversity-read-notices', JSON.stringify(next)) }
+  const toggleSection = (section) => setExpandedSections((current) => ({ ...current, [section]: !current[section] }))
+  const visibleItems = (section) => expandedSections[section] ? homeSurveySections[section] : homeSurveySections[section].slice(0, 2)
+  const searchResults = searchQuery.trim()
+    ? Object.values(homeSurveySections).flat().filter((survey, index, surveys) => surveys.findIndex((item) => item.id === survey.id) === index && survey.title.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    : []
   return (
     <div className="screen with-nav">
       <TopBar
@@ -137,7 +186,7 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate }) {
         brand
         right={
           <div className="top-actions">
-            <IconButton label="검색">⌕</IconButton>
+            <IconButton label="설문 검색" onClick={() => setSearchOpen((open) => !open)}><SearchIcon /></IconButton>
             <IconButton label="알림" badge={unreadCount || null} onClick={() => setNotificationOpen(true)}><BellIcon /></IconButton>
             <button className="avatar-button" type="button" onClick={() => navigate('profile')}>MY</button>
           </div>
@@ -145,6 +194,17 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate }) {
       />
 
       <main className="screen-content home-content">
+        {searchOpen ? <section className="home-search" aria-label="설문 검색">
+          <label>
+            <SearchIcon />
+            <input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="찾고 싶은 설문을 검색해 보세요" />
+            {searchQuery ? <button type="button" aria-label="검색어 지우기" onClick={() => setSearchQuery('')}>×</button> : null}
+          </label>
+          {searchQuery.trim() ? <div className="home-search-results">
+            <small>{searchResults.length ? `${searchResults.length}개의 설문을 찾았어요` : '검색 결과가 없어요'}</small>
+            {searchResults.map((survey) => <SurveyRow key={survey.id} {...survey} onClick={() => onParticipate(survey.id)} />)}
+          </div> : null}
+        </section> : null}
         <button className={isCheckedIn ? 'checkin-card is-complete' : 'checkin-card'} type="button" onClick={() => setCheckinOpen(true)}>
           <span>{isCheckedIn ? '오늘 출석을 완료했어요' : '오늘도 반가워요 👋'}</span>
           <b>{isCheckedIn ? '출석 완료 ✓' : '출석체크 +10P'}</b>
@@ -156,34 +216,30 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate }) {
         </div>
 
         <section>
-          <SectionHeader icon="🔥" title="HOT 설문" count="5개" action="전체보기 ›" />
+          <SectionHeader icon="🔥" title="HOT 설문" count="5개" action={expandedSections.hot ? '접기 ∧' : '전체보기 ›'} onAction={() => toggleSection('hot')} expanded={!!expandedSections.hot} />
           <div className="stack-sm">
-            <SurveyRow title="대학생의 AI 활용과 취업 준비" meta="82 / 100명 · 약 3분" point={20} onClick={() => onParticipate('home-ai')} />
-            <SurveyRow title="배달앱 선택 기준과 소비 습관" meta="211명 참여 · 약 2분" point={15} onClick={() => onParticipate('home-delivery')} />
+            {visibleItems('hot').map((survey) => <SurveyRow key={survey.id} {...survey} onClick={() => onParticipate(survey.id)} />)}
           </div>
         </section>
 
         <section>
-          <SectionHeader icon="⏰" title="마감임박" count="4개" action="보상 1.5배" />
+          <SectionHeader icon="⏰" title="마감임박" count="4개" action={expandedSections.deadline ? '접기 ∧' : '전체보기 ›'} onAction={() => toggleSection('deadline')} expanded={!!expandedSections.deadline} />
           <div className="grid-two">
-            <button className="mini-card" type="button" onClick={() => onParticipate('home-capstone')}><b>캡스톤 협업 경험</b><small>2시간 남음 · <em className="point-text">+45P</em></small></button>
-            <button className="mini-card" type="button" onClick={() => onParticipate('home-commute')}><b>통학 만족도 조사</b><small>오늘 마감 · <em className="point-text">+30P</em></small></button>
+            {visibleItems('deadline').map((survey) => <button className="mini-card" key={survey.id} type="button" onClick={() => onParticipate(survey.id)}><b>{survey.title}</b><small>{survey.meta} · <em className="point-text">+{survey.point}P</em></small></button>)}
           </div>
         </section>
 
         <section>
-          <SectionHeader icon="✨" title="새로 올라온 설문" count="8개" action="더보기 ›" />
+          <SectionHeader icon="✨" title="새로 올라온 설문" count="8개" action={expandedSections.newest ? '접기 ∧' : '전체보기 ›'} onAction={() => toggleSection('newest')} expanded={!!expandedSections.newest} />
           <div className="grid-two">
-            <button className="mini-card" type="button" onClick={() => onParticipate('home-date')}><b>데이트 비용 인식</b><small>방금 등록 · <em className="point-text">+10P</em></small></button>
-            <button className="mini-card" type="button" onClick={() => onParticipate('home-contest')}><b>공모전 참여 경험</b><small>5분 전 · <em className="point-text">+20P</em></small></button>
+            {visibleItems('newest').map((survey) => <button className="mini-card" key={survey.id} type="button" onClick={() => onParticipate(survey.id)}><b>{survey.title}</b><small>{survey.meta} · <em className="point-text">+{survey.point}P</em></small></button>)}
           </div>
         </section>
 
         <section>
-          <SectionHeader icon="💙" title="관심 분야 설문" count="" action="취업 · 소비 기반" />
+          <SectionHeader icon="💙" title="관심 분야 설문" count="5개" action={expandedSections.interest ? '접기 ∧' : '전체보기 ›'} onAction={() => toggleSection('interest')} expanded={!!expandedSections.interest} />
           <div className="stack-sm">
-            <SurveyRow title="Z세대 구독 서비스 이용 행태" meta="관심사 일치 92% · 약 4분" point={30} onClick={() => onParticipate('home-subscription')} />
-            <SurveyRow title="대학생 취업 준비 비용 조사" meta="관심사 일치 87% · 약 3분" point={20} onClick={() => onParticipate('home-career-cost')} />
+            {visibleItems('interest').map((survey) => <SurveyRow key={survey.id} {...survey} onClick={() => onParticipate(survey.id)} />)}
           </div>
         </section>
 

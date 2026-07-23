@@ -110,6 +110,22 @@ button {
   font-weight: 800;
 }
 
+.search-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.top-actions .icon-button:first-child {
+  border: 1px solid #e5e9f0;
+  background: #fff;
+  color: #3d485a;
+  box-shadow: 0 3px 10px rgba(30, 45, 70, .06);
+}
+
 .avatar-button {
   font-size: 10px;
 }
@@ -204,6 +220,42 @@ button {
   gap: 16px;
   padding-top: 10px;
 }
+
+.home-search {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid #dce5f5;
+  border-radius: 14px;
+  background: #f8faff;
+  box-shadow: 0 8px 24px rgba(36, 92, 190, .08);
+}
+
+.home-search > label {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px;
+  border: 1px solid #cfdcf2;
+  border-radius: 11px;
+  background: #fff;
+  color: var(--blue);
+}
+
+.home-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: #202735;
+  font-size: 11px;
+}
+
+.home-search input::placeholder { color: #9aa3b2; }
+.home-search label button { padding: 3px; background: transparent; color: #929cab; font-size: 17px; }
+.home-search-results { display: grid; gap: 7px; }
+.home-search-results > small { padding: 1px 2px 2px; color: #778296; font-size: 9px; }
 
 .section-header {
   display: flex;
