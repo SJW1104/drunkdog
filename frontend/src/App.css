@@ -201,9 +201,103 @@ button {
 
 .home-content {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 16px;
   padding-top: 10px;
 }
+
+.home-highlight-section {
+  position: relative;
+  display: grid;
+  gap: 9px;
+  margin: 0 -5px;
+  min-height: max-content;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 18px;
+}
+
+.home-highlight-section::after {
+  position: absolute;
+  top: -35px;
+  right: -25px;
+  width: 105px;
+  height: 105px;
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+}
+
+.home-highlight-section--hot {
+  border-color: #ffd7dc;
+  background: linear-gradient(145deg, #fff8f9, #fff1f3);
+  box-shadow: 0 10px 24px rgba(230, 68, 87, .07);
+}
+
+.home-highlight-section--hot::after { background: rgba(255, 89, 111, .07); }
+
+.home-highlight-section--deadline {
+  border-color: #ffddb9;
+  background: linear-gradient(145deg, #fffaf4, #fff3e5);
+  box-shadow: 0 10px 24px rgba(238, 117, 27, .07);
+}
+
+.home-highlight-section--deadline::after { background: rgba(255, 151, 61, .09); }
+
+.home-highlight-section .section-header {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 0;
+}
+
+.home-highlight-section .section-header strong > span {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  margin-right: 3px;
+  place-items: center;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 4px 11px rgba(36, 44, 61, .08);
+}
+
+.home-highlight-section--hot .section-header strong { color: #b72d40; }
+.home-highlight-section--hot .section-header button { color: #d44155; font-weight: 850; }
+.home-highlight-section--deadline .section-header strong { color: #a95816; }
+.home-highlight-section--deadline .section-header button {
+  padding: 5px 8px;
+  border-radius: 99px;
+  background: #fff0dd;
+  color: #e16c15;
+  font-weight: 900;
+}
+
+.home-highlight-note {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -2px 0 0;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.home-highlight-note b {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 99px;
+  font-size: 7px;
+}
+
+.home-highlight-note span { color: #697486; }
+.home-highlight-section--hot .home-highlight-note b { background: #ffe0e5; color: #c83449; }
+.home-highlight-section--deadline .home-highlight-note b { background: #ffe4c4; color: #bd5a11; }
+.home-highlight-section .survey-row,
+.home-highlight-section .mini-card { position: relative; z-index: 1; box-shadow: 0 5px 13px rgba(41, 50, 68, .05); }
+.home-highlight-section--deadline .point-text { color: #e86f16; }
 
 .section-header {
   display: flex;

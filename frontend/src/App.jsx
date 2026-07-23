@@ -181,16 +181,18 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
           <button type="button" onClick={() => onParticipate('sponsored-campus')}>참여하기</button>
         </div>
 
-        <section>
+        <section className="home-highlight-section home-highlight-section--hot">
           <SectionHeader icon="🔥" title="HOT 설문" count="5개" action="전체보기 ›" onAction={() => navigate('surveys')} />
+          <p className="home-highlight-note"><b>인기 급상승</b><span>지금 참여자가 가장 많이 모이고 있어요.</span></p>
           <div className="stack-sm">
             <SurveyRow title="대학생의 AI 활용과 취업 준비" meta="82 / 100명 · 약 3분" point={5} completed={completedSurveys.includes('home-ai')} onClick={() => onParticipate('home-ai')} />
             <SurveyRow title="배달앱 선택 기준과 소비 습관" meta="211명 참여 · 약 2분" point={5} completed={completedSurveys.includes('home-delivery')} onClick={() => onParticipate('home-delivery')} />
           </div>
         </section>
 
-        <section>
+        <section className="home-highlight-section home-highlight-section--deadline">
           <SectionHeader icon="⏰" title="마감임박" count="4개" action="보상 1.5배" />
+          <p className="home-highlight-note"><b>시간 한정</b><span>마감 전에 참여하면 기본 보상의 1.5배를 받아요.</span></p>
           <div className="grid-two">
             <button className={completedSurveys.includes('home-capstone') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-capstone')}><b>캡스톤 협업 경험</b><small>2시간 남음 · <em className="point-text">+8P</em></small></button>
             <button className={completedSurveys.includes('home-commute') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-commute')}><b>통학 만족도 조사</b><small>오늘 마감 · <em className="point-text">+8P</em></small></button>
