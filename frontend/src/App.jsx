@@ -822,7 +822,6 @@ function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, o
   const [confirmGift, setConfirmGift] = useState(null)
   const [couponOpen, setCouponOpen] = useState(false)
   const [coupons, setCoupons] = useState(() => JSON.parse(localStorage.getItem('suniversity-coupons') || '[]'))
-  const [withdrawStatus, setWithdrawStatus] = useState(() => localStorage.getItem('suniversity-withdraw-request') ? 'requested' : 'idle')
   const [adSeconds, setAdSeconds] = useState(() => Math.max(0, Math.ceil((Number(localStorage.getItem('suniversity-ad-deadline')) - Date.now()) / 1000)))
   useEffect(() => {
     if (!adSeconds) return undefined
@@ -848,20 +847,12 @@ function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, o
     const next = coupons.map((coupon) => coupon.couponId === couponId ? { ...coupon, used: true } : coupon)
     setCoupons(next); localStorage.setItem('suniversity-coupons', JSON.stringify(next))
   }
-  const requestWithdrawal = () => {
-    if (points < 3000 || withdrawStatus === 'requested') return
-    if (!window.confirm('3,000P 출금을 신청할까요? 신청 후 운영 확인을 거쳐 지급돼요.')) return
-    if (!spendPoints(3000, '포인트 출금 신청')) return
-    localStorage.setItem('suniversity-withdraw-request', JSON.stringify({ amount: 3000, requestedAt: new Date().toISOString() }))
-    setWithdrawStatus('requested')
-  }
   const giftCard = (gift) => <button className="gift-card" type="button" key={gift.id} onClick={() => setConfirmGift(gift)}><div className="gift-image">{gift.icon}</div><span><b>{gift.name}</b><small>{gift.detail}</small></span><strong>{gift.price.toLocaleString()}P</strong></button>
   return (
     <div className="screen with-nav">
       <TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="쿠폰함" onClick={() => setCouponOpen(true)}><TicketIcon /></IconButton>} />
       <main className="screen-content points-content">
         <div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div>
-        <div className="withdraw-card"><span><b>포인트 출금</b><small>3,000P 이상부터 신청할 수 있어요.</small></span><button type="button" disabled={points < 3000 || withdrawStatus === 'requested'} onClick={requestWithdrawal}>{withdrawStatus === 'requested' ? '신청 접수됨' : points < 3000 ? '기준 미달' : '3,000P 출금 신청'}</button></div>
         <SectionHeader title="포인트 더 모으기" count="" action={`${adEarned.toLocaleString()}/1,000P`} />
         <div className="watch-card"><b>광고 보고 10P 받기</b><small>{adSeconds ? `광고 재생 중 · ${adSeconds}초 남음` : `오늘 광고 보상 ${adEarned.toLocaleString()} / 1,000P`}</small><div className="daily-ad-progress"><span style={{ width: adSeconds ? `${(30 - adSeconds) / 30 * 100}%` : `${Math.min(100, adEarned / 10)}%` }} /></div><button type="button" disabled={adEarned >= 1000 || adSeconds > 0} onClick={startAd}>{adEarned >= 1000 ? '오늘 적립 한도 완료' : adSeconds ? `${adSeconds}초 후 보상 지급` : '30초 광고 시청'}</button><em>모든 활동을 합쳐 하루 최대 1,000P까지 적립할 수 있어요.</em></div>
         <div className="gift-heading"><b>기프티콘 교환</b><button type="button" onClick={() => setCatalogOpen(true)}>전체보기</button></div>
