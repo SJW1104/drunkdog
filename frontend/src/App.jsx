@@ -532,7 +532,9 @@ function TeamAvatar({ team, name, small = false }) {
 
 function BalanceGameScreen({ navigate, onVote }) {
   const [activeGame, setActiveGame] = useState(null)
-  const [votes, setVotes] = useState({})
+  const [votes, setVotes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('suniversity-balance-votes') || '{}') } catch { return {} }
+  })
   const [posts, setPosts] = useState(initialDebates)
   const [draft, setDraft] = useState('')
   const [replyingTo, setReplyingTo] = useState(null)
@@ -541,7 +543,9 @@ function BalanceGameScreen({ navigate, onVote }) {
 
   const vote = (choice) => {
     if (selected) return
-    setVotes({ ...votes, [activeGame.id]: choice })
+    const nextVotes = { ...votes, [activeGame.id]: choice }
+    setVotes(nextVotes)
+    localStorage.setItem('suniversity-balance-votes', JSON.stringify(nextVotes))
     onVote()
   }
   const addPost = () => {
@@ -562,10 +566,10 @@ function BalanceGameScreen({ navigate, onVote }) {
       <main className="screen-content balance-feed">
         <div className="balance-feed-heading"><span>생각이 갈리는 순간</span><h1>당신의 선택은<br />어느 쪽인가요?</h1><p>카드를 골라 투표하고 같은 편과 의견을 나눠보세요.</p></div>
         <div className="balance-feed-grid">
-          {balanceGames.map((game) => <button className="balance-feed-card" type="button" key={game.id} onClick={() => setActiveGame(game)}>
+          {balanceGames.map((game) => <button className={votes[game.id] ? 'balance-feed-card is-completed' : 'balance-feed-card'} type="button" key={game.id} onClick={() => setActiveGame(game)}>
             <span className="balance-category">{game.category}</span><strong>{game.question}</strong>
             <div><span className="blue-preview">{game.a}</span><b>VS</b><span className="red-preview">{game.b}</span></div>
-            <small>{game.participants}명 참여 · 의견 보기 →</small>
+            <small>{votes[game.id] ? `참여 완료 · ${votes[game.id]} 선택 · 결과 보기 →` : `${game.participants}명 참여 · 의견 보기 →`}</small>
           </button>)}
         </div>
       </main>
@@ -586,7 +590,7 @@ function BalanceGameScreen({ navigate, onVote }) {
           <button type="button" className={selected === 'B' ? 'poll-side poll-red is-selected' : 'poll-side poll-red'} onClick={() => vote('B')} style={selected ? { '--fill': `${100 - activeGame.aPercent}%` } : undefined}><small>B · {activeGame.bLabel}</small><b>{activeGame.b}</b>{selected ? <strong>{100 - activeGame.aPercent}%</strong> : <span>선택하기</span>}</button>
         </div>
         {!selected ? <p className="vote-guide">하나를 선택하면 실시간 비율과 진영별 토론장이 열려요.</p> : <>
-          <div className={`my-team-banner team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><span><small>내 선택</small><b>{selected === 'A' ? activeGame.aLabel : activeGame.bLabel} 토론에 참여 중</b></span><strong>+2P</strong></div>
+          <div className={`my-team-banner team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><span><small>내 선택</small><b>{selected === 'A' ? activeGame.aLabel : activeGame.bLabel} 토론에 참여 중</b></span><strong>참여 완료</strong></div>
           <section className="debate-section">
             <div className="debate-title"><span>찬성과 반대, 서로의 생각을 확인해보세요</span><b>의견 토론장</b></div>
             <div className={`debate-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`${selected === 'A' ? activeGame.aLabel : activeGame.bLabel}을 선택한 이유를 남겨보세요`} /><button type="button" onClick={addPost}>등록</button></div>
