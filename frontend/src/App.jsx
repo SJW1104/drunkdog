@@ -21,7 +21,9 @@ function IconButton({ children, label, onClick, badge }) {
   )
 }
 
-function BellIcon() {
+function SearchIcon() {
+  return <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m15.5 15.5 4.2 4.2" /></svg>
+}function BellIcon() {
   return (
     <svg className="bell-icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
@@ -135,7 +137,7 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
     { id: 'home-subscription', title: 'Z세대 구독 서비스 이용 행태', category: '트렌드 · 소비', point: 30 },
     { id: 'home-career-cost', title: '대학생 취업 준비 비용 조사', category: '취업', point: 20 },
   ]
-  const searchResults = homeSearchQuery.trim() ? searchableSurveys.filter((survey) => `${survey.title} ${survey.category}`.toLowerCase().includes(homeSearchQuery.trim().toLowerCase())) : []
+  const searchResults = searchableSurveys.filter((survey) => `${survey.title} ${survey.category}`.toLowerCase().includes(homeSearchQuery.trim().toLowerCase()))
   const [notificationOpen, setNotificationOpen] = useState(false)
   const [readNotices, setReadNotices] = useState(() => JSON.parse(localStorage.getItem('suniversity-read-notices') || '[]'))
   const { data: homeNoticeData, isLoading: noticesLoading } = useAsyncData(mockApi.getNotifications)
@@ -150,7 +152,7 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
         brand
         right={
           <div className="top-actions">
-            <IconButton label="검색" onClick={() => setSearchOpen(true)}>⌕</IconButton>
+            <IconButton label="검색" onClick={() => setSearchOpen(true)}><SearchIcon /></IconButton>
             <IconButton label="알림" badge={unreadCount || null} onClick={() => setNotificationOpen(true)}><BellIcon /></IconButton>
             <button className="avatar-button" type="button" onClick={() => navigate('profile')}>MY</button>
           </div>
@@ -185,7 +187,7 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
         </section>
 
         <section>
-          <SectionHeader icon="✨" title="새로 올라온 설문" count="8개" action="더보기 ›" />
+          <SectionHeader icon="✨" title="새로 올라온 설문" count="8개" action="전체보기 ›" />
           <div className="grid-two">
             <button className={completedSurveys.includes('home-date') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-date')}><b>데이트 비용 인식</b><small>방금 등록 · <em className="point-text">+10P</em></small></button>
             <button className={completedSurveys.includes('home-contest') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-contest')}><b>공모전 참여 경험</b><small>5분 전 · <em className="point-text">+20P</em></small></button>
@@ -212,7 +214,7 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
 
       <button className="fab" type="button" onClick={() => navigate('create')}>＋ 설문 등록</button>
       <BottomNav active="home" navigate={navigate} />
-      {searchOpen ? <div className="search-overlay"><div className="search-overlay-head"><button type="button" onClick={() => { setSearchOpen(false); setHomeSearchQuery('') }}>‹</button><label><span>⌕</span><input autoFocus value={homeSearchQuery} onChange={(event) => setHomeSearchQuery(event.target.value)} placeholder="설문 제목이나 카테고리 검색" /></label></div><main><div className="search-suggestions"><span>추천 검색어</span>{['AI', '취업', '팀플', '소비'].map((keyword) => <button type="button" key={keyword} onClick={() => setHomeSearchQuery(keyword)}>{keyword}</button>)}</div>{homeSearchQuery.trim() ? <><div className="search-result-head"><b>{`'${homeSearchQuery}' 검색 결과`}</b><small>{searchResults.length}개</small></div><div className="search-result-list">{searchResults.map((survey) => <button type="button" key={survey.id} className={completedSurveys.includes(survey.id) ? 'is-completed' : ''} onClick={() => { setSearchOpen(false); setHomeSearchQuery(''); onParticipate(survey.id) }}><span><small>{survey.category}</small><b>{survey.title}</b></span><strong>{completedSurveys.includes(survey.id) ? '참여 완료' : `+${survey.point}P`}</strong></button>)}{searchResults.length === 0 ? <div className="empty-state"><b>검색 결과가 없어요</b><p>다른 검색어를 입력해 보세요.</p></div> : null}</div></> : null}</main></div> : null}
+      {searchOpen ? <div className="search-overlay"><div className="search-overlay-head"><button type="button" onClick={() => { setSearchOpen(false); setHomeSearchQuery('') }}>‹</button><label><SearchIcon /><input autoFocus value={homeSearchQuery} onChange={(event) => setHomeSearchQuery(event.target.value)} placeholder="설문 제목이나 카테고리 검색" /></label></div><main><div className="search-suggestions"><span>추천 검색어</span>{['AI', '취업', '팀플', '소비'].map((keyword) => <button type="button" key={keyword} onClick={() => setHomeSearchQuery(keyword)}>{keyword}</button>)}</div><div className="search-result-head"><b>{homeSearchQuery.trim() ? `'${homeSearchQuery}' 검색 결과` : '추천 설문'}</b><small>{searchResults.length}개</small></div><div className="search-result-list">{searchResults.map((survey) => <button type="button" key={survey.id} className={completedSurveys.includes(survey.id) ? 'is-completed' : ''} onClick={() => { setSearchOpen(false); setHomeSearchQuery(''); onParticipate(survey.id) }}><span><small>{survey.category}</small><b>{survey.title}</b></span><strong>{completedSurveys.includes(survey.id) ? '참여 완료' : `+${survey.point}P`}</strong></button>)}{searchResults.length === 0 ? <div className="empty-state"><b>검색 결과가 없어요</b><p>다른 검색어를 입력해 보세요.</p></div> : null}</div></main></div> : null}
       {notificationOpen ? <div className="notification-popover-backdrop" role="presentation" onClick={() => setNotificationOpen(false)}><section className="notification-popover" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><div className="notification-popover-head"><span><b>알림</b><small>새 소식을 빠르게 확인해 보세요.</small></span><button type="button" onClick={readAllNotices}>모두 읽음</button></div>{noticesLoading ? <div className="loading-state"><i /><i /><i /></div> : <div className="notification-popover-list">{homeNotices.map((notice) => <button type="button" key={notice.id} className={readNotices.includes(notice.id) ? 'is-read' : ''} onClick={() => openNotice(notice)}><i /><span><b>{notice.title}</b><small>{notice.body}</small></span><time>{notice.time}</time></button>)}</div>}<button className="notification-close" type="button" onClick={() => setNotificationOpen(false)}>닫기</button></section></div> : null}
       {checkinOpen ? <div className="modal-backdrop" role="presentation" onClick={() => setCheckinOpen(false)}>
         <section className="checkin-modal" role="dialog" aria-modal="true" aria-labelledby="checkin-title" onClick={(event) => event.stopPropagation()}>
@@ -280,9 +282,13 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
       <TopBar title="설문 둘러보기" onBack={() => setShowCategories(true)} />
       <main className="screen-content list-content">
         <label className="search-box">
-          <span>⌕</span>
+          <SearchIcon />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="키워드로 설문 검색" />
         </label>
+
+        <div className="survey-category-tabs" aria-label="설문 카테고리">
+          {categories.map(([label]) => <button type="button" key={label} className={category === label ? 'is-active' : ''} onClick={() => setCategory(label)}>{label}</button>)}
+        </div>
 
         <SectionHeader title="내게 맞는 설문" count="" action="추천순⌄" />
         {isLoading ? <div className="loading-state" aria-label="설문 불러오는 중"><i /><i /><i /></div> : null}
