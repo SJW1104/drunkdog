@@ -12,6 +12,7 @@ const navItems = [
   { id: 'points', label: '포인트' },
 ]
 const bottomNavScreens = new Set(navItems.map((item) => item.id))
+const RESULT_VIEW_PRICE = 200
 
 function IconButton({ children, label, onClick, badge }) {
   return (
@@ -361,7 +362,6 @@ function ParticipateScreen({ onComplete, onExit, surveyId, survey, isSaved, onTo
     ? {
         title: survey.title,
         badge: survey.badge || '설문 탐험가',
-        resultPrice: survey.resultPrice ?? 100,
         questions: survey.questions.map((question, questionIndex) => ({
           ...question,
           options: question.options || [],
@@ -369,8 +369,8 @@ function ParticipateScreen({ onComplete, onExit, surveyId, survey, isSaved, onTo
           id: question.id || `published-${questionIndex}`,
         })),
       }
-    : { ...getSurveyContent(surveyId), resultPrice: 100 }
-  const { title: surveyTitle, badge, questions, resultPrice } = content
+    : getSurveyContent(surveyId)
+  const { title: surveyTitle, badge, questions } = content
   const [questionIndex, setQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState({})
   const [showMenu, setShowMenu] = useState(false)
@@ -385,7 +385,7 @@ function ParticipateScreen({ onComplete, onExit, surveyId, survey, isSaved, onTo
     if (!hasAnswer) return
     if (isLast) {
       setIsSubmitting(true)
-      window.setTimeout(() => onComplete(participationReward, badge, surveyTitle, answers, questions, resultPrice), 1200)
+      window.setTimeout(() => onComplete(participationReward, badge, surveyTitle, answers, questions), 1200)
     } else setQuestionIndex(questionIndex + 1)
   }
   if (isSubmitting) return <div className="screen"><main className="screen-content result-wait"><div className="result-wait-spinner" /><h1>응답을 분석하고 있어요</h1><p>나와 비슷한 대학생을 찾는 중이에요.<br />잠시만 기다려 주세요!</p></main></div>
@@ -405,15 +405,15 @@ function ParticipateScreen({ onComplete, onExit, surveyId, survey, isSaved, onTo
       </main>
     </div>
   )
-}function ResultAccessScreen({ navigate, points, unlockResult, resultInfo }) {
-  const resultPrice = resultInfo.resultPrice ?? 100
+}function ResultAccessScreen({ navigate, points, unlockResult, reward }) {
+  const resultPrice = RESULT_VIEW_PRICE
   return (
     <div className="screen">
       <TopBar title="응답 완료" onBack={() => navigate('surveys')} />
       <main className="screen-content result-access-content">
         <div className="completion-icon">✓</div>
         <h1>응답이 제출됐어요</h1>
-        <p>참여 보상 {resultInfo.reward || 5}P가 지급되었습니다.</p>
+        <p>참여 보상 {reward || 5}P가 지급되었습니다.</p>
         <div className="result-lock-card">
           <span>설문 결과 미리보기</span>
           <b>다른 응답자의 결과가 궁금한가요?</b>
@@ -440,7 +440,6 @@ function CreateScreen({ navigate, onPublish, spendPoints }) {
   const [category, setCategory] = useState(savedDraft.category || '연구·프로젝트')
   const [targetCount, setTargetCount] = useState(savedDraft.targetCount || 100)
   const [isPublic, setIsPublic] = useState(savedDraft.isPublic ?? true)
-  const [resultPrice, setResultPrice] = useState(savedDraft.resultPrice ?? 100)
   const [saveLabel, setSaveLabel] = useState('임시저장')
   const [isPublishing, setIsPublishing] = useState(false)
   const [publishError, setPublishError] = useState('')
@@ -500,7 +499,7 @@ function CreateScreen({ navigate, onPublish, spendPoints }) {
   }
 
   const saveDraft = () => {
-    localStorage.setItem('suniversity-survey-draft', JSON.stringify({ editId, title, category, targetCount, reward, isPublic, resultPrice, questions }))
+    localStorage.setItem('suniversity-survey-draft', JSON.stringify({ editId, title, category, targetCount, reward, isPublic, questions }))
     setSaveLabel('저장 완료')
     window.setTimeout(() => setSaveLabel('임시저장'), 1400)
   }
@@ -509,7 +508,7 @@ function CreateScreen({ navigate, onPublish, spendPoints }) {
     setIsPublishing(true)
     setPublishError('')
     try {
-      const survey = await mockApi.createSurvey({ id: editId || undefined, editId, title: title.trim(), category, targetCount, reward, questionCount: questions.length, questions, isPublic, resultPrice })
+      const survey = await mockApi.createSurvey({ id: editId || undefined, editId, title: title.trim(), category, targetCount, reward, questionCount: questions.length, questions, isPublic, resultPrice: RESULT_VIEW_PRICE })
       onPublish({ ...survey, id: editId || survey.id, editId, eyebrow: `${editId ? '수정됨' : '새 설문'} · ${category}`, meta: `${questions.length}문항 · 약 ${Math.max(1, Math.ceil(questions.length * 0.6))}분`, count: `0 / ${targetCount}`, point: reward, tone: 'blue' })
       localStorage.removeItem('suniversity-survey-draft')
       navigate('surveys')
@@ -586,7 +585,7 @@ function CreateScreen({ navigate, onPublish, spendPoints }) {
           <label className="builder-field">목표 응답자 수<input type="number" min="10" max="1000" value={targetCount} onChange={(event) => setTargetCount(Number(event.target.value))} /></label>
           <div className="fixed-reward-card"><span>참여자 1인당 보상</span><strong>{reward}P</strong><small>{questions.length}문항 기준으로 자동 적용돼요.</small></div>
           <label className="toggle-row"><span><b>결과 공개</b><small>공개하면 커뮤니티 포인트 혜택을 받아요.</small></span><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} /></label>
-          {isPublic ? <label className="builder-field">결과 열람 가격<input type="range" min="0" max="500" step="50" value={resultPrice} onChange={(event) => setResultPrice(Number(event.target.value))} /><strong>{resultPrice ? `${resultPrice}P` : '무료'}</strong><small>열람 수익의 70%가 작성자에게 적립돼요.</small></label> : null}
+          {isPublic ? <div className="fixed-reward-card"><span>결과 열람 가격</span><strong>{RESULT_VIEW_PRICE}P</strong><small>모든 공개 설문에 동일하게 적용돼요.</small></div> : null}
           <div className="budget-card"><span>설문 등록 비용</span><strong>0P</strong><small>설문 등록은 무료이며 참여 보상은 SUNIVERSITY가 지급해요.</small></div>
           <button className="primary-button" type="button" onClick={() => setStep(3)}>다음 · 등록 내용 검토</button>
         </> : null}
@@ -597,7 +596,7 @@ function CreateScreen({ navigate, onPublish, spendPoints }) {
           <div className="review-card"><small>설문 제목</small><b>{title}</b></div>
           <div className="review-grid"><div><small>카테고리</small><b>{category}</b></div><div><small>문항 수</small><b>{questions.length}개</b></div><div><small>목표 응답</small><b>{targetCount}명</b></div><div><small>참여 보상</small><b>{reward}P</b></div></div>
           <div className="review-card review-questions"><small>문항 구성</small>{questions.map((question, index) => <span key={question.id}><b>Q{index + 1}. {question.title}</b><em>{typeLabels[question.type]} · {question.required ? '필수' : '선택'}</em></span>)}</div>
-          <div className="review-card"><small>결과 공개</small><b>{isPublic ? `커뮤니티 공개 · 열람 ${resultPrice ? `${resultPrice}P` : '무료'}` : '작성자만 보기'}</b></div>
+          <div className="review-card"><small>결과 공개</small><b>{isPublic ? `커뮤니티 공개 · 열람 ${RESULT_VIEW_PRICE}P` : '작성자만 보기'}</b></div>
           {publishError ? <p className="publish-error">{publishError}</p> : null}
           <button className="primary-button" disabled={isPublishing} type="button" onClick={publish}>{isPublishing ? '저장 중...' : editId ? '수정 내용 저장하기' : '무료로 설문 등록하기'}</button>
         </> : null}
@@ -990,7 +989,7 @@ function MySurveysScreen({ navigate, hasDraft, publishedSurveys, spendPoints }) 
     setItems(items.map((survey) => survey.id === item.id ? { ...survey, bumpedAt: '방금 끌어올림' } : survey))
   }
   const editSurvey = (item) => {
-    localStorage.setItem('suniversity-survey-draft', JSON.stringify({ editId: item.id, title: item.title, category: '연구·프로젝트', targetCount: item.target, reward: 20, isPublic: true, resultPrice: 100, questions: [{ id: `edit-${item.id}-1`, title: '이 주제에 대해 얼마나 관심이 있나요?', type: 'single', required: true, options: ['매우 관심 있어요', '조금 관심 있어요', '보통이에요', '관심 없어요'] }, { id: `edit-${item.id}-2`, title: '가장 중요하게 생각하는 점은 무엇인가요?', type: 'single', required: true, options: ['편리함', '비용', '신뢰도', '주변 추천'] }] }))
+    localStorage.setItem('suniversity-survey-draft', JSON.stringify({ editId: item.id, title: item.title, category: '연구·프로젝트', targetCount: item.target, reward: 20, isPublic: true, questions: [{ id: `edit-${item.id}-1`, title: '이 주제에 대해 얼마나 관심이 있나요?', type: 'single', required: true, options: ['매우 관심 있어요', '조금 관심 있어요', '보통이에요', '관심 없어요'] }, { id: `edit-${item.id}-2`, title: '가장 중요하게 생각하는 점은 무엇인가요?', type: 'single', required: true, options: ['편리함', '비용', '신뢰도', '주변 추천'] }] }))
     navigate('create')
   }
   return <div className="screen"><TopBar title="내 설문 관리" onBack={() => navigate('profile')} /><main className="screen-content manage-surveys"><div className="manage-tabs"><button className={tab === 'published' ? 'is-active' : ''} onClick={() => setTab('published')} type="button">등록한 설문</button><button className={tab === 'draft' ? 'is-active' : ''} onClick={() => setTab('draft')} type="button">임시저장</button></div>{tab === 'published' ? <div className="manage-list">{items.map((item) => { const used = bumpCounts[item.id] || 0; return <article key={item.id}><div><span>{item.status}</span><b>{item.title}</b><small>{item.responses} / {item.target}명 응답{item.bumpedAt ? ` · ${item.bumpedAt}` : ''}</small><i><em style={{ width: `${item.responses / item.target * 100}%` }} /></i></div><div><button className="survey-bump" type="button" disabled={item.status === '마감'} onClick={() => bumpSurvey(item)}>{used === 0 ? '끌어올리기 · 광고' : `끌어올리기 · ${used * 100}P`}</button><button type="button" onClick={() => navigate('result')}>결과</button><button type="button" onClick={() => editSurvey(item)}>수정</button><button type="button" disabled={item.status === '마감'} onClick={() => closeSurvey(item.id)}>마감</button><button type="button" className="danger" onClick={() => deleteSurvey(item.id)}>삭제</button></div></article> })}</div> : draftExists ? <div className="draft-manage-card"><span>임시저장</span><b>작성 중인 설문이 있어요</b><p>마지막 작성 내용을 이어서 편집할 수 있어요.</p><button type="button" onClick={() => navigate('create')}>이어서 작성하기</button><button type="button" onClick={() => { localStorage.removeItem('suniversity-survey-draft'); setDraftExists(false) }}>삭제</button></div> : <div className="empty-state"><b>임시저장 설문이 없어요</b></div>}</main></div>
@@ -1036,7 +1035,7 @@ function HelpScreen({ navigate }) {
         </section>
         <div className="help-faq">
           <details open><summary>이미 참여한 설문에 다시 참여할 수 있나요?</summary><p>중복 참여는 불가능해요. 참여 완료 설문은 목록에서 회색으로 표시되며 기존 결과만 다시 확인할 수 있어요.</p></details>
-          <details><summary>다른 사람의 설문 결과는 어떻게 보나요?</summary><p>응답을 완료한 뒤 작성자가 정한 열람 포인트를 사용하면 전체 분포와 AI 인사이트를 확인할 수 있어요.</p></details>
+          <details><summary>다른 사람의 설문 결과는 어떻게 보나요?</summary><p>응답을 완료한 뒤 고정 열람 가격인 {RESULT_VIEW_PRICE}P를 사용하면 전체 분포와 AI 인사이트를 확인할 수 있어요.</p></details>
           <details><summary>AI 문항 도우미는 무료인가요?</summary><p>하루 10개 문항까지 무료이며, 11번째 문항부터 한 문항당 20P가 사용돼요.</p></details>
           <details><summary>광고 보상 한도는 얼마인가요?</summary><p>광고 한 편당 10P, 하루 최대 5편까지 받을 수 있어요. 모든 활동을 합친 하루 적립 한도는 1,000P예요.</p></details>
           <details><summary>설문을 더 많이 노출하려면 어떻게 하나요?</summary><p>내 설문 관리에서 끌어올리기를 이용하세요. 첫 1회는 광고 시청으로 무료이고 이후에는 100P씩 비용이 증가해요.</p></details>
@@ -1164,9 +1163,9 @@ function App() {
     return true
   }
 
-  const completeSurvey = (amount, badge, title, answers, questions, resultPrice = 100) => {
+  const completeSurvey = (amount, badge, title, answers, questions) => {
     earnPoints(amount, '설문 참여 보상')
-    const resultInfo = { badge, title, answers, questions, reward: amount, resultPrice }; setLastResult(resultInfo); localStorage.setItem('suniversity-last-result', JSON.stringify(resultInfo))
+    const resultInfo = { badge, title, answers, questions, reward: amount, resultPrice: RESULT_VIEW_PRICE }; setLastResult(resultInfo); localStorage.setItem('suniversity-last-result', JSON.stringify(resultInfo))
     if (activeSurveyId && !completedSurveys.includes(activeSurveyId)) { const nextCompleted = [activeSurveyId, ...completedSurveys]; setCompletedSurveys(nextCompleted); localStorage.setItem('suniversity-completed-surveys', JSON.stringify(nextCompleted)) }
     if (badge && !badges.includes(badge)) { const next = [badge, ...badges]; setBadges(next); localStorage.setItem('suniversity-survey-badges', JSON.stringify(next)) }
     navigate('resultAccess')
@@ -1222,7 +1221,7 @@ function App() {
     surveys: <SurveyListScreen navigate={navigate} customSurveys={publishedSurveys} onParticipate={startSurvey} completedSurveys={completedSurveys} />,
     participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} surveyId={activeSurveyId} survey={publishedSurveys.find((item) => String(item.id) === String(activeSurveyId))} isSaved={savedSurveys.includes(String(activeSurveyId))} onToggleSaved={toggleSavedSurvey} />,
     create: <CreateScreen navigate={navigate} onPublish={publishSurvey} spendPoints={spendPoints} />,
-    resultAccess: <ResultAccessScreen navigate={navigate} points={points} resultInfo={lastResult} unlockResult={(price) => { if (!price || spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
+    resultAccess: <ResultAccessScreen navigate={navigate} points={points} reward={lastResult.reward} unlockResult={(price) => { if (!price || spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
     result: <ResultScreen navigate={navigate} spendPoints={spendPoints} resultInfo={lastResult} />,
     points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} />,
     ranking: <RankingScreen navigate={navigate} selectedTitle={selectedTitle} points={points} />,
