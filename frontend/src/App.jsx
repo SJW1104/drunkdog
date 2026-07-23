@@ -413,6 +413,7 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
     { id: 'q2', title: 'AI 도구 사용 빈도는?', type: 'single', required: true, options: ['거의 사용하지 않음', '주 1~2회', '주 3회 이상'] },
     { id: 'q3', title: '가장 유용했던 기능은?', type: 'multiple', required: false, options: ['자료 조사', '글쓰기', '코딩', '아이디어 발상'] },
   ])
+  const editId = savedDraft.editId
 
   const typeLabels = { single: '객관식', multiple: '복수 선택', text: '주관식' }
   const updateQuestion = (id, changes) => setQuestions(questions.map((question) => question.id === id ? { ...question, ...changes } : question))
@@ -447,13 +448,13 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
   }
 
   const saveDraft = () => {
-    localStorage.setItem('suniversity-survey-draft', JSON.stringify({ title, category, targetCount, reward, isPublic, questions }))
+    localStorage.setItem('suniversity-survey-draft', JSON.stringify({ editId, title, category, targetCount, reward, isPublic, questions }))
     setSaveLabel('저장 완료')
     window.setTimeout(() => setSaveLabel('임시저장'), 1400)
   }
 
   const publish = async () => {
-    const budget = targetCount * reward
+    const budget = editId ? 0 : targetCount * reward
     if (points < budget) {
       setPublishError(`등록에 ${budget.toLocaleString()}P가 필요해요. 현재 ${points.toLocaleString()}P를 보유하고 있어요.`)
       return
@@ -461,9 +462,9 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
     setIsPublishing(true)
     setPublishError('')
     try {
-      const survey = await mockApi.createSurvey({ title: title.trim(), category, targetCount, reward, questionCount: questions.length, questions, isPublic })
-      if (!spendPoints(budget, '설문 참여 보상 예산')) return
-      onPublish({ ...survey, eyebrow: `새 설문 · ${category}`, meta: `${questions.length}문항 · 약 ${Math.max(1, Math.ceil(questions.length * 0.6))}분`, count: `0 / ${targetCount}`, point: reward, tone: 'blue' })
+      const survey = await mockApi.createSurvey({ id: editId || undefined, editId, title: title.trim(), category, targetCount, reward, questionCount: questions.length, questions, isPublic })
+      if (budget && !spendPoints(budget, '설문 참여 보상 예산')) return
+      onPublish({ ...survey, id: editId || survey.id, editId, eyebrow: `${editId ? '수정됨' : '새 설문'} · ${category}`, meta: `${questions.length}문항 · 약 ${Math.max(1, Math.ceil(questions.length * 0.6))}분`, count: `0 / ${targetCount}`, point: reward, tone: 'blue' })
       localStorage.removeItem('suniversity-survey-draft')
       navigate('surveys')
     } catch (error) {
@@ -475,7 +476,7 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
 
   return (
     <div className="screen">
-      <TopBar title="새 설문 만들기" onBack={() => step > 1 ? setStep(step - 1) : navigate('home')} right={<button className="text-action" type="button" onClick={saveDraft}>{saveLabel}</button>} />
+      <TopBar title={editId ? '설문 수정하기' : '새 설문 만들기'} onBack={() => step > 1 ? setStep(step - 1) : navigate(editId ? 'mySurveys' : 'home')} right={<button className="text-action" type="button" onClick={saveDraft}>{saveLabel}</button>} />
       {showGuide ? <div className="modal-backdrop builder-guide-backdrop"><section className="builder-guide"><button className="modal-close" type="button" onClick={() => setShowGuide(false)}>×</button><span>설문 작성 가이드</span><h2>친구에게 묻듯<br />쉽게 써보세요</h2><ul><li>어려운 전문용어 대신 익숙한 말을 사용해요.</li><li>한 문항에는 한 가지 내용만 물어봐요.</li><li>짧고 자연스러운 대화체가 응답률을 높여요.</li></ul><button className="primary-button" type="button" onClick={() => setShowGuide(false)}>가이드 확인했어요</button></section></div> : null}
       <div className="step-progress"><span /><span className={step >= 2 ? '' : 'pending'} /><span className={step >= 3 ? '' : 'pending'} /></div>
       <main className="screen-content create-content">
@@ -549,9 +550,9 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
           <div className="review-grid"><div><small>카테고리</small><b>{category}</b></div><div><small>문항 수</small><b>{questions.length}개</b></div><div><small>목표 응답</small><b>{targetCount}명</b></div><div><small>참여 보상</small><b>{reward}P</b></div></div>
           <div className="review-card review-questions"><small>문항 구성</small>{questions.map((question, index) => <span key={question.id}><b>Q{index + 1}. {question.title}</b><em>{typeLabels[question.type]} · {question.required ? '필수' : '선택'}</em></span>)}</div>
           <div className="review-card"><small>결과 공개</small><b>{isPublic ? '커뮤니티 공개' : '작성자만 보기'}</b></div>
-          {points < targetCount * reward ? <p className="publish-error">포인트가 부족해요. 포인트 화면에서 설문이나 광고에 참여해 주세요.</p> : null}
+          {!editId && points < targetCount * reward ? <p className="publish-error">포인트가 부족해요. 포인트 화면에서 설문이나 광고에 참여해 주세요.</p> : null}
           {publishError ? <p className="publish-error">{publishError}</p> : null}
-          <button className="primary-button" disabled={isPublishing || points < targetCount * reward} type="button" onClick={publish}>{isPublishing ? '등록 중...' : `${(targetCount * reward).toLocaleString()}P 결제하고 등록하기`}</button>
+          <button className="primary-button" disabled={isPublishing || (!editId && points < targetCount * reward)} type="button" onClick={publish}>{isPublishing ? '저장 중...' : editId ? '수정 내용 저장하기' : `${(targetCount * reward).toLocaleString()}P 결제하고 등록하기`}</button>
         </> : null}
       </main>
     </div>
@@ -578,7 +579,9 @@ function BalanceGameScreen({ navigate, onVote }) {
   const [votes, setVotes] = useState(() => {
     try { return JSON.parse(localStorage.getItem('suniversity-balance-votes') || '{}') } catch { return {} }
   })
-  const [posts, setPosts] = useState(initialDebates)
+  const [posts, setPosts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('suniversity-balance-posts') || 'null') || initialDebates } catch { return initialDebates }
+  })
   const [draft, setDraft] = useState('')
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyDraft, setReplyDraft] = useState('')
@@ -586,6 +589,9 @@ function BalanceGameScreen({ navigate, onVote }) {
     try { return JSON.parse(localStorage.getItem('suniversity-liked-balance-posts') || '[]') } catch { return [] }
   })
   const selected = activeGame ? votes[activeGame.id] : null
+  useEffect(() => {
+    localStorage.setItem('suniversity-balance-posts', JSON.stringify(posts))
+  }, [posts])
 
   const vote = (choice) => {
     if (selected) return
@@ -611,6 +617,9 @@ function BalanceGameScreen({ navigate, onVote }) {
     setLikedPosts(nextLiked)
     setPosts(posts.map((post) => post.id === postId ? { ...post, likes: post.likes + (liked ? -1 : 1) } : post))
     localStorage.setItem('suniversity-liked-balance-posts', JSON.stringify(nextLiked))
+  }
+  const deletePost = (postId) => {
+    if (window.confirm('이 의견을 삭제할까요?')) setPosts(posts.filter((post) => post.id !== postId))
   }
 
   if (!activeGame) return (
@@ -655,7 +664,7 @@ function BalanceGameScreen({ navigate, onVote }) {
                   <div className="debate-list">
                     {teamPosts.length ? teamPosts.map((post) => <article className={`debate-post team-${post.team.toLowerCase()}`} key={post.id}>
                       <div className="post-head"><TeamAvatar team={post.team} name={post.author} /><span><b>{post.author}</b><small>{post.team === 'A' ? activeGame.aLabel : activeGame.bLabel}</small></span></div>
-                      <p>{post.text}</p><div className="post-actions"><button type="button" className={likedPosts.includes(post.id) ? 'is-liked' : ''} onClick={() => togglePostLike(post.id)}>공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button></div>
+                      <p>{post.text}</p><div className="post-actions"><button type="button" className={likedPosts.includes(post.id) ? 'is-liked' : ''} onClick={() => togglePostLike(post.id)}>공감 {post.likes}</button><button type="button" onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}>답글 {post.replies.length}</button>{post.author === '나' ? <button type="button" onClick={() => deletePost(post.id)}>삭제</button> : <button type="button" onClick={() => window.alert('신고가 접수됐어요.')}>신고</button>}</div>
                       {post.replies.map((reply) => <div className={`debate-reply team-${(reply.team || post.team).toLowerCase()}`} key={reply.id}><TeamAvatar team={reply.team || post.team} name={reply.author} small /><span><b>{reply.author}</b><p>{reply.text}</p></span></div>)}
                       {replyingTo === post.id ? <div className={`reply-composer team-${selected.toLowerCase()}`}><TeamAvatar team={selected} name="나" small /><input value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="답글 입력" /><button type="button" onClick={() => addReply(post.id)}>등록</button></div> : null}
                     </article>) : <div className="empty-debate">아직 의견이 없어요.</div>}
@@ -672,6 +681,7 @@ function BalanceGameScreen({ navigate, onVote }) {
 }
 function ResultScreen({ navigate, spendPoints, resultInfo }) {
   const [deepAnalysis, setDeepAnalysis] = useState(() => localStorage.getItem('suniversity-deep-analysis') === resultInfo.title)
+  const [resultQuestion, setResultQuestion] = useState(0)
   const answers = resultInfo.answers || {}
   const questions = resultInfo.questions || surveyContentMap.default.questions
   const selectedRates = questions.map((question, index) => question.rates?.[answers[index]]).filter(Number.isFinite)
@@ -695,7 +705,8 @@ function ResultScreen({ navigate, spendPoints, resultInfo }) {
     const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }))
     const link = document.createElement('a'); link.href = url; link.download = 'suniversity-result-report.txt'; link.click(); URL.revokeObjectURL(url)
   }
-  return (<div className="screen"><TopBar title="설문 결과" onBack={() => navigate('home')} right={<IconButton label="공유" onClick={shareResult}>↗</IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>{resultInfo.badge || 'AI 활용 만렙 새내기'}</h1><p className="subtitle">{resultInfo.title || '대학생 AI 활용 조사'}에서 발견한 나의 응답 성향이에요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>{Math.max(74, matchRate)}%</strong><small>완료율</small></div><div><strong>{questions.length}:12</strong><small>평균 시간</small></div></div><SectionHeader title="나와 같은 답을 고른 사람" count="" action={`${matchRate}%`} /><div className="match-card"><strong>{matchRate}%</strong><span>내가 고른 답을 선택한<br />대학생의 평균 비율이에요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action={`Q${questions.length} 기준`} /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: `${maleRate}%` }}>남 {maleRate}%</span><span style={{ width: `${100 - maleRate}%` }}>여 {100 - maleRate}%</span></p><small>내 답변과 같은 선택을 한 응답자를 성별로 비교했어요.</small></article><article><b>학교 비교</b><p><span style={{ width: `${schoolRate}%` }}>우리 학교 {schoolRate}%</span><span style={{ width: `${100 - schoolRate}%` }}>타교 {100 - schoolRate}%</span></p><small>우리 학교에서 같은 답을 고른 비율이 더 높아요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>선택한 답변은 전체 응답자 중 평균 {matchRate}%가 함께 골랐어요. {matchRate >= 50 ? '대학생 다수가 공감하는 성향이에요.' : '비교적 뚜렷한 나만의 성향이에요.'}</p></div>{deepAnalysis ? <div className="deep-analysis-card"><span>AI 심층 분석 완료</span><h2>응답 패턴을 더 자세히 봤어요</h2><p>일관성 있는 선택을 했고, 우리 학교 응답자와의 유사도가 {schoolRate}%예요. 관심 분야가 비슷한 사용자 그룹에서는 같은 선택이 더 자주 나타났어요.</p><ul><li>응답 일관성: 높음</li><li>우리 학교 유사도: {schoolRate}%</li><li>전체 응답 유사도: {matchRate}%</li></ul></div> : null}<button className="primary-button" type="button" onClick={unlockDeepAnalysis}>{deepAnalysis ? '심층 분석 확인 완료' : '심층 분석 보기 · 200P'}</button><button className="soft-button" type="button" onClick={downloadReport}>PPT 초안 생성 · 400P</button></main></div>)
+  const detailQuestion = questions[resultQuestion]
+  return (<div className="screen"><TopBar title="설문 결과" onBack={() => navigate('home')} right={<IconButton label="공유" onClick={shareResult}>↗</IconButton>} /><main className="screen-content result-content"><span className="result-nickname">이번 설문의 내 별명</span><h1>{resultInfo.badge || 'AI 활용 만렙 새내기'}</h1><p className="subtitle">{resultInfo.title || '대학생 AI 활용 조사'}에서 발견한 나의 응답 성향이에요.</p><div className="stat-grid"><div><strong>104</strong><small>총 응답</small></div><div><strong>{Math.max(74, matchRate)}%</strong><small>완료율</small></div><div><strong>{questions.length}:12</strong><small>평균 시간</small></div></div><SectionHeader title="문항별 응답 분포" count="" action={`Q${resultQuestion + 1}/${questions.length}`} /><div className="result-question-tabs">{questions.map((_, index) => <button type="button" className={resultQuestion === index ? 'is-active' : ''} key={index} onClick={() => setResultQuestion(index)}>Q{index + 1}</button>)}</div><article className="result-question-card"><b>{detailQuestion.title}</b>{detailQuestion.options?.map((option, index) => { const rate = detailQuestion.rates?.[index] ?? Math.round(100 / detailQuestion.options.length); return <div className={answers[resultQuestion] === index ? 'is-my-answer' : ''} key={option}><span><em>{option}</em><strong>{rate}%</strong></span><i><small style={{ width: `${rate}%` }} /></i></div> })}</article><SectionHeader title="나와 같은 답을 고른 사람" count="" action={`${matchRate}%`} /><div className="match-card"><strong>{matchRate}%</strong><span>내가 고른 답을 선택한<br />대학생의 평균 비율이에요.</span></div><SectionHeader title="그룹별 응답 비교" count="" action={`Q${resultQuestion + 1} 기준`} /><div className="comparison-grid"><article><b>남녀 비교</b><p><span style={{ width: `${maleRate}%` }}>남 {maleRate}%</span><span style={{ width: `${100 - maleRate}%` }}>여 {100 - maleRate}%</span></p><small>내 답변과 같은 선택을 한 응답자를 성별로 비교했어요.</small></article><article><b>학교 비교</b><p><span style={{ width: `${schoolRate}%` }}>우리 학교 {schoolRate}%</span><span style={{ width: `${100 - schoolRate}%` }}>타교 {100 - schoolRate}%</span></p><small>우리 학교에서 같은 답을 고른 비율이 더 높아요.</small></article></div><div className="insight-card"><b>✦ AI 핵심 인사이트</b><p>선택한 답변은 전체 응답자 중 평균 {matchRate}%가 함께 골랐어요. {matchRate >= 50 ? '대학생 다수가 공감하는 성향이에요.' : '비교적 뚜렷한 나만의 성향이에요.'}</p></div>{deepAnalysis ? <div className="deep-analysis-card"><span>AI 심층 분석 완료</span><h2>응답 패턴을 더 자세히 봤어요</h2><p>일관성 있는 선택을 했고, 우리 학교 응답자와의 유사도가 {schoolRate}%예요. 관심 분야가 비슷한 사용자 그룹에서는 같은 선택이 더 자주 나타났어요.</p><ul><li>응답 일관성: 높음</li><li>우리 학교 유사도: {schoolRate}%</li><li>전체 응답 유사도: {matchRate}%</li></ul></div> : null}<button className="primary-button" type="button" onClick={unlockDeepAnalysis}>{deepAnalysis ? '심층 분석 확인 완료' : '심층 분석 보기 · 200P'}</button><button className="soft-button" type="button" onClick={downloadReport}>PPT 초안 생성 · 400P</button></main></div>)
 }
 function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, onWatchAd }) {
   const gifts = [{ id: 1, icon: '☕', name: '아메리카노', detail: '모바일 교환권', price: 3000 }, { id: 2, icon: '🍦', name: '편의점 상품권', detail: '3,000원권', price: 3500 }, { id: 3, icon: '🍔', name: '햄버거 세트', detail: '세트 교환권', price: 5000 }, { id: 4, icon: '🎬', name: '영화 관람권', detail: '주중·주말 공통', price: 9000 }]
@@ -703,15 +714,19 @@ function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, o
   const [confirmGift, setConfirmGift] = useState(null)
   const [couponOpen, setCouponOpen] = useState(false)
   const [coupons, setCoupons] = useState(() => JSON.parse(localStorage.getItem('suniversity-coupons') || '[]'))
-  const [adSeconds, setAdSeconds] = useState(0)
+  const [adSeconds, setAdSeconds] = useState(() => Math.max(0, Math.ceil((Number(localStorage.getItem('suniversity-ad-deadline')) - Date.now()) / 1000)))
   useEffect(() => {
     if (!adSeconds) return undefined
     const timer = window.setInterval(() => setAdSeconds((seconds) => {
-      if (seconds <= 1) { window.clearInterval(timer); onWatchAd(); return 0 }
+      if (seconds <= 1) { window.clearInterval(timer); localStorage.removeItem('suniversity-ad-deadline'); onWatchAd(); return 0 }
       return seconds - 1
     }), 1000)
     return () => window.clearInterval(timer)
   }, [adSeconds, onWatchAd])
+  const startAd = () => {
+    localStorage.setItem('suniversity-ad-deadline', String(Date.now() + 30000))
+    setAdSeconds(30)
+  }
   const exchange = () => {
     if (confirmGift && spendPoints(confirmGift.price, `${confirmGift.name} 교환`)) {
       const nextCoupons = [{ ...confirmGift, couponId: Date.now(), code: `SUN-${String(Date.now()).slice(-8)}` }, ...coupons]
@@ -719,8 +734,13 @@ function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, o
       setConfirmGift(null); setCatalogOpen(false); setCouponOpen(true)
     }
   }
+  const markCouponUsed = (couponId) => {
+    if (!window.confirm('쿠폰을 사용 완료로 처리할까요?')) return
+    const next = coupons.map((coupon) => coupon.couponId === couponId ? { ...coupon, used: true } : coupon)
+    setCoupons(next); localStorage.setItem('suniversity-coupons', JSON.stringify(next))
+  }
   const giftCard = (gift) => <button className="gift-card" type="button" key={gift.id} onClick={() => setConfirmGift(gift)}><div className="gift-image">{gift.icon}</div><span><b>{gift.name}</b><small>{gift.detail}</small></span><strong>{gift.price.toLocaleString()}P</strong></button>
-  return <div className="screen with-nav"><TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="쿠폰함" onClick={() => setCouponOpen(true)}>🎟</IconButton>} /><main className="screen-content points-content"><div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div><SectionHeader title="포인트 더 모으기" count="" action={`${adEarned.toLocaleString()}/1,000P`} /><div className="watch-card"><b>광고 보고 100P 받기</b><small>{adSeconds ? `광고 재생 중 · ${adSeconds}초 남음` : `오늘 광고 보상 ${adEarned.toLocaleString()}P / 1,000P`}</small><div className="daily-ad-progress"><span style={{ width: adSeconds ? `${(30 - adSeconds) / 30 * 100}%` : `${Math.min(100, adEarned / 10)}%` }} /></div><button type="button" disabled={adEarned >= 1000 || adSeconds > 0} onClick={() => setAdSeconds(30)}>{adEarned >= 1000 ? '오늘 한도 달성' : adSeconds ? `${adSeconds}초 후 보상 지급` : '30초 광고 시청'}</button></div><div className="gift-heading"><b>기프티콘 교환</b><button type="button" onClick={() => setCatalogOpen(true)}>전체보기</button></div>{gifts.slice(0, 2).map(giftCard)}<p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div></main><BottomNav active="points" navigate={navigate} />{catalogOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCatalogOpen(false)}><section className="gift-catalog" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCatalogOpen(false)} type="button">×</button><h2>기프티콘 전체보기</h2><p>모은 포인트로 원하는 상품을 교환해 보세요.</p>{gifts.map(giftCard)}</section></div> : null}{couponOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCouponOpen(false)}><section className="gift-catalog coupon-wallet" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCouponOpen(false)} type="button">×</button><h2>내 쿠폰함</h2><p>교환한 모바일 쿠폰을 확인하세요.</p>{coupons.length ? coupons.map((coupon) => <article key={coupon.couponId}><span>{coupon.icon}</span><div><b>{coupon.name}</b><small>{coupon.code}</small></div><strong>사용 가능</strong></article>) : <div className="empty-state"><b>보유한 쿠폰이 없어요</b></div>}</section></div> : null}{confirmGift ? <div className="modal-backdrop" onClick={() => setConfirmGift(null)}><section className="exchange-confirm" onClick={(event) => event.stopPropagation()}><span>{confirmGift.icon}</span><h2>{confirmGift.name}</h2><p>{confirmGift.price.toLocaleString()}P를 사용해 교환할까요?<br />현재 {points.toLocaleString()}P 보유 중이에요.</p><div><button type="button" onClick={() => setConfirmGift(null)}>취소</button><button type="button" disabled={points < confirmGift.price} onClick={exchange}>{points < confirmGift.price ? '포인트 부족' : '교환하기'}</button></div></section></div> : null}</div>
+  return <div className="screen with-nav"><TopBar title="포인트" onBack={() => navigate('home')} right={<IconButton label="쿠폰함" onClick={() => setCouponOpen(true)}>🎟</IconButton>} /><main className="screen-content points-content"><div className="balance-card"><small>사용 가능 포인트</small><strong><span>P</span> {points.toLocaleString()} P</strong><b>↑ 이번 달 +780P 적립</b></div><SectionHeader title="포인트 더 모으기" count="" action={`${adEarned.toLocaleString()}/1,000P`} /><div className="watch-card"><b>광고 보고 100P 받기</b><small>{adSeconds ? `광고 재생 중 · ${adSeconds}초 남음` : `오늘 광고 보상 ${adEarned.toLocaleString()}P / 1,000P`}</small><div className="daily-ad-progress"><span style={{ width: adSeconds ? `${(30 - adSeconds) / 30 * 100}%` : `${Math.min(100, adEarned / 10)}%` }} /></div><button type="button" disabled={adEarned >= 1000 || adSeconds > 0} onClick={startAd}>{adEarned >= 1000 ? '오늘 한도 달성' : adSeconds ? `${adSeconds}초 후 보상 지급` : '30초 광고 시청'}</button></div><div className="gift-heading"><b>기프티콘 교환</b><button type="button" onClick={() => setCatalogOpen(true)}>전체보기</button></div>{gifts.slice(0, 2).map(giftCard)}<p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div></main><BottomNav active="points" navigate={navigate} />{catalogOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCatalogOpen(false)}><section className="gift-catalog" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCatalogOpen(false)} type="button">×</button><h2>기프티콘 전체보기</h2><p>모은 포인트로 원하는 상품을 교환해 보세요.</p>{gifts.map(giftCard)}</section></div> : null}{couponOpen ? <div className="modal-backdrop gift-catalog-backdrop" onClick={() => setCouponOpen(false)}><section className="gift-catalog coupon-wallet" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setCouponOpen(false)} type="button">×</button><h2>내 쿠폰함</h2><p>교환한 모바일 쿠폰을 확인하세요.</p>{coupons.length ? coupons.map((coupon) => <article className={coupon.used ? 'is-used' : ''} key={coupon.couponId}><span>{coupon.icon}</span><div><b>{coupon.name}</b><small>{coupon.code}</small></div><button type="button" disabled={coupon.used} onClick={() => markCouponUsed(coupon.couponId)}>{coupon.used ? '사용 완료' : '사용하기'}</button></article>) : <div className="empty-state"><b>보유한 쿠폰이 없어요</b></div>}</section></div> : null}{confirmGift ? <div className="modal-backdrop" onClick={() => setConfirmGift(null)}><section className="exchange-confirm" onClick={(event) => event.stopPropagation()}><span>{confirmGift.icon}</span><h2>{confirmGift.name}</h2><p>{confirmGift.price.toLocaleString()}P를 사용해 교환할까요?<br />현재 {points.toLocaleString()}P 보유 중이에요.</p><div><button type="button" onClick={() => setConfirmGift(null)}>취소</button><button type="button" disabled={points < confirmGift.price} onClick={exchange}>{points < confirmGift.price ? '포인트 부족' : '교환하기'}</button></div></section></div> : null}</div>
 }
 function RankingScreen({ navigate }) {
   const [rankingFilter, setRankingFilter] = useState('all')
@@ -755,10 +775,13 @@ function RankingScreen({ navigate }) {
 
 function VerifyScreen({ navigate, onVerify }) {
   const [phoneVerified, setPhoneVerified] = useState(true)
-  const [studentCardUploaded, setStudentCardUploaded] = useState(false)
+  const [studentCardUploaded, setStudentCardUploaded] = useState(() => localStorage.getItem('suniversity-student-card') === 'uploaded')
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [interests, setInterests] = useState(['취업', '소비'])
-  const toggleInterest = (interest) => setInterests(interests.includes(interest) ? interests.filter((item) => item !== interest) : [...interests, interest])
+  const [interests, setInterests] = useState(() => JSON.parse(localStorage.getItem('suniversity-interests') || '["취업","소비"]'))
+  const toggleInterest = (interest) => {
+    const next = interests.includes(interest) ? interests.filter((item) => item !== interest) : [...interests, interest]
+    setInterests(next); localStorage.setItem('suniversity-interests', JSON.stringify(next))
+  }
   return (
     <div className="screen">
       <TopBar title="suniversity" brand onBack={() => navigate('home')} />
@@ -778,7 +801,7 @@ function VerifyScreen({ navigate, onVerify }) {
         <div className="chips interest-chips">{['취업', '학교생활', '소비', 'MBTI', '연애'].map((interest) => <button className={interests.includes(interest) ? 'chip is-active' : 'chip'} type="button" key={interest} onClick={() => toggleInterest(interest)}>{interest}</button>)}</div>
         <button className="primary-button" disabled={!phoneVerified || !studentCardUploaded || !interests.length} type="button" onClick={onVerify}>인증 완료하고 2,500P 받기</button>
       </main>
-      {cameraOpen ? <div className="modal-backdrop camera-backdrop"><section className="camera-modal"><button className="modal-close" type="button" onClick={() => setCameraOpen(false)}>×</button><span>학생증 촬영</span><div className="camera-preview"><i /><b>학생증을 사각형 안에 맞춰주세요</b><small>학교명과 이름이 선명하게 보여야 해요.</small></div><button className="camera-shutter" type="button" aria-label="촬영" onClick={() => { setStudentCardUploaded(true); setCameraOpen(false) }} /><p>이 화면은 프론트엔드 촬영 흐름을 확인하기 위한 미리보기예요.</p></section></div> : null}
+      {cameraOpen ? <div className="modal-backdrop camera-backdrop"><section className="camera-modal"><button className="modal-close" type="button" onClick={() => setCameraOpen(false)}>×</button><span>학생증 촬영</span><div className="camera-preview"><i /><b>학생증을 사각형 안에 맞춰주세요</b><small>학교명과 이름이 선명하게 보여야 해요.</small></div><button className="camera-shutter" type="button" aria-label="촬영" onClick={() => { setStudentCardUploaded(true); localStorage.setItem('suniversity-student-card', 'uploaded'); setCameraOpen(false) }} /><p>이 화면은 프론트엔드 촬영 흐름을 확인하기 위한 미리보기예요.</p></section></div> : null}
     </div>
   )
 }
@@ -786,8 +809,16 @@ function VerifyScreen({ navigate, onVerify }) {
 function AuthScreen({ navigate }) {
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ id: '', nickname: '', password: '', passwordConfirm: '' })
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [authError, setAuthError] = useState('')
   const update = (key) => (event) => setForm({ ...form, [key]: event.target.value })
-  const canSubmit = form.id && form.password && (mode === 'login' || (form.nickname && form.password === form.passwordConfirm))
+  const canSubmit = form.id.trim().length >= 4 && form.password.length >= 8 && (mode === 'login' || (form.nickname.trim().length >= 2 && form.password === form.passwordConfirm && termsAccepted))
+  const submitAuth = () => {
+    if (!canSubmit) { setAuthError('입력 내용을 다시 확인해 주세요.'); return }
+    localStorage.setItem('suniversity-test-user', JSON.stringify({ id: form.id.trim(), nickname: form.nickname.trim() || '설문요정' }))
+    setAuthError('')
+    navigate(mode === 'signup' ? 'verify' : 'home')
+  }
 
   return (
     <div className="screen auth-screen">
@@ -804,7 +835,11 @@ function AuthScreen({ navigate }) {
           <label>비밀번호<input type="password" value={form.password} onChange={update('password')} placeholder="8자 이상 입력" /></label>
           {mode === 'signup' ? <label>비밀번호 확인<input type="password" value={form.passwordConfirm} onChange={update('passwordConfirm')} placeholder="비밀번호를 다시 입력" /></label> : null}
         </div>
-        <button className="primary-button" disabled={!canSubmit} type="button" onClick={() => navigate(mode === 'signup' ? 'verify' : 'home')}>
+        {mode === 'signup' ? <label className="auth-terms"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>서비스 이용약관과 개인정보 처리방침에 동의합니다.</span></label> : null}
+        {form.password && form.password.length < 8 ? <p className="auth-error">비밀번호는 8자 이상 입력해 주세요.</p> : null}
+        {mode === 'signup' && form.passwordConfirm && form.password !== form.passwordConfirm ? <p className="auth-error">비밀번호가 서로 다릅니다.</p> : null}
+        {authError ? <p className="auth-error">{authError}</p> : null}
+        <button className="primary-button" disabled={!canSubmit} type="button" onClick={submitAuth}>
           {mode === 'signup' ? '가입하고 대학생 인증하기' : '로그인'}
         </button>
         <button className="guest-button" type="button" onClick={() => navigate('home')}>프로토타입 둘러보기</button>
@@ -833,15 +868,27 @@ function NotificationsScreen({ navigate }) {
     </div>
   )
 }
-function MySurveysScreen({ navigate, hasDraft }) {
-  const [items, setItems] = useState([{ id: 1, title: '대학생의 AI 활용 경험 조사', responses: 82, target: 100, status: '진행 중' }, { id: 2, title: '캠퍼스 통학 만족도 조사', responses: 100, target: 100, status: '마감' }, { id: 3, title: '취업 준비 비용 조사', responses: 34, target: 80, status: '진행 중' }])
+function MySurveysScreen({ navigate, hasDraft, publishedSurveys }) {
+  const [items, setItems] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('suniversity-managed-surveys') || 'null')
+    const defaults = saved || [{ id: 1, title: '대학생의 AI 활용 경험 조사', responses: 82, target: 100, status: '진행 중' }, { id: 2, title: '캠퍼스 통학 만족도 조사', responses: 100, target: 100, status: '마감' }, { id: 3, title: '취업 준비 비용 조사', responses: 34, target: 80, status: '진행 중' }]
+    const knownIds = new Set(defaults.map((item) => String(item.id)))
+    return [...publishedSurveys.filter((survey) => !knownIds.has(String(survey.id))).map((survey) => ({ id: survey.id, title: survey.title, responses: 0, target: survey.targetCount || 100, status: '진행 중' })), ...defaults]
+  })
   const [tab, setTab] = useState('published')
-  const closeSurvey = (id) => setItems(items.map((item) => item.id === id ? { ...item, status: '마감' } : item))
+  const [draftExists, setDraftExists] = useState(hasDraft)
+  useEffect(() => { localStorage.setItem('suniversity-managed-surveys', JSON.stringify(items)) }, [items])
+  const closeSurvey = (id) => {
+    if (window.confirm('설문을 마감하면 더 이상 응답을 받을 수 없어요. 마감할까요?')) setItems(items.map((item) => item.id === id ? { ...item, status: '마감' } : item))
+  }
+  const deleteSurvey = (id) => {
+    if (window.confirm('이 설문을 삭제할까요? 삭제 후 복구할 수 없어요.')) setItems(items.filter((item) => item.id !== id))
+  }
   const editSurvey = (item) => {
     localStorage.setItem('suniversity-survey-draft', JSON.stringify({ editId: item.id, title: item.title, category: '연구·프로젝트', targetCount: item.target, reward: 20, isPublic: true, questions: [{ id: `edit-${item.id}-1`, title: '이 주제에 대해 얼마나 관심이 있나요?', type: 'single', required: true, options: ['매우 관심 있어요', '조금 관심 있어요', '보통이에요', '관심 없어요'] }, { id: `edit-${item.id}-2`, title: '가장 중요하게 생각하는 점은 무엇인가요?', type: 'single', required: true, options: ['편리함', '비용', '신뢰도', '주변 추천'] }] }))
     navigate('create')
   }
-  return <div className="screen"><TopBar title="내 설문 관리" onBack={() => navigate('profile')} /><main className="screen-content manage-surveys"><div className="manage-tabs"><button className={tab === 'published' ? 'is-active' : ''} onClick={() => setTab('published')} type="button">등록한 설문</button><button className={tab === 'draft' ? 'is-active' : ''} onClick={() => setTab('draft')} type="button">임시저장</button></div>{tab === 'published' ? <div className="manage-list">{items.map((item) => <article key={item.id}><div><span>{item.status}</span><b>{item.title}</b><small>{item.responses} / {item.target}명 응답</small><i><em style={{ width: `${item.responses / item.target * 100}%` }} /></i></div><div><button type="button" onClick={() => navigate('result')}>결과</button><button type="button" onClick={() => editSurvey(item)}>수정</button><button type="button" disabled={item.status === '마감'} onClick={() => closeSurvey(item.id)}>마감</button></div></article>)}</div> : hasDraft ? <div className="draft-manage-card"><span>임시저장</span><b>작성 중인 설문이 있어요</b><p>마지막 작성 내용을 이어서 편집할 수 있어요.</p><button type="button" onClick={() => navigate('create')}>이어서 작성하기</button><button type="button" onClick={() => { localStorage.removeItem('suniversity-survey-draft'); window.alert('임시저장을 삭제했어요.') }}>삭제</button></div> : <div className="empty-state"><b>임시저장 설문이 없어요</b></div>}</main></div>
+  return <div className="screen"><TopBar title="내 설문 관리" onBack={() => navigate('profile')} /><main className="screen-content manage-surveys"><div className="manage-tabs"><button className={tab === 'published' ? 'is-active' : ''} onClick={() => setTab('published')} type="button">등록한 설문</button><button className={tab === 'draft' ? 'is-active' : ''} onClick={() => setTab('draft')} type="button">임시저장</button></div>{tab === 'published' ? <div className="manage-list">{items.map((item) => <article key={item.id}><div><span>{item.status}</span><b>{item.title}</b><small>{item.responses} / {item.target}명 응답</small><i><em style={{ width: `${item.responses / item.target * 100}%` }} /></i></div><div><button type="button" onClick={() => navigate('result')}>결과</button><button type="button" onClick={() => editSurvey(item)}>수정</button><button type="button" disabled={item.status === '마감'} onClick={() => closeSurvey(item.id)}>마감</button><button type="button" className="danger" onClick={() => deleteSurvey(item.id)}>삭제</button></div></article>)}</div> : draftExists ? <div className="draft-manage-card"><span>임시저장</span><b>작성 중인 설문이 있어요</b><p>마지막 작성 내용을 이어서 편집할 수 있어요.</p><button type="button" onClick={() => navigate('create')}>이어서 작성하기</button><button type="button" onClick={() => { localStorage.removeItem('suniversity-survey-draft'); setDraftExists(false) }}>삭제</button></div> : <div className="empty-state"><b>임시저장 설문이 없어요</b></div>}</main></div>
 }
 function SavedSurveysScreen({ navigate, savedSurveys, completedSurveys, onParticipate, onRemove }) {
   return (
@@ -928,10 +975,21 @@ function App() {
       { id: 3, label: 'AI 심층 분석', amount: -200 },
     ]
   })
+  useEffect(() => {
+    window.history.replaceState({ screen: localStorage.getItem('suniversity-current-screen') || 'home' }, '')
+    const handlePopState = (event) => {
+      const next = event.state?.screen || 'home'
+      setScreen(next)
+      localStorage.setItem('suniversity-current-screen', next)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   const navigate = (next) => {
     setScreen(next)
     localStorage.setItem('suniversity-current-screen', next)
+    if (window.history.state?.screen !== next) window.history.pushState({ screen: next }, '')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -981,7 +1039,7 @@ function App() {
   }
 
   const publishSurvey = (survey) => {
-    const next = [survey, ...publishedSurveys]
+    const next = survey.editId ? publishedSurveys.map((item) => String(item.id) === String(survey.editId) ? survey : item) : [survey, ...publishedSurveys]
     setPublishedSurveys(next)
     localStorage.setItem('suniversity-published-surveys', JSON.stringify(next))
   }
@@ -1020,7 +1078,7 @@ function App() {
     balance: <BalanceGameScreen navigate={navigate} onVote={voteBalance} />,
     verify: <VerifyScreen navigate={navigate} onVerify={completeVerification} />,
     notifications: <NotificationsScreen navigate={navigate} />,
-    mySurveys: <MySurveysScreen navigate={navigate} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} />,
+    mySurveys: <MySurveysScreen navigate={navigate} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} publishedSurveys={publishedSurveys} />,
     savedSurveys: <SavedSurveysScreen navigate={navigate} savedSurveys={savedSurveys} completedSurveys={completedSurveys} onParticipate={startSurvey} onRemove={toggleSavedSurvey} />,
     profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} savedCount={savedSurveys.length} />,
   }

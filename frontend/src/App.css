@@ -2532,3 +2532,21 @@ button:focus-visible {
 .camera-preview b { font-size: 10px; }.camera-preview small { color: #b5c0d0; font-size: 8px; }
 .camera-shutter { width: 52px; height: 52px; border: 5px solid #fff; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
 .camera-modal > p { margin: 13px 0 0; color: #8f9aad; font-size: 8px; }
+.auth-terms { display: flex; gap: 8px; margin: 12px 0; align-items: flex-start; color: #657087; font-size: 9px; line-height: 1.45; }
+.auth-terms input { margin-top: 1px; accent-color: var(--blue); }
+.auth-error { margin: 7px 0; color: #e14f5a; font-size: 9px; }
+.coupon-wallet article > button { padding: 6px 8px; border-radius: 7px; background: var(--blue); color: #fff; font-size: 8px; font-weight: 800; }
+.coupon-wallet article.is-used { filter: grayscale(1); opacity: .55; }
+.manage-list article > div:last-child button.danger { color: #e14f5a; }
+.result-question-tabs { display: flex; gap: 6px; margin: 8px 0 10px; overflow-x: auto; }
+.result-question-tabs button { flex: 0 0 auto; width: 31px; height: 28px; border-radius: 8px; background: #f0f3f8; color: #7e899b; font-size: 9px; font-weight: 800; }
+.result-question-tabs button.is-active { background: var(--blue); color: #fff; }
+.result-question-card { display: grid; gap: 11px; margin-bottom: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; }
+.result-question-card > b { margin-bottom: 2px; font-size: 11px; line-height: 1.45; }
+.result-question-card > div { display: grid; gap: 5px; }
+.result-question-card > div > span { display: flex; justify-content: space-between; color: #697488; font-size: 9px; }
+.result-question-card em { font-style: normal; }.result-question-card strong { color: var(--blue); }
+.result-question-card i { display: block; height: 7px; overflow: hidden; border-radius: 99px; background: #eef2f7; }
+.result-question-card i small { display: block; height: 100%; border-radius: inherit; background: #b9d1ff; }
+.result-question-card .is-my-answer em { color: var(--blue); font-weight: 900; }
+.result-question-card .is-my-answer i small { background: var(--blue); }
