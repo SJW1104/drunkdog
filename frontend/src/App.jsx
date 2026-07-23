@@ -335,7 +335,7 @@ function getSurveyContent(id = '') {
   if (text.includes('캡스톤') || text.includes('협업')) return surveyContentMap['home-capstone']
   return surveyContentMap.default
 }
-function ParticipateScreen({ onComplete, onExit, surveyId }) {
+function ParticipateScreen({ onComplete, onExit, surveyId, isSaved, onToggleSaved }) {
   const { title: surveyTitle, badge, questions } = getSurveyContent(surveyId)
   const [questionIndex, setQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState({})
@@ -356,7 +356,7 @@ function ParticipateScreen({ onComplete, onExit, surveyId }) {
   return (
     <div className="screen">
       <TopBar title="설문 참여" onBack={() => questionIndex ? setQuestionIndex(questionIndex - 1) : onExit()} right={<IconButton label="더보기" onClick={() => setShowMenu(!showMenu)}>•••</IconButton>} />
-      {showMenu ? <div className="survey-more-menu"><button type="button" onClick={() => { navigator.clipboard?.writeText(window.location.href); setShowMenu(false) }}>설문 링크 공유</button><button type="button" onClick={() => setShowMenu(false)}>관심 설문 저장</button><button type="button" className="danger" onClick={() => { window.alert('신고가 접수되었습니다.'); setShowMenu(false) }}>설문 신고</button></div> : null}
+      {showMenu ? <div className="survey-more-menu"><button type="button" onClick={() => { navigator.clipboard?.writeText(window.location.href); setShowMenu(false) }}>설문 링크 공유</button><button type="button" className={isSaved ? 'is-saved' : ''} onClick={() => { onToggleSaved(surveyId); setShowMenu(false) }}>{isSaved ? '관심 설문에서 삭제' : '관심 설문 저장'}</button><button type="button" className="danger" onClick={() => { window.alert('신고가 접수되었습니다.'); setShowMenu(false) }}>설문 신고</button></div> : null}
       <main className="screen-content participate-content">
         <div className="survey-progress-label"><span>질문 {questionIndex + 1} / {questions.length}</span><span>{Math.round((questionIndex + 1) / questions.length * 100)}% 진행</span></div>
         <div className="survey-progress"><span style={{ width: ((questionIndex + 1) / questions.length * 100) + '%' }} /></div>
@@ -779,7 +779,22 @@ function MySurveysScreen({ navigate, hasDraft }) {
   const closeSurvey = (id) => setItems(items.map((item) => item.id === id ? { ...item, status: '마감' } : item))
   return <div className="screen"><TopBar title="내 설문 관리" onBack={() => navigate('profile')} /><main className="screen-content manage-surveys"><div className="manage-tabs"><button className={tab === 'published' ? 'is-active' : ''} onClick={() => setTab('published')} type="button">등록한 설문</button><button className={tab === 'draft' ? 'is-active' : ''} onClick={() => setTab('draft')} type="button">임시저장</button></div>{tab === 'published' ? <div className="manage-list">{items.map((item) => <article key={item.id}><div><span>{item.status}</span><b>{item.title}</b><small>{item.responses} / {item.target}명 응답</small><i><em style={{ width: `${item.responses / item.target * 100}%` }} /></i></div><div><button type="button" onClick={() => navigate('result')}>결과</button><button type="button" onClick={() => window.alert('설문 수정 화면을 열었어요.')}>수정</button><button type="button" disabled={item.status === '마감'} onClick={() => closeSurvey(item.id)}>마감</button></div></article>)}</div> : hasDraft ? <div className="draft-manage-card"><span>임시저장</span><b>작성 중인 설문이 있어요</b><p>마지막 작성 내용을 이어서 편집할 수 있어요.</p><button type="button" onClick={() => navigate('create')}>이어서 작성하기</button><button type="button" onClick={() => { localStorage.removeItem('suniversity-survey-draft'); window.alert('임시저장을 삭제했어요.') }}>삭제</button></div> : <div className="empty-state"><b>임시저장 설문이 없어요</b></div>}</main></div>
 }
-function ProfileScreen({ navigate, points, hasDraft, badges }) {
+function SavedSurveysScreen({ navigate, savedSurveys, completedSurveys, onParticipate, onRemove }) {
+  return (
+    <div className="screen">
+      <TopBar title="관심 설문" onBack={() => navigate('profile')} />
+      <main className="screen-content saved-surveys-content">
+        <div className="saved-surveys-heading"><span>나중에 참여하려고 저장한 설문</span><b>{savedSurveys.length}개</b></div>
+        {savedSurveys.length ? <div className="saved-survey-list">{savedSurveys.map((id) => {
+          const survey = getSurveyContent(id)
+          const completed = completedSurveys.includes(id)
+          return <article className={completed ? 'is-completed' : ''} key={id}><button type="button" onClick={() => onParticipate(id)}><span><small>{completed ? '참여 완료' : '관심 설문'}</small><b>{survey.title}</b><em>{survey.questions.length}문항 · 약 3분</em></span><strong>{completed ? '완료' : '+30P'}</strong></button><button className="saved-survey-remove" type="button" aria-label={`${survey.title} 관심 설문에서 삭제`} onClick={() => onRemove(id)}>삭제</button></article>
+        })}</div> : <div className="empty-state"><b>저장한 관심 설문이 없어요</b><p>설문 참여 화면의 더보기에서<br />관심 설문을 저장할 수 있어요.</p><button type="button" onClick={() => navigate('surveys')}>설문 둘러보기</button></div>}
+      </main>
+    </div>
+  )
+}
+function ProfileScreen({ navigate, points, hasDraft, badges, savedCount }) {
   const [notificationEnabled, setNotificationEnabled] = useState(() => localStorage.getItem('suniversity-notifications') !== 'off')
   const [phone, setPhone] = useState(() => localStorage.getItem('suniversity-phone') || '010-1234-5678')
   const updatePhone = () => { const next = window.prompt('변경할 전화번호를 입력해 주세요.', phone); if (next?.trim()) { setPhone(next.trim()); localStorage.setItem('suniversity-phone', next.trim()); window.alert('전화번호를 변경했어요.') } }
@@ -803,6 +818,7 @@ function ProfileScreen({ navigate, points, hasDraft, badges }) {
         </section>
 
         <section className="settings-group">
+          <button type="button" onClick={() => navigate('savedSurveys')}><span><UiIcon name="bell" /> 관심 설문</span><b>{savedCount ? `${savedCount}개` : '없음'} ›</b></button>
           <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 ›</b></button>
           <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} ›</b></button>
           <button type="button" onClick={() => navigate('points')}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b>›</b></button>
@@ -819,6 +835,7 @@ function App() {
   const [participationSource, setParticipationSource] = useState('surveys')
   const [activeSurveyId, setActiveSurveyId] = useState(null)
   const [completedSurveys, setCompletedSurveys] = useState(() => JSON.parse(localStorage.getItem('suniversity-completed-surveys') || '[]'))
+  const [savedSurveys, setSavedSurveys] = useState(() => JSON.parse(localStorage.getItem('suniversity-saved-surveys') || '[]'))
   const [points, setPoints] = useState(() => Number(localStorage.getItem('suniversity-points')) || 2540)
   const [adReward, setAdReward] = useState(() => {
     const today = new Date().toISOString().slice(0, 10)
@@ -881,6 +898,13 @@ function App() {
     navigate('resultAccess')
   }
 
+  const toggleSavedSurvey = (surveyId) => {
+    const id = String(surveyId)
+    const next = savedSurveys.includes(id) ? savedSurveys.filter((savedId) => savedId !== id) : [id, ...savedSurveys]
+    setSavedSurveys(next)
+    localStorage.setItem('suniversity-saved-surveys', JSON.stringify(next))
+  }
+
   const publishSurvey = (survey) => {
     setPublishedSurveys([survey, ...publishedSurveys])
   }
@@ -910,7 +934,7 @@ function App() {
     auth: <AuthScreen navigate={navigate} />,
     home: <HomeScreen navigate={navigate} isCheckedIn={lastCheckin === new Date().toISOString().slice(0, 10)} onCheckIn={checkInToday} onParticipate={startSurvey} completedSurveys={completedSurveys} />,
     surveys: <SurveyListScreen navigate={navigate} customSurveys={publishedSurveys} onParticipate={startSurvey} completedSurveys={completedSurveys} />,
-    participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} surveyId={activeSurveyId} />,
+    participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} surveyId={activeSurveyId} isSaved={savedSurveys.includes(String(activeSurveyId))} onToggleSaved={toggleSavedSurvey} />,
     create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} />,
     resultAccess: <ResultAccessScreen navigate={navigate} points={points} unlockResult={(price) => { if (spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
     result: <ResultScreen navigate={navigate} spendPoints={spendPoints} resultInfo={lastResult} />,
@@ -920,7 +944,8 @@ function App() {
     verify: <VerifyScreen navigate={navigate} onVerify={completeVerification} />,
     notifications: <NotificationsScreen navigate={navigate} />,
     mySurveys: <MySurveysScreen navigate={navigate} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} />,
-    profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} />,
+    savedSurveys: <SavedSurveysScreen navigate={navigate} savedSurveys={savedSurveys} completedSurveys={completedSurveys} onParticipate={startSurvey} onRemove={toggleSavedSurvey} />,
+    profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} savedCount={savedSurveys.length} />,
   }
 
   return (

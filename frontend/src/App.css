@@ -2493,3 +2493,18 @@ button:focus-visible {
 .search-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .search-overlay-head .search-icon { color: var(--blue); }
 .survey-category-tabs { display: flex; gap: 7px; margin: 2px 0 17px; padding: 1px 1px 5px; overflow-x: auto; scrollbar-width: none; }.survey-category-tabs::-webkit-scrollbar { display: none; }.survey-category-tabs button { flex: 0 0 auto; padding: 7px 11px; border: 1px solid #e0e6ef; border-radius: 99px; background: #fff; color: #687386; font-size: 9px; font-weight: 800; }.survey-category-tabs button.is-active { border-color: var(--blue); background: var(--blue); color: #fff; box-shadow: 0 4px 10px rgba(23,105,255,.16); }
+
+/* Saved surveys */
+.survey-more-menu button.is-saved { color: var(--blue); font-weight: 800; }
+.saved-surveys-content { padding-top: 18px; }
+.saved-surveys-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; color: var(--muted); font-size: 10px; }
+.saved-surveys-heading b { color: var(--blue); }
+.saved-survey-list { display: grid; gap: 10px; }
+.saved-survey-list article { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.saved-survey-list article > button:first-child { display: flex; width: 100%; min-height: 92px; padding: 15px 62px 15px 15px; align-items: center; justify-content: space-between; background: transparent; text-align: left; }
+.saved-survey-list article span { display: grid; gap: 5px; }
+.saved-survey-list article small, .saved-survey-list article strong { color: var(--blue); font-size: 9px; }
+.saved-survey-list article b { color: var(--ink); font-size: 12px; }
+.saved-survey-list article em { color: var(--muted); font-size: 9px; font-style: normal; }
+.saved-survey-list article.is-completed { filter: grayscale(1); opacity: .58; }
+.saved-survey-remove { position: absolute; right: 12px; bottom: 11px; padding: 5px 7px; border-radius: 7px; background: #f2f4f7; color: #7d8797; font-size: 8px; }
