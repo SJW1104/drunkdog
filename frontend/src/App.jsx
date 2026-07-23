@@ -75,6 +75,7 @@ function UiIcon({ name }) {
     survey: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
     draft: <><path d="M4 4h11l5 5v11H4V4Z" /><path d="M14 4v6h6M8 14h8M8 17h5" /></>,
     coin: <><circle cx="12" cy="12" r="9" /><path d="M9 9.5c0-1.5 1.3-2.5 3-2.5s3 1 3 2.5-1.2 2.1-3 2.5-3 1-3 2.5 1.3 2.5 3 2.5 3-1 3-2.5M12 5v14" /></>,
+    help: <><circle cx="12" cy="12" r="9" /><path d="M9.7 9a2.4 2.4 0 0 1 4.6.9c0 2-2.3 2.2-2.3 4M12 17.5h.01" /></>,
   }
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name] || paths.all}</svg>
 }
@@ -137,14 +138,14 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
   const [searchOpen, setSearchOpen] = useState(false)
   const [homeSearchQuery, setHomeSearchQuery] = useState('')
   const searchableSurveys = [
-    { id: 'home-ai', title: '대학생의 AI 활용과 취업 준비', category: 'AI · 취업', point: 20 },
-    { id: 'home-delivery', title: '배달앱 선택 기준과 소비 습관', category: '소비', point: 15 },
-    { id: 'home-capstone', title: '캡스톤 협업 경험', category: '팀플 · 프로젝트', point: 45 },
-    { id: 'home-commute', title: '통학 만족도 조사', category: '대학생활', point: 30 },
-    { id: 'home-date', title: '데이트 비용 인식', category: '연애 · 소비', point: 10 },
-    { id: 'home-contest', title: '공모전 참여 경험', category: '공모전', point: 20 },
-    { id: 'home-subscription', title: 'Z세대 구독 서비스 이용 행태', category: '트렌드 · 소비', point: 30 },
-    { id: 'home-career-cost', title: '대학생 취업 준비 비용 조사', category: '취업', point: 20 },
+    { id: 'home-ai', title: '대학생의 AI 활용과 취업 준비', category: 'AI · 취업', point: 5 },
+    { id: 'home-delivery', title: '배달앱 선택 기준과 소비 습관', category: '소비', point: 5 },
+    { id: 'home-capstone', title: '캡스톤 협업 경험', category: '팀플 · 프로젝트', point: 5 },
+    { id: 'home-commute', title: '통학 만족도 조사', category: '대학생활', point: 5 },
+    { id: 'home-date', title: '데이트 비용 인식', category: '연애 · 소비', point: 5 },
+    { id: 'home-contest', title: '공모전 참여 경험', category: '공모전', point: 5 },
+    { id: 'home-subscription', title: 'Z세대 구독 서비스 이용 행태', category: '트렌드 · 소비', point: 5 },
+    { id: 'home-career-cost', title: '대학생 취업 준비 비용 조사', category: '취업', point: 5 },
   ]
   const searchResults = searchableSurveys.filter((survey) => `${survey.title} ${survey.category}`.toLowerCase().includes(homeSearchQuery.trim().toLowerCase()))
   const [notificationOpen, setNotificationOpen] = useState(false)
@@ -182,32 +183,32 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate, completed
         <section>
           <SectionHeader icon="🔥" title="HOT 설문" count="5개" action="전체보기 ›" onAction={() => navigate('surveys')} />
           <div className="stack-sm">
-            <SurveyRow title="대학생의 AI 활용과 취업 준비" meta="82 / 100명 · 약 3분" point={20} completed={completedSurveys.includes('home-ai')} onClick={() => onParticipate('home-ai')} />
-            <SurveyRow title="배달앱 선택 기준과 소비 습관" meta="211명 참여 · 약 2분" point={15} completed={completedSurveys.includes('home-delivery')} onClick={() => onParticipate('home-delivery')} />
+            <SurveyRow title="대학생의 AI 활용과 취업 준비" meta="82 / 100명 · 약 3분" point={5} completed={completedSurveys.includes('home-ai')} onClick={() => onParticipate('home-ai')} />
+            <SurveyRow title="배달앱 선택 기준과 소비 습관" meta="211명 참여 · 약 2분" point={5} completed={completedSurveys.includes('home-delivery')} onClick={() => onParticipate('home-delivery')} />
           </div>
         </section>
 
         <section>
           <SectionHeader icon="⏰" title="마감임박" count="4개" action="보상 1.5배" />
           <div className="grid-two">
-            <button className={completedSurveys.includes('home-capstone') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-capstone')}><b>캡스톤 협업 경험</b><small>2시간 남음 · <em className="point-text">+45P</em></small></button>
-            <button className={completedSurveys.includes('home-commute') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-commute')}><b>통학 만족도 조사</b><small>오늘 마감 · <em className="point-text">+30P</em></small></button>
+            <button className={completedSurveys.includes('home-capstone') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-capstone')}><b>캡스톤 협업 경험</b><small>2시간 남음 · <em className="point-text">+5P</em></small></button>
+            <button className={completedSurveys.includes('home-commute') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-commute')}><b>통학 만족도 조사</b><small>오늘 마감 · <em className="point-text">+5P</em></small></button>
           </div>
         </section>
 
         <section>
           <SectionHeader icon="✨" title="새로 올라온 설문" count="8개" action="전체보기 ›" onAction={() => navigate('surveys')} />
           <div className="grid-two">
-            <button className={completedSurveys.includes('home-date') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-date')}><b>데이트 비용 인식</b><small>방금 등록 · <em className="point-text">+10P</em></small></button>
-            <button className={completedSurveys.includes('home-contest') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-contest')}><b>공모전 참여 경험</b><small>5분 전 · <em className="point-text">+20P</em></small></button>
+            <button className={completedSurveys.includes('home-date') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-date')}><b>데이트 비용 인식</b><small>방금 등록 · <em className="point-text">+5P</em></small></button>
+            <button className={completedSurveys.includes('home-contest') ? 'mini-card is-completed' : 'mini-card'} type="button" onClick={() => onParticipate('home-contest')}><b>공모전 참여 경험</b><small>5분 전 · <em className="point-text">+5P</em></small></button>
           </div>
         </section>
 
         <section>
           <SectionHeader icon="💙" title="관심 분야 설문" count="" action="취업 · 소비 기반" />
           <div className="stack-sm">
-            <SurveyRow title="Z세대 구독 서비스 이용 행태" meta="관심사 일치 92% · 약 4분" point={30} completed={completedSurveys.includes('home-subscription')} onClick={() => onParticipate('home-subscription')} />
-            <SurveyRow title="대학생 취업 준비 비용 조사" meta="관심사 일치 87% · 약 3분" point={20} completed={completedSurveys.includes('home-career-cost')} onClick={() => onParticipate('home-career-cost')} />
+            <SurveyRow title="Z세대 구독 서비스 이용 행태" meta="관심사 일치 92% · 약 4분" point={5} completed={completedSurveys.includes('home-subscription')} onClick={() => onParticipate('home-subscription')} />
+            <SurveyRow title="대학생 취업 준비 비용 조사" meta="관심사 일치 87% · 약 3분" point={5} completed={completedSurveys.includes('home-career-cost')} onClick={() => onParticipate('home-career-cost')} />
           </div>
         </section>
 
@@ -247,11 +248,13 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
   const allSurveys = [...customSurveys, ...(fetchedSurveys || [])]
   const filteredSurveys = allSurveys.filter((survey) => {
     const matchesQuery = survey.title.toLowerCase().includes(query.toLowerCase())
-    const matchesCategory = category === '전체' || survey.eyebrow.includes(category)
+    const matchesCategory = category === '전체'
+      || (category === '인기' ? /HOT|급상승|마감/.test(survey.eyebrow) : survey.eyebrow.includes(category))
     return matchesQuery && matchesCategory
   })
   const categories = [
     ['전체', 'all', '모든 설문을 한눈에'],
+    ['인기', 'all', 'HOT·급상승·마감 임박'],
     ['연구·프로젝트', 'career', '논문·팀플·캡스톤'],
     ['재미', 'mbti', '연애·심리·유머·밈'],
     ['대학생활', 'campus', '통학·학식·수강신청'],
@@ -259,7 +262,6 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
     ['소비', 'consume', '쇼핑·식생활·서비스'],
     ['라이프', 'love', '운동·여행·취미'],
     ['토론', 'school', '찬반·사회 이슈·투표'],
-    ['인기', 'all', 'HOT·급상승·마감 임박'],
   ]
 
   if (showCategories) {
@@ -305,7 +307,7 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
           {!isLoading && !error && filteredSurveys.map((survey, index) => (
             <button className={`${completedSurveys.includes(String(survey.id || survey.title)) ? 'survey-card is-completed' : 'survey-card'} tone-${survey.tone || 'blue'}`} key={survey.title} type="button" onClick={() => onParticipate(String(survey.id || survey.title))}>
               <span className={'survey-eyebrow ' + survey.tone}>{survey.eyebrow}</span>{completedSurveys.includes(String(survey.id || survey.title)) ? <span className="completed-label">참여 완료</span> : null}
-              <div className="survey-title-row"><strong>{survey.title}</strong><PointPill value={survey.point} /></div>
+              <div className="survey-title-row"><strong>{survey.title}</strong><PointPill value={survey.questions?.length ? getParticipationReward(survey.questions.length) : getParticipationReward(getSurveyContent(String(survey.id || survey.title)).questions.length)} /></div>
               <div className="survey-meta"><span>{survey.meta}</span><span>{survey.count}</span></div>
               {index === 0 ? <div className="progress-line"><span /></div> : null}
             </button>
@@ -346,7 +348,7 @@ function getParticipationReward(questionCount) {
   if (questionCount <= 10) return 10
   if (questionCount <= 15) return 15
   if (questionCount <= 20) return 20
-  if (questionCount <= 30) return 30
+  if (questionCount < 40) return 30
   return 40
 }
 function getLevelInfo(points) {
@@ -424,7 +426,7 @@ function ParticipateScreen({ onComplete, onExit, surveyId, survey, isSaved, onTo
     </div>
   )
 }
-function CreateScreen({ navigate, onPublish, points, spendPoints }) {
+function CreateScreen({ navigate, onPublish, spendPoints }) {
   const [savedDraft] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('suniversity-survey-draft')) || {}
@@ -437,7 +439,6 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
   const [title, setTitle] = useState(savedDraft.title || '대학생의 AI 활용 경험 조사')
   const [category, setCategory] = useState(savedDraft.category || '연구·프로젝트')
   const [targetCount, setTargetCount] = useState(savedDraft.targetCount || 100)
-  const [reward, setReward] = useState(savedDraft.reward || 20)
   const [isPublic, setIsPublic] = useState(savedDraft.isPublic ?? true)
   const [resultPrice, setResultPrice] = useState(savedDraft.resultPrice ?? 100)
   const [saveLabel, setSaveLabel] = useState('임시저장')
@@ -458,6 +459,7 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
     }
   })
   const editId = savedDraft.editId
+  const reward = getParticipationReward(questions.length)
   const freeAiQuestionsLeft = Math.max(0, 10 - dailyAiQuestions.count)
   const expectedMinutes = Math.max(1, Math.ceil(questions.length * 0.6))
   const expectedResponseRate = Math.max(78, 94 - questions.length)
@@ -504,16 +506,10 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
   }
 
   const publish = async () => {
-    const budget = editId ? 0 : targetCount * reward
-    if (points < budget) {
-      setPublishError(`등록에 ${budget.toLocaleString()}P가 필요해요. 현재 ${points.toLocaleString()}P를 보유하고 있어요.`)
-      return
-    }
     setIsPublishing(true)
     setPublishError('')
     try {
       const survey = await mockApi.createSurvey({ id: editId || undefined, editId, title: title.trim(), category, targetCount, reward, questionCount: questions.length, questions, isPublic, resultPrice })
-      if (budget && !spendPoints(budget, '설문 참여 보상 예산')) return
       onPublish({ ...survey, id: editId || survey.id, editId, eyebrow: `${editId ? '수정됨' : '새 설문'} · ${category}`, meta: `${questions.length}문항 · 약 ${Math.max(1, Math.ceil(questions.length * 0.6))}분`, count: `0 / ${targetCount}`, point: reward, tone: 'blue' })
       localStorage.removeItem('suniversity-survey-draft')
       navigate('surveys')
@@ -588,10 +584,10 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
           <p className="subtitle">원하는 응답자와 모집 규모를 정할 수 있어요.</p>
           <label className="builder-field">카테고리<select value={category} onChange={(event) => setCategory(event.target.value)}><option>연구·프로젝트</option><option>재미</option><option>대학생활</option><option>트렌드</option><option>소비</option><option>라이프</option><option>토론</option></select></label>
           <label className="builder-field">목표 응답자 수<input type="number" min="10" max="1000" value={targetCount} onChange={(event) => setTargetCount(Number(event.target.value))} /></label>
-          <label className="builder-field">1인당 참여 보상<input type="range" min="5" max="40" step="5" value={reward} onChange={(event) => setReward(Number(event.target.value))} /><strong>{reward}P</strong></label>
+          <div className="fixed-reward-card"><span>참여자 1인당 보상</span><strong>{reward}P</strong><small>{questions.length}문항 기준으로 자동 적용돼요.</small></div>
           <label className="toggle-row"><span><b>결과 공개</b><small>공개하면 커뮤니티 포인트 혜택을 받아요.</small></span><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} /></label>
           {isPublic ? <label className="builder-field">결과 열람 가격<input type="range" min="0" max="500" step="50" value={resultPrice} onChange={(event) => setResultPrice(Number(event.target.value))} /><strong>{resultPrice ? `${resultPrice}P` : '무료'}</strong><small>열람 수익의 70%가 작성자에게 적립돼요.</small></label> : null}
-          <div className="budget-card"><span>예상 필요 포인트</span><strong>{(targetCount * reward).toLocaleString()}P</strong><small>목표 응답자 수 × 참여 보상</small></div>
+          <div className="budget-card"><span>설문 등록 비용</span><strong>0P</strong><small>설문 등록은 무료이며 참여 보상은 SUNIVERSITY가 지급해요.</small></div>
           <button className="primary-button" type="button" onClick={() => setStep(3)}>다음 · 등록 내용 검토</button>
         </> : null}
 
@@ -602,9 +598,8 @@ function CreateScreen({ navigate, onPublish, points, spendPoints }) {
           <div className="review-grid"><div><small>카테고리</small><b>{category}</b></div><div><small>문항 수</small><b>{questions.length}개</b></div><div><small>목표 응답</small><b>{targetCount}명</b></div><div><small>참여 보상</small><b>{reward}P</b></div></div>
           <div className="review-card review-questions"><small>문항 구성</small>{questions.map((question, index) => <span key={question.id}><b>Q{index + 1}. {question.title}</b><em>{typeLabels[question.type]} · {question.required ? '필수' : '선택'}</em></span>)}</div>
           <div className="review-card"><small>결과 공개</small><b>{isPublic ? `커뮤니티 공개 · 열람 ${resultPrice ? `${resultPrice}P` : '무료'}` : '작성자만 보기'}</b></div>
-          {!editId && points < targetCount * reward ? <p className="publish-error">포인트가 부족해요. 포인트 화면에서 설문이나 광고에 참여해 주세요.</p> : null}
           {publishError ? <p className="publish-error">{publishError}</p> : null}
-          <button className="primary-button" disabled={isPublishing || (!editId && points < targetCount * reward)} type="button" onClick={publish}>{isPublishing ? '저장 중...' : editId ? '수정 내용 저장하기' : `${(targetCount * reward).toLocaleString()}P 결제하고 등록하기`}</button>
+          <button className="primary-button" disabled={isPublishing} type="button" onClick={publish}>{isPublishing ? '저장 중...' : editId ? '수정 내용 저장하기' : '무료로 설문 등록하기'}</button>
         </> : null}
       </main>
     </div>
@@ -1009,7 +1004,7 @@ function SavedSurveysScreen({ navigate, savedSurveys, completedSurveys, onPartic
         {savedSurveys.length ? <div className="saved-survey-list">{savedSurveys.map((id) => {
           const survey = getSurveyContent(id)
           const completed = completedSurveys.includes(id)
-          return <article className={completed ? 'is-completed' : ''} key={id}><button type="button" onClick={() => onParticipate(id)}><span><small>{completed ? '참여 완료' : '관심 설문'}</small><b>{survey.title}</b><em>{survey.questions.length}문항 · 약 3분</em></span><strong>{completed ? '완료' : '+30P'}</strong></button><button className="saved-survey-remove" type="button" aria-label={`${survey.title} 관심 설문에서 삭제`} onClick={() => onRemove(id)}>삭제</button></article>
+          return <article className={completed ? 'is-completed' : ''} key={id}><button type="button" onClick={() => onParticipate(id)}><span><small>{completed ? '참여 완료' : '관심 설문'}</small><b>{survey.title}</b><em>{survey.questions.length}문항 · 약 3분</em></span><strong>{completed ? '완료' : `+${getParticipationReward(survey.questions.length)}P`}</strong></button><button className="saved-survey-remove" type="button" aria-label={`${survey.title} 관심 설문에서 삭제`} onClick={() => onRemove(id)}>삭제</button></article>
         })}</div> : <div className="empty-state"><b>저장한 관심 설문이 없어요</b><p>설문 참여 화면의 더보기에서<br />관심 설문을 저장할 수 있어요.</p><button type="button" onClick={() => navigate('surveys')}>설문 둘러보기</button></div>}
       </main>
     </div>
@@ -1022,6 +1017,33 @@ function ViewedSurveysScreen({ navigate, onOpenResult }) {
   })()
   if (selectedSurvey) return <div className="screen"><TopBar title="열람한 설문" onBack={() => setSelectedSurvey(null)} /><main className="screen-content viewed-survey-detail"><span className="category-kicker">VIEWED SURVEY</span><h1>{selectedSurvey.title}</h1><p>이 설문에서 열어본 결과와 심층 분석을 다시 확인할 수 있어요.</p><div className="review-grid"><div><small>상태</small><b>응답 완료</b></div><div><small>분석</small><b>열람 완료</b></div><div><small>획득 호칭</small><b>{selectedSurvey.badge}</b></div><div><small>열람일</small><b>{selectedSurvey.viewedAt}</b></div></div><div className="review-card"><small>설문 정보</small><b>설문 내용과 기본 정보만 먼저 확인하고, 아래 버튼을 눌러야 심층 분석 결과로 이동해요.</b></div><button className="primary-button" type="button" onClick={() => onOpenResult(selectedSurvey)}>심층 분석 다시 보기</button></main></div>
   return <div className="screen"><TopBar title="내가 열람한 설문" onBack={() => navigate('profile')} /><main className="screen-content survey-library"><span className="category-kicker">VIEWED</span><h1>열람한 설문</h1><p>설문을 선택하면 기본 정보를 먼저 확인할 수 있어요.</p>{viewedSurveys.length ? <div className="survey-library-list">{viewedSurveys.map((survey) => <button type="button" key={survey.id} onClick={() => setSelectedSurvey(survey)}><span><small>심층 분석 열람 완료</small><b>{survey.title}</b><em>{survey.badge} · {survey.viewedAt}</em></span><strong>›</strong></button>)}</div> : <div className="empty-state"><b>열람한 설문이 없어요</b><p>설문 결과에서 심층 분석을 열면 여기에 저장돼요.</p></div>}</main></div>
+}
+function HelpScreen({ navigate }) {
+  const rewards = [['5문항 이하', '5P'], ['10문항 이하', '10P'], ['15문항 이하', '15P'], ['20문항 이하', '20P'], ['30문항 이하', '30P'], ['40문항 이상', '40P']]
+  return (
+    <div className="screen">
+      <TopBar title="도움말" onBack={() => navigate('profile')} />
+      <main className="screen-content help-content">
+        <span className="category-kicker">SUNIVERSITY GUIDE</span>
+        <h1>자주 묻는 내용을<br />모아두었어요</h1>
+        <section className="help-highlight">
+          <b>설문 등록은 무료예요</b>
+          <p>목표 응답자 수와 관계없이 등록자의 포인트는 차감되지 않아요. 참여 보상은 문항 수 기준으로 자동 정해집니다.</p>
+        </section>
+        <section className="reward-guide">
+          <div><b>설문 참여 보상</b><small>응답을 끝까지 제출하면 지급돼요.</small></div>
+          <div>{rewards.map(([range, point]) => <span key={range}><small>{range}</small><strong>{point}</strong></span>)}</div>
+        </section>
+        <div className="help-faq">
+          <details open><summary>이미 참여한 설문에 다시 참여할 수 있나요?</summary><p>중복 참여는 불가능해요. 참여 완료 설문은 목록에서 회색으로 표시되며 기존 결과만 다시 확인할 수 있어요.</p></details>
+          <details><summary>다른 사람의 설문 결과는 어떻게 보나요?</summary><p>응답을 완료한 뒤 작성자가 정한 열람 포인트를 사용하면 전체 분포와 AI 인사이트를 확인할 수 있어요.</p></details>
+          <details><summary>AI 문항 도우미는 무료인가요?</summary><p>하루 10개 문항까지 무료이며, 11번째 문항부터 한 문항당 20P가 사용돼요.</p></details>
+          <details><summary>광고 보상 한도는 얼마인가요?</summary><p>광고 한 편당 10P, 하루 최대 5편까지 받을 수 있어요. 모든 활동을 합친 하루 적립 한도는 1,000P예요.</p></details>
+          <details><summary>설문을 더 많이 노출하려면 어떻게 하나요?</summary><p>내 설문 관리에서 끌어올리기를 이용하세요. 첫 1회는 광고 시청으로 무료이고 이후에는 100P씩 비용이 증가해요.</p></details>
+        </div>
+      </main>
+    </div>
+  )
 }
 function ProfileScreen({ navigate, points, hasDraft, badges, savedCount, selectedTitle, onSelectTitle }) {
   const [notificationEnabled, setNotificationEnabled] = useState(() => localStorage.getItem('suniversity-notifications') !== 'off')
@@ -1050,6 +1072,7 @@ function ProfileScreen({ navigate, points, hasDraft, badges, savedCount, selecte
           <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="survey" /> 내가 만든 설문</span><b>3개 <ChevronRightIcon /></b></button>
           <button type="button" onClick={() => navigate('mySurveys')}><span><UiIcon name="draft" /> 임시저장 설문</span><b>{hasDraft ? '1개' : '없음'} <ChevronRightIcon /></b></button>
           <button type="button" onClick={() => navigate('points')}><span><UiIcon name="coin" /> 포인트 이용 내역</span><b><ChevronRightIcon /></b></button>
+          <button type="button" onClick={() => navigate('help')}><span><UiIcon name="help" /> 도움말</span><b><ChevronRightIcon /></b></button>
         </section>
         <button className="logout-button" type="button" onClick={() => navigate('auth')}>로그아웃</button><button className="withdraw-button" type="button" onClick={() => { if (window.confirm('정말 탈퇴할까요? 저장된 참여 기록이 삭제됩니다.')) { localStorage.clear(); navigate('auth') } }}>회원 탈퇴</button>
       </main>
@@ -1198,7 +1221,7 @@ function App() {
     home: <HomeScreen navigate={navigate} isCheckedIn={lastCheckin === new Date().toISOString().slice(0, 10)} onCheckIn={checkInToday} onParticipate={startSurvey} completedSurveys={completedSurveys} />,
     surveys: <SurveyListScreen navigate={navigate} customSurveys={publishedSurveys} onParticipate={startSurvey} completedSurveys={completedSurveys} />,
     participate: <ParticipateScreen navigate={navigate} onComplete={completeSurvey} onExit={() => navigate(participationSource)} surveyId={activeSurveyId} survey={publishedSurveys.find((item) => String(item.id) === String(activeSurveyId))} isSaved={savedSurveys.includes(String(activeSurveyId))} onToggleSaved={toggleSavedSurvey} />,
-    create: <CreateScreen navigate={navigate} onPublish={publishSurvey} points={points} spendPoints={spendPoints} />,
+    create: <CreateScreen navigate={navigate} onPublish={publishSurvey} spendPoints={spendPoints} />,
     resultAccess: <ResultAccessScreen navigate={navigate} points={points} resultInfo={lastResult} unlockResult={(price) => { if (!price || spendPoints(price, '설문 결과 열람')) navigate('result') }} />,
     result: <ResultScreen navigate={navigate} spendPoints={spendPoints} resultInfo={lastResult} />,
     points: <PointsScreen navigate={navigate} points={points} transactions={transactions} spendPoints={spendPoints} adEarned={adReward.amount} onWatchAd={watchAd} />,
@@ -1209,6 +1232,7 @@ function App() {
     mySurveys: <MySurveysScreen navigate={navigate} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} publishedSurveys={publishedSurveys} spendPoints={spendPoints} />,
     savedSurveys: <SavedSurveysScreen navigate={navigate} savedSurveys={savedSurveys} completedSurveys={completedSurveys} onParticipate={startSurvey} onRemove={toggleSavedSurvey} />,
     viewedSurveys: <ViewedSurveysScreen navigate={navigate} onOpenResult={openViewedResult} />,
+    help: <HelpScreen navigate={navigate} />,
     profile: <ProfileScreen navigate={navigate} points={points} hasDraft={Boolean(localStorage.getItem('suniversity-survey-draft'))} badges={badges} savedCount={savedSurveys.length} selectedTitle={selectedTitle} onSelectTitle={selectProfileTitle} />,
     phoneChange: <PhoneChangeScreen navigate={navigate} />,
     passwordChange: <PasswordChangeScreen navigate={navigate} />,
