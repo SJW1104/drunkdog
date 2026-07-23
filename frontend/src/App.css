@@ -49,7 +49,7 @@ button {
 }
 
 .screen.with-nav {
-  padding-bottom: 72px;
+  padding-bottom: 92px;
 }
 
 .screen-content {
@@ -371,7 +371,7 @@ button {
   position: fixed;
   z-index: 30;
   right: max(calc((100vw - 420px) / 2 + 18px), 18px);
-  bottom: 80px;
+  bottom: 92px;
   padding: 12px 16px;
   border-radius: 12px;
   background: var(--blue);
@@ -384,26 +384,50 @@ button {
 .bottom-nav {
   position: fixed;
   z-index: 25;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  right: 16px;
+  bottom: 14px;
+  left: 16px;
   display: grid;
-  width: min(100%, 420px);
-  height: 68px;
+  width: min(calc(100% - 32px), 388px);
+  height: 60px;
   grid-template-columns: repeat(5, 1fr);
   margin: 0 auto;
-  border-top: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.97);
-  backdrop-filter: blur(14px);
+  padding: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(223, 228, 237, .9);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 36px rgba(31, 43, 66, .18), 0 3px 10px rgba(31, 43, 66, .08);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+
+.bottom-nav::before {
+  position: absolute;
+  z-index: 0;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc((100% - 12px) / 5);
+  border-radius: 22px;
+  background: linear-gradient(135deg, #1769ff, #568fff);
+  box-shadow: 0 8px 18px rgba(23, 105, 255, .28);
+  content: '';
+  transform: translateX(calc(var(--active-index) * 100%));
+  transition: transform 480ms cubic-bezier(.22, 1, .36, 1), box-shadow 260ms ease;
 }
 
 .nav-item {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-content: center;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
+  border-radius: 22px;
   background: transparent;
   color: #8d95a6;
-  font-size: 8px;
+  font-size: 7px;
+  transition: color 260ms ease, transform 420ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .nav-icon {
@@ -411,11 +435,11 @@ button {
   width: 32px;
   height: 27px;
   place-items: center;
-  margin: -4px auto -1px;
+  margin: -2px auto -1px;
   border-radius: 10px;
   font-size: 16px;
   line-height: 1;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition: color 260ms ease, transform 420ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .bottom-nav-svg {
@@ -454,15 +478,16 @@ button {
 }
 
 .nav-item.is-active .nav-icon {
-  transform: translateY(-2px);
-  background: linear-gradient(135deg, #1769ff, #4f8dff);
-  box-shadow: 0 5px 12px rgba(23, 105, 255, .25);
+  transform: translateY(-1px) scale(1.06);
+  background: transparent;
+  box-shadow: none;
   color: #fff;
 }
 
 .nav-item.is-active {
-  color: var(--blue);
+  color: #fff;
   font-weight: 800;
+  transform: translateY(-1px);
 }
 
 .list-content {
@@ -2211,18 +2236,29 @@ button:focus-visible {
   padding-bottom: 0;
 }
 
+.device-shell .screen.with-nav .screen-content {
+  padding-bottom: 104px;
+}
+
 .device-shell .bottom-nav {
-  position: static;
-  width: 100%;
-  height: 68px;
-  flex: 0 0 68px;
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  left: 14px;
+  width: auto;
+  height: 60px;
   margin: 0;
 }
 
 .device-shell .fab {
   position: absolute;
   right: 18px;
-  bottom: 80px;
+  bottom: 88px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav::before { transition: none; }
+  .nav-item, .nav-icon { transition: none; }
 }
 
 @media (max-width: 480px) {

@@ -12,6 +12,8 @@ const navItems = [
   { id: 'points', label: '포인트' },
 ]
 
+const bottomNavScreens = new Set(navItems.map((item) => item.id))
+
 function IconButton({ children, label, onClick, badge }) {
   return (
     <button className="icon-button" type="button" aria-label={label} onClick={onClick}>
@@ -87,8 +89,9 @@ function TopBar({ title, onBack, right, brand = false }) {
 }
 
 function BottomNav({ active, navigate }) {
+  const activeIndex = Math.max(0, navItems.findIndex((item) => item.id === active))
   return (
-    <nav className="bottom-nav" aria-label="주요 메뉴">
+    <nav className="bottom-nav" aria-label="주요 메뉴" style={{ '--active-index': activeIndex }}>
       {navItems.map((item) => (
         <button
           key={item.id}
@@ -265,7 +268,6 @@ function HomeScreen({ navigate, isCheckedIn, onCheckIn, onParticipate }) {
       </main>
 
       <button className="fab" type="button" onClick={() => navigate('create')}>＋ 설문 등록</button>
-      <BottomNav active="home" navigate={navigate} />
       {notificationOpen ? <div className="notification-popover-backdrop" role="presentation" onClick={() => setNotificationOpen(false)}><section className="notification-popover" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><div className="notification-popover-head"><span><b>알림</b><small>새 소식을 빠르게 확인해 보세요.</small></span><button type="button" onClick={readAllNotices}>모두 읽음</button></div>{noticesLoading ? <div className="loading-state"><i /><i /><i /></div> : <div className="notification-popover-list">{homeNotices.map((notice) => <button type="button" key={notice.id} className={readNotices.includes(notice.id) ? 'is-read' : ''} onClick={() => openNotice(notice)}><i /><span><b>{notice.title}</b><small>{notice.body}</small></span><time>{notice.time}</time></button>)}</div>}<button className="notification-close" type="button" onClick={() => setNotificationOpen(false)}>닫기</button></section></div> : null}
       {checkinOpen ? <div className="modal-backdrop" role="presentation" onClick={() => setCheckinOpen(false)}>
         <section className="checkin-modal" role="dialog" aria-modal="true" aria-labelledby="checkin-title" onClick={(event) => event.stopPropagation()}>
@@ -318,7 +320,6 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
             </button>)}
           </div>
         </main>
-        <BottomNav active="surveys" navigate={navigate} />
       </div>
     )
   }
@@ -352,7 +353,6 @@ function SurveyListScreen({ navigate, customSurveys = [], onParticipate, complet
           ))}
         </div>
       </main>
-      <BottomNav active="surveys" navigate={navigate} />
     </div>
   )
 }
@@ -640,7 +640,6 @@ function BalanceGameScreen({ navigate, onVote }) {
           </button>)}
         </div>
       </main>
-      <BottomNav active="balance" navigate={navigate} />
     </div>
   )
 
@@ -680,7 +679,6 @@ function BalanceGameScreen({ navigate, onVote }) {
           </section>
         </>}
       </main>
-      <BottomNav active="balance" navigate={navigate} />
     </div>
   )
 }
@@ -700,7 +698,6 @@ function PointsScreen({ navigate, points, transactions, spendPoints, adEarned, o
         <div className="gift-card"><div className="gift-image cone">🍦</div><span><b>편의점 상품권</b><small>3,000원권</small></span><strong>3,500P</strong></div>
         <p className="foot-note">설문 참여 후 광고를 보면 20문항까지 보상을 2배로 받을 수 있어요.</p><div className="transaction-list"><b>최근 포인트 내역</b>{transactions.map((item) => <div key={item.id}><span>{item.label}</span><strong className={item.amount > 0 ? 'plus' : 'minus'}>{item.amount > 0 ? '+' : ''}{item.amount}P</strong></div>)}</div>
       </main>
-      <BottomNav active="points" navigate={navigate} />
     </div>
   )
 }
@@ -731,7 +728,6 @@ function RankingScreen({ navigate }) {
         </div>
         <div className="weekly-card"><b>이번 주 도전</b><p>설문 3개 더 참여하고 레벨업 보상 100P를 받아보세요.</p></div>
       </main>
-      <BottomNav active="ranking" navigate={navigate} />
     </div>
   )
 }
@@ -967,7 +963,10 @@ function App() {
         <span className="device-camera" aria-hidden="true" />
         <span className="device-button device-button--volume" aria-hidden="true" />
         <span className="device-button device-button--power" aria-hidden="true" />
-        <div className="phone-frame">{screens[screen] || screens.home}</div>
+        <div className="phone-frame">
+          {screens[screen] || screens.home}
+          {bottomNavScreens.has(screen) ? <BottomNav active={screen} navigate={navigate} /> : null}
+        </div>
       </div>
     </div>
   )
