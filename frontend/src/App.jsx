@@ -945,10 +945,12 @@ function SavedSurveysScreen({ navigate, savedSurveys, completedSurveys, onPartic
   )
 }
 function ViewedSurveysScreen({ navigate, onOpenResult }) {
+  const [selectedSurvey, setSelectedSurvey] = useState(null)
   const viewedSurveys = (() => {
     try { return JSON.parse(localStorage.getItem('suniversity-viewed-surveys') || '[]') } catch { return [] }
   })()
-  return <div className="screen"><TopBar title="내가 열람한 설문" onBack={() => navigate('profile')} /><main className="screen-content survey-library"><span className="category-kicker">VIEWED</span><h1>열람한 심층 분석</h1><p>포인트로 열어본 분석 결과를 다시 확인할 수 있어요.</p>{viewedSurveys.length ? <div className="survey-library-list">{viewedSurveys.map((survey) => <button type="button" key={survey.id} onClick={() => onOpenResult(survey)}><span><small>심층 분석 열람 완료</small><b>{survey.title}</b><em>{survey.badge} · {survey.viewedAt}</em></span><strong>›</strong></button>)}</div> : <div className="empty-state"><b>열람한 심층 분석이 없어요</b><p>설문 결과에서 심층 분석을 열면 여기에 저장돼요.</p></div>}</main></div>
+  if (selectedSurvey) return <div className="screen"><TopBar title="열람한 설문" onBack={() => setSelectedSurvey(null)} /><main className="screen-content viewed-survey-detail"><span className="category-kicker">VIEWED SURVEY</span><h1>{selectedSurvey.title}</h1><p>이 설문에서 열어본 결과와 심층 분석을 다시 확인할 수 있어요.</p><div className="review-grid"><div><small>상태</small><b>응답 완료</b></div><div><small>분석</small><b>열람 완료</b></div><div><small>획득 호칭</small><b>{selectedSurvey.badge}</b></div><div><small>열람일</small><b>{selectedSurvey.viewedAt}</b></div></div><div className="review-card"><small>설문 정보</small><b>설문 내용과 기본 정보만 먼저 확인하고, 아래 버튼을 눌러야 심층 분석 결과로 이동해요.</b></div><button className="primary-button" type="button" onClick={() => onOpenResult(selectedSurvey)}>심층 분석 다시 보기</button></main></div>
+  return <div className="screen"><TopBar title="내가 열람한 설문" onBack={() => navigate('profile')} /><main className="screen-content survey-library"><span className="category-kicker">VIEWED</span><h1>열람한 설문</h1><p>설문을 선택하면 기본 정보를 먼저 확인할 수 있어요.</p>{viewedSurveys.length ? <div className="survey-library-list">{viewedSurveys.map((survey) => <button type="button" key={survey.id} onClick={() => setSelectedSurvey(survey)}><span><small>심층 분석 열람 완료</small><b>{survey.title}</b><em>{survey.badge} · {survey.viewedAt}</em></span><strong>›</strong></button>)}</div> : <div className="empty-state"><b>열람한 설문이 없어요</b><p>설문 결과에서 심층 분석을 열면 여기에 저장돼요.</p></div>}</main></div>
 }
 function ProfileScreen({ navigate, points, hasDraft, badges, savedCount, selectedTitle, onSelectTitle }) {
   const [notificationEnabled, setNotificationEnabled] = useState(() => localStorage.getItem('suniversity-notifications') !== 'off')
