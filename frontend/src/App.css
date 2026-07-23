@@ -2617,3 +2617,18 @@ button:focus-visible {
 .debate-list-unified .debate-post > p { margin: 13px 0; overflow-wrap: anywhere; font-size: 10px; line-height: 1.65; }
 .debate-list-unified .post-actions { flex-wrap: wrap; gap: 8px; }
 .debate-list-unified .debate-reply { margin-left: 0; padding: 10px; border-radius: 11px; }
+
+/* Notion plan alignment */
+.ai-helper-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 3px 0 2px; }
+.ai-helper-stats span { display: grid; gap: 2px; padding: 8px; border-radius: 9px; background: rgba(255,255,255,.7); color: #68758a; font-size: 8px; }
+.ai-helper-stats strong { color: var(--blue); font-size: 10px; }
+.watch-card > em { color: #7c8799; font-size: 8px; font-style: normal; line-height: 1.45; }
+.comment-identity-selector { display: flex; align-items: center; gap: 6px; margin: 0 1px 8px; }
+.comment-identity-selector > span { margin-right: auto; color: #738096; font-size: 8px; font-weight: 800; }
+.comment-identity-selector button { padding: 6px 9px; border: 1px solid var(--line); border-radius: 99px; background: #fff; color: #748096; font-size: 8px; font-weight: 850; }
+.comment-identity-selector button.is-active { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+.manage-list article > div:last-child { flex-wrap: wrap; }
+.manage-list article > div:last-child button { min-width: calc(25% - 5px); }
+.manage-list article > div:last-child button.survey-bump { min-width: 100%; background: var(--blue-soft); color: var(--blue); }
+.survey-text-answer { width: 100%; min-height: 150px; padding: 15px; resize: vertical; border: 1px solid var(--line); border-radius: 14px; outline: 0; background: #fff; color: var(--ink); font: inherit; font-size: 11px; line-height: 1.6; }
+.survey-text-answer:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(23,105,255,.09); }
