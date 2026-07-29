@@ -112,6 +112,7 @@ POST /api/v1/dev/reset
 | 프로필 | `GET/PATCH /users/me`, `GET /users/me/profile`, `GET /users/me/surveys` |
 | 사용자 설정 | `PATCH /users/me/preferences`, `GET /users/me/bookmarks` |
 | 설문 | `POST/GET /surveys`, `GET/PATCH/DELETE /surveys/{id}` |
+| 추가 참여 보상 | `GET /surveys/{id}/reward-boost/quote`, `POST /surveys/{id}/reward-boost/mock-purchase` |
 | 설문 상태 | `POST /surveys/{id}/publish`, `POST /surveys/{id}/close` |
 | 응답·결과 | `POST /surveys/{id}/responses`, `GET /surveys/{id}/results` |
 | 커뮤니티 | `GET/POST /surveys/{id}/comments`, `POST /surveys/{id}/like` |
@@ -137,15 +138,17 @@ cd backend
 
 테스트는 각각 독립된 임시 JSON 파일을 사용합니다.
 
-현재 자동 테스트 7개가 로그인부터 설문 작성·참여·결과·포인트·출석·알림·북마크·
+현재 자동 테스트 16개가 로그인부터 설문 작성·참여·결과·포인트·출석·알림·북마크·
 리워드·리포트·밸런스게임 흐름을 검증합니다.
 
 ## 현재 포인트 규칙
 
-- 일반 설문은 `reward_points`를 명시하면 그 값을 사용하고, 생략하면 문항 수를 기준으로 계산합니다.
-- 마감까지 24시간 이하인 설문은 참여 보상이 1.5배입니다.
+- 일반 설문 기본 보상은 문항 수와 같으며 최소 5P, 최대 40P입니다. 따라서 기본 4문항은 5P입니다.
+- 작성자는 게시 전 `+10P` 단위로 참여 보상을 올릴 수 있으며, `+10P`마다 설문 한 건 기준 1,000원을 결제합니다.
+- 클라이언트가 `reward_points`를 직접 지정할 수 없고, 개발 환경에서는 Mock 결제 API가 결제 완료와 보상 증액을 원자적으로 기록합니다.
+- 마감까지 24시간 이하인 설문은 무료 기본 보상만 1.5배로 계산하며 소수점은 버립니다. 결제한 추가 보상은 정확한 금액 그대로 더합니다.
 - 일반 보상은 한국 시간 기준 하루 최대 1,000P입니다.
-- 밸런스게임 투표는 2P, 출석은 10P, 광고 보상은 10P입니다.
+- 밸런스게임 투표는 2P, 출석은 5P, 광고 보상은 10P입니다.
 - AI 결과 분석은 200P, Mock AI+PPT 리포트는 400P입니다.
 - 유료 결과 구매액은 작성자 70%, 플랫폼 30% 규칙으로 처리합니다.
 

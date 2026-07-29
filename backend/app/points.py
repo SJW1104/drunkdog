@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from .domain import KOREA_TZ, business_date
+from .domain import KOREA_TZ, business_date, participation_reward
 from .store import JsonStore
 
 
@@ -122,7 +122,3 @@ def add_entry_to_data(
         }
     )
     return LedgerResult(entry_id, next_balance, True)
-
-
-def participation_reward(question_count: int) -> int:
-    return max(1, min(question_count, 40))

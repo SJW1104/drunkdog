@@ -69,6 +69,17 @@ ANALYSIS_SCHEMA: dict[str, Any] = {
     "required": ["summary", "findings", "cautions"],
 }
 
+QUESTION_REWRITE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "original": {"type": "string"},
+        "revised": {"type": "string"},
+        "rationale": {"type": "string"},
+    },
+    "required": ["original", "revised", "rationale"],
+}
+
 
 @dataclass(slots=True)
 class AIProvider:
@@ -120,6 +131,38 @@ class AIProvider:
             user=f"설문 제목: {title}\n집계 결과:\n{json.dumps(results, ensure_ascii=False)}",
             schema_name="survey_analysis",
             schema=ANALYSIS_SCHEMA,
+        )
+
+    def rewrite_question(
+        self,
+        *,
+        prompt: str,
+        description: str,
+        question_type: str,
+    ) -> dict[str, str]:
+        if self.settings.ai_mode != "openai":
+            revised = self._mock_question_rewrite(prompt)
+            return {
+                "original": prompt,
+                "revised": revised,
+                "rationale": (
+                    "질문의 의미는 유지하면서 어려운 표현과 불필요한 수식어를 "
+                    "줄이고, 응답자가 한 번에 이해할 수 있는 문장으로 다듬었습니다."
+                ),
+            }
+        return self._request_json(
+            developer=(
+                "당신은 대학 연구 설문 문항 교정자다. 질문의 연구 의도와 측정 "
+                "대상을 바꾸지 말고, 유도 질문·이중 질문·모호한 표현을 줄여라. "
+                "원문과 수정 이유를 반드시 함께 반환하라."
+            ),
+            user=(
+                f"질문 유형: {question_type}\n"
+                f"질문 설명: {description or '(없음)'}\n"
+                f"원문: {prompt}"
+            ),
+            schema_name="question_rewrite",
+            schema=QUESTION_REWRITE_SCHEMA,
         )
 
     def _request_json(
@@ -219,4 +262,20 @@ class AIProvider:
             "description": f"{audience}을 대상으로 {topic}에 대한 의견을 알아보는 설문입니다.",
             "questions": questions[:question_count],
         }
+
+    @staticmethod
+    def _mock_question_rewrite(prompt: str) -> str:
+        revised = prompt.strip()
+        replacements = {
+            "귀하께서는": "본인은",
+            "어떠하다고 생각하십니까": "어떻게 생각하나요",
+            "응답하여 주시기 바랍니다": "응답해 주세요",
+            "이용한 경험이 있으십니까": "이용해 본 적이 있나요",
+            "해당되는 바를": "해당하는 항목을",
+        }
+        for source, target in replacements.items():
+            revised = revised.replace(source, target)
+        if not revised.endswith(("?", "요.", "다.")):
+            revised = f"{revised}?"
+        return revised
 

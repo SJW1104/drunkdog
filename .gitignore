@@ -8,12 +8,15 @@ frontend/.env
 backend/__pycache__/
 backend/.pytest_cache/
 backend/.pytest-*/
+.pytest-work/
 backend/.venv/
 backend/*.egg-info/
 backend/**/*.pyc
 backend/data/*.db
 backend/data/runtime.json
 backend/data/runtime.json.tmp
+data/runtime.json
+data/runtime.json.tmp
 backend/.env
 
 # Generated inspection and Office temp files

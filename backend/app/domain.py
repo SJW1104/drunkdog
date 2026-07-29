@@ -6,6 +6,9 @@ from typing import Any
 
 
 KOREA_TZ = timezone(timedelta(hours=9), name="Asia/Seoul")
+REWARD_BOOST_UNIT_POINTS = 10
+REWARD_BOOST_UNIT_PRICE_KRW = 1_000
+MAX_REWARD_BOOST_POINTS = 1_000
 
 
 def iso_now() -> str:
@@ -16,11 +19,35 @@ def business_date() -> date:
     return datetime.now(KOREA_TZ).date()
 
 
-def survey_reward_points(survey: dict[str, Any]) -> int:
-    configured = survey.get("reward_points")
-    if configured is not None:
-        return int(configured)
-    return max(1, min(len(survey.get("questions", [])), 40))
+def participation_reward(question_count: int) -> int:
+    """Return the free survey reward defined by the product policy.
+
+    A survey pays at least 5P even when the default form has four questions,
+    then follows the question count one-for-one up to the 40P ceiling.
+    """
+
+    if question_count < 1:
+        raise ValueError("설문에는 문항이 한 개 이상 필요합니다.")
+    return max(5, min(question_count, 40))
+
+
+def survey_base_reward_points(survey: dict[str, Any]) -> int:
+    policy = survey.get("published_reward_policy")
+    if policy:
+        return int(policy["base_reward_points"])
+    if survey.get("survey_type") == "balance":
+        return 2
+    question_count = len(survey.get("questions", []))
+    # A zero-question survey is a valid draft in the research product, but it
+    # cannot be published or rewarded.
+    return participation_reward(question_count) if question_count else 0
+
+
+def survey_reward_boost_points(survey: dict[str, Any]) -> int:
+    policy = survey.get("published_reward_policy")
+    if policy:
+        return int(policy.get("reward_boost_points", 0))
+    return int(survey.get("reward_boost_points", 0))
 
 
 def parse_datetime(value: str | None) -> datetime | None:
@@ -50,15 +77,68 @@ def is_deadline_imminent(
     return timedelta(0) < remaining <= timedelta(hours=24)
 
 
-def reward_quote(survey: dict[str, Any]) -> dict[str, int | float | bool]:
-    base = survey_reward_points(survey)
-    imminent = is_deadline_imminent(survey)
+def reward_quote(
+    survey: dict[str, Any], *, now: datetime | None = None
+) -> dict[str, int | float | bool]:
+    base = survey_base_reward_points(survey)
+    boost = survey_reward_boost_points(survey)
+    imminent = (
+        survey.get("survey_type") != "balance"
+        and is_deadline_imminent(survey, now=now)
+    )
     multiplier = 1.5 if imminent else 1.0
+    rewarded_base = int(base * multiplier)
+    deadline_bonus = rewarded_base - base
+    boosted = base + boost
     return {
         "base_reward_points": base,
+        "reward_boost_points": boost,
+        "boosted_reward_points": boosted,
         "reward_multiplier": multiplier,
-        "reward_points": int(base * multiplier),
+        "deadline_bonus_points": deadline_bonus,
+        "reward_points": rewarded_base + boost,
+        "reward_boost_price_krw": (
+            boost // REWARD_BOOST_UNIT_POINTS
+        )
+        * REWARD_BOOST_UNIT_PRICE_KRW,
         "deadline_imminent": imminent,
+    }
+
+
+def reward_boost_quote(
+    survey: dict[str, Any], increment_points: int
+) -> dict[str, int | str]:
+    if survey.get("survey_type") == "balance":
+        raise ValueError("밸런스게임에는 추가 참여 보상을 설정할 수 없습니다.")
+    if (
+        increment_points < REWARD_BOOST_UNIT_POINTS
+        or increment_points % REWARD_BOOST_UNIT_POINTS
+    ):
+        raise ValueError("추가 보상은 10P 단위로 설정해야 합니다.")
+    current_boost = survey_reward_boost_points(survey)
+    next_boost = current_boost + increment_points
+    if next_boost > MAX_REWARD_BOOST_POINTS:
+        raise ValueError(
+            f"추가 보상은 최대 {MAX_REWARD_BOOST_POINTS}P까지 설정할 수 있습니다."
+        )
+    base = survey_base_reward_points(survey)
+    return {
+        "survey_id": survey["id"],
+        "question_count": len(survey.get("questions", [])),
+        "base_reward_points": base,
+        "current_reward_boost_points": current_boost,
+        "increment_points": increment_points,
+        "new_reward_boost_points": next_boost,
+        "current_reward_points": base + current_boost,
+        "new_reward_points": base + next_boost,
+        "unit_reward_points": REWARD_BOOST_UNIT_POINTS,
+        "unit_price_krw": REWARD_BOOST_UNIT_PRICE_KRW,
+        "amount_krw": (
+            increment_points // REWARD_BOOST_UNIT_POINTS
+        )
+        * REWARD_BOOST_UNIT_PRICE_KRW,
+        "currency": "KRW",
+        "charge_scope": "survey_flat",
     }
 
 

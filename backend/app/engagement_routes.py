@@ -136,7 +136,7 @@ def check_in(
         reward = max(
             0,
             min(
-                10,
+                5,
                 1000
                 - get_daily_reward_total_from_data(data, user["id"]),
             ),

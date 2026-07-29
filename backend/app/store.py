@@ -28,11 +28,18 @@ COLLECTIONS = (
     "bookmarks",
     "reward_products",
     "reward_exchanges",
+    "survey_reward_payments",
     "badges",
     "user_badges",
     "balance_posts",
     "balance_post_likes",
     "result_reports",
+    "teams",
+    "exchanges",
+    "auto_match_queue",
+    "reliability_events",
+    "share_receipts",
+    "ai_revisions",
 )
 
 
@@ -129,10 +136,77 @@ class JsonStore:
                 "interests": [],
                 "notifications_enabled": True,
                 "selected_title": None,
+                "year": None,
+                "department": None,
+                "profile_categories": [],
             }
             for key, value in defaults.items():
                 if key not in user:
                     user[key] = copy.deepcopy(value)
+                    changed = True
+        for survey in data.get("surveys", []):
+            survey_defaults = {
+                "category_tags": [],
+                "external_access_enabled": True,
+                "respondent_results_enabled": True,
+                "exchange_enabled": False,
+                "exchange_methods": [],
+                "exchange_unit": "individual",
+                "team_id": None,
+                "target_exchange_responses": None,
+                "team_requested_responses": None,
+                "auto_repeat": True,
+                "required_respondent_conditions": [],
+                "structure_locked_at": None,
+                "version": 1,
+            }
+            for key, value in survey_defaults.items():
+                if key not in survey:
+                    survey[key] = copy.deepcopy(value)
+                    changed = True
+            if not survey.get("public_slug"):
+                survey["public_slug"] = survey["id"]
+                changed = True
+            for question in survey.get("questions", []):
+                question_defaults = {
+                    "description": "",
+                    "rows": [],
+                    "columns": [],
+                    "scale_min": None,
+                    "scale_max": None,
+                    "scale_min_label": None,
+                    "scale_max_label": None,
+                    "validation": None,
+                    "file_rule": None,
+                }
+                for key, value in question_defaults.items():
+                    if key not in question:
+                        question[key] = copy.deepcopy(value)
+                        changed = True
+            if "reward_boost_points" not in survey:
+                survey["reward_boost_points"] = 0
+                changed = True
+            if "reward_boost_price_krw" not in survey:
+                survey["reward_boost_price_krw"] = 0
+                changed = True
+            if "reward_boost_payment_ids" not in survey:
+                survey["reward_boost_payment_ids"] = []
+                changed = True
+            if "reward_points" in survey:
+                # Legacy clients could set arbitrary rewards without payment.
+                # The new policy intentionally drops that unverified override.
+                survey.pop("reward_points")
+                changed = True
+        for response in data.get("responses", []):
+            response_defaults = {
+                "source": "normal_app",
+                "result_status": "included",
+                "exchange_id": None,
+                "respondent_profile_snapshot": {},
+            }
+            for key, value in response_defaults.items():
+                if key not in response:
+                    response[key] = copy.deepcopy(value)
                     changed = True
         return changed
 

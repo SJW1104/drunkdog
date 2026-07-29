@@ -61,7 +61,7 @@ SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, S
 | 사용자 | PATCH | `/users/me/preferences` | 로그인 | 관심사·알림·대표 칭호 변경 |
 | 사용자 | GET | `/users/me/bookmarks` | 로그인 | 저장한 설문 조회 |
 | 출석 | GET | `/attendance/today` | 로그인 | 오늘 출석과 연속 출석 조회 |
-| 출석 | POST | `/attendance/check-in` | 학교 인증 | 오늘 출석 및 10P 지급 |
+| 출석 | POST | `/attendance/check-in` | 학교 인증 | 오늘 출석 및 5P 지급 |
 | 알림 | GET | `/notifications` | 로그인 | 알림 목록과 안 읽은 수 조회 |
 | 알림 | PATCH | `/notifications/{notification_id}/read` | 로그인 | 알림 한 건 읽음 처리 |
 | 알림 | POST | `/notifications/read-all` | 로그인 | 알림 모두 읽음 처리 |
@@ -71,6 +71,8 @@ SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, S
 | 설문 | GET | `/surveys/{survey_id}` | 로그인 | 설문 상세 조회 |
 | 설문 | PATCH | `/surveys/{survey_id}` | 학교 인증·작성자 | 임시저장 수정 |
 | 설문 | DELETE | `/surveys/{survey_id}` | 학교 인증·작성자 | 임시저장 삭제 |
+| 설문 | GET | `/surveys/{survey_id}/reward-boost/quote` | 학교 인증·작성자 | 추가 참여 보상 결제 견적 |
+| 설문 | POST | `/surveys/{survey_id}/reward-boost/mock-purchase` | 학교 인증·작성자·개발 전용 | 추가 참여 보상 Mock 결제 |
 | 설문 | POST | `/surveys/{survey_id}/publish` | 학교 인증·작성자 | 설문 게시 |
 | 설문 | POST | `/surveys/{survey_id}/close` | 학교 인증·작성자 | 설문 마감 |
 | 설문 | GET | `/surveys/{survey_id}/progress` | 공개 | 응답 진행률 조회 |
@@ -321,6 +323,7 @@ Authorization: Bearer signed-access-token
 - 선택형 문항: 선택지 2개 이상
 - 밸런스 문항: 선택지 정확히 2개
 - `paid` 결과: `result_price_points`가 1 이상이어야 함
+- 참여 보상은 서버가 계산하므로 요청에 `reward_points`를 직접 넣을 수 없음
 
 ### GET `/surveys`
 
@@ -344,6 +347,54 @@ Authorization: Bearer signed-access-token
 ### POST `/surveys/{survey_id}/publish`
 
 작성자가 `draft` 설문을 게시합니다. 성공 시 상태가 `published`로 변경됩니다.
+
+### 추가 참여 보상 견적과 결제
+
+기본 보상은 문항 수와 같고 최소 5P, 최대 40P입니다. 따라서 4문항 설문의 기본
+참여 보상은 5P입니다.
+
+```http
+GET /surveys/{survey_id}/reward-boost/quote?increment_points=10
+```
+
+응답 예시:
+
+```json
+{
+  "survey_id": "survey-uuid",
+  "question_count": 4,
+  "base_reward_points": 5,
+  "current_reward_boost_points": 0,
+  "increment_points": 10,
+  "new_reward_boost_points": 10,
+  "new_reward_points": 15,
+  "unit_reward_points": 10,
+  "unit_price_krw": 1000,
+  "amount_krw": 1000,
+  "currency": "KRW",
+  "charge_scope": "survey_flat"
+}
+```
+
+개발용 결제:
+
+```http
+POST /surveys/{survey_id}/reward-boost/mock-purchase
+```
+
+```json
+{
+  "increment_points": 10,
+  "transaction_id": "client-stable-transaction-id"
+}
+```
+
+서버가 금액을 계산하며, 같은 거래 ID와 같은 요청을 재전송하면 `duplicate: true`로
+기존 결제를 반환합니다. 같은 거래 ID를 다른 금액이나 설문에 사용하면 `409`입니다.
+Mock 결제는 개발 환경에서만 사용할 수 있습니다.
+
+추가 보상은 `+10P`마다 설문 한 건 기준 1,000원입니다. 목표 응답 수에 비례하는
+예산 결제가 아니며, 결제가 완료된 보상만 게시 시점에 정책으로 고정됩니다.
 
 ### POST `/surveys/{survey_id}/close`
 
@@ -402,11 +453,13 @@ Authorization: Bearer signed-access-token
 ```json
 {
   "response_id": "response-uuid",
-  "points_earned": 4,
-  "base_points": 4,
+  "points_earned": 15,
+  "base_points": 5,
+  "author_boost_points": 10,
   "deadline_bonus_points": 0,
+  "quoted_reward_points": 15,
   "daily_cap_applied": false,
-  "balance": 2504,
+  "balance": 2515,
   "badge": null,
   "result_access": true,
   "balance_result": null
@@ -589,8 +642,10 @@ Authorization: Bearer signed-access-token
 | 이벤트 | 포인트 |
 |---|---:|
 | 학교 인증 최초 완료 | `+2,500P` |
-| 설문 참여 | 문항 수 기준 `+1~40P` |
-| 마감까지 24시간 이하인 설문 참여 | 기본 참여 포인트의 `1.5배` |
+| 설문 참여 | 문항 수 기준 최소 `5P`, 최대 `40P` |
+| 작성자 추가 보상 | `+10P`마다 설문 한 건 기준 `1,000원` 결제 |
+| 마감까지 24시간 이하인 설문 참여 | 무료 기본 참여 포인트만 `1.5배` |
+| 출석 체크 | 하루 한 번 `+5P` |
 | 일반 일일 획득 한도 | `1,000P` |
 | 리워드 광고 | `+10P`, 하루 최대 5회 |
 | AI 심층 분석 | `-200P` |
@@ -698,7 +753,7 @@ AdMob 원본 콜백을 받을 때는 그 앞단에서 Google SSV의 ECDSA 서명
 ### 출석과 알림
 
 - `GET /attendance/today`: 오늘 출석 여부, 연속 출석 수, 최근 7일 기록을 반환합니다.
-- `POST /attendance/check-in`: 한국 날짜 기준 하루 한 번 10P를 지급합니다. 재호출은
+- `POST /attendance/check-in`: 한국 날짜 기준 하루 한 번 5P를 지급합니다. 재호출은
   `already_checked_in: true`이며 중복 지급하지 않습니다.
 - `GET /notifications`: `items`, `unread_count`, `total`, 페이지 정보를 반환합니다.
 - 읽음 처리는 한 건 또는 전체에 대해 여러 번 호출해도 안전합니다.

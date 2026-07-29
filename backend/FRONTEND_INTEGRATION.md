@@ -1,8 +1,9 @@
 # 프런트엔드 연동 가이드
 
-현재 프런트엔드는 화면별 mock 데이터와 `localStorage`를 사용하므로, 아래 순서대로
-API 어댑터를 연결하면 됩니다. 백엔드의 필드 이름은 `snake_case`이고 프런트에서 필요한
-표시용 필드는 어댑터에서 변환합니다.
+현재 설문 생성 화면은 실제 API의 `draft → 견적 → Mock 결제 → publish` 흐름과
+연결되어 있습니다. 나머지 화면별 mock 데이터와 `localStorage` 기능은 아래 계약에 맞춰
+단계적으로 교체합니다. 백엔드의 필드 이름은 `snake_case`이고 프런트 표시 모델은
+어댑터에서 변환합니다.
 
 ## 1. API 클라이언트
 
@@ -22,7 +23,7 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
+  const token = localStorage.getItem("suniversity-api-access-token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -35,19 +36,21 @@ api.interceptors.request.use((config) => {
 실제 로그인 UI를 연결하기 전에는 다음 API로 토큰을 받습니다.
 
 ```http
-POST /dev/login?user_id=demo-student
+POST /dev/login?user_id=demo-author
 ```
 
 응답의 `access_token`을 저장합니다.
 
 ```ts
 const { data } = await api.post("/dev/login", null, {
-  params: { user_id: "demo-student" },
+  params: { user_id: "demo-author" },
 });
-localStorage.setItem("access_token", data.access_token);
+localStorage.setItem("suniversity-api-access-token", data.access_token);
 ```
 
-사용 가능한 계정은 `/dev/dummy-users`에서 확인할 수 있습니다.
+설문 작성·게시 화면은 `demo-author`를 사용합니다. 참여 API를 연동할 때는 작성자 본인의
+설문 참여가 금지되므로 `demo-student` 같은 별도 계정을 사용합니다. 사용 가능한 계정은
+`/dev/dummy-users`에서 확인할 수 있습니다.
 
 ## 3. 홈 설문 카드
 
@@ -127,9 +130,6 @@ function toCreatePayload(form: any) {
     survey_type: form.type === "balance" ? "balance" : "standard",
     results_visibility: form.resultsVisibility ?? "after_participation",
     result_price_points: Number(form.resultPricePoints ?? 0),
-    reward_points: form.rewardPoints
-      ? Number(form.rewardPoints)
-      : null,
     target_responses: form.targetCount
       ? Number(form.targetCount)
       : null,
@@ -146,11 +146,56 @@ function toCreatePayload(form: any) {
 
 생성 직후에는 `draft`입니다. 게시 버튼에서 받은 `survey.id`로 한 번 더 호출합니다.
 
+기본 참여 보상은 서버가 계산합니다.
+
+```text
+기본 보상 = 문항 수 기준 최소 5P, 최대 40P
+4문항 설문 = 기본 5P
+```
+
+작성자가 추가 보상을 선택하지 않으면 바로 게시합니다. `+10P` 이상 추가하려면 먼저
+서버 견적을 확인합니다.
+
+```http
+GET /surveys/{survey_id}/reward-boost/quote?increment_points=10
+```
+
+주요 응답:
+
+```json
+{
+  "base_reward_points": 5,
+  "current_reward_boost_points": 0,
+  "increment_points": 10,
+  "new_reward_points": 15,
+  "amount_krw": 1000,
+  "currency": "KRW",
+  "charge_scope": "survey_flat"
+}
+```
+
+사용자가 결제를 확인하면 개발용 Mock 결제를 호출합니다. 재시도에도 중복 결제가 되지
+않도록 프런트에서 같은 `transaction_id`를 유지해야 합니다.
+
+```ts
+await api.post(`/surveys/${surveyId}/reward-boost/mock-purchase`, {
+  increment_points: 10,
+  transaction_id: crypto.randomUUID(),
+});
+```
+
+`+20P`를 한 번에 구매하면 2,000원이며, `+10P`를 두 번 구매해도 총 2,000원입니다.
+결제가 완료된 추가 보상만 설문에 적용됩니다. 실제 결제 연동 시 이 Mock API를
+PG·앱스토어 영수증 검증 API로 교체합니다.
+
+그 다음 설문을 게시합니다.
+
 ```http
 POST /surveys/{survey_id}/publish
 ```
 
 밸런스게임은 `balance` 문항 하나와 선택지 정확히 2개가 필요합니다.
+밸런스게임에는 이 추가 보상 결제를 적용하지 않습니다.
 
 ## 6. 결과 화면
 

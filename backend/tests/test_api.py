@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.domain import participation_reward
 from app.main import create_app
 
 
@@ -111,7 +113,9 @@ def test_full_survey_flow(tmp_path: Path) -> None:
         },
     )
     assert response.status_code == 201, response.text
-    assert response.json()["points_earned"] == 2
+    assert response.json()["points_earned"] == 5
+    assert response.json()["base_points"] == 5
+    assert response.json()["author_boost_points"] == 0
 
     duplicate = client.post(
         f"/api/v1/surveys/{survey_id}/responses",
@@ -129,7 +133,7 @@ def test_full_survey_flow(tmp_path: Path) -> None:
 
     wallet = client.get("/api/v1/wallet", headers=participant_headers)
     assert wallet.status_code == 200
-    assert wallet.json()["balance"] == 2502
+    assert wallet.json()["balance"] == 2505
 
     analysis = client.post(
         f"/api/v1/ai/surveys/{survey_id}/analysis", headers=author_headers
@@ -228,7 +232,9 @@ def test_frontend_survey_card_contract_and_viewer_state(tmp_path: Path) -> None:
     ai_survey = items["survey-ai-campus"]
     assert ai_survey["author_nickname"] == "설문요정"
     assert ai_survey["university_name"] == "고려대학교 세종캠퍼스"
-    assert ai_survey["reward_points"] == 20
+    assert ai_survey["reward_points"] == 5
+    assert ai_survey["base_reward_points"] == 5
+    assert ai_survey["reward_boost_points"] == 0
     assert ai_survey["estimated_minutes"] == 2
     assert ai_survey["is_completed"] is True
     assert ai_survey["is_liked"] is True
@@ -241,9 +247,13 @@ def test_frontend_survey_card_contract_and_viewer_state(tmp_path: Path) -> None:
 
     shuttle = items["survey-campus-shuttle"]
     assert shuttle["deadline_imminent"] is True
-    assert shuttle["base_reward_points"] == 30
+    assert shuttle["base_reward_points"] == 5
+    assert shuttle["reward_boost_points"] == 20
+    assert shuttle["boosted_reward_points"] == 25
+    assert shuttle["reward_boost_price_krw"] == 2000
+    assert shuttle["reward_boost_payment_status"] == "paid"
     assert shuttle["reward_multiplier"] == 1.5
-    assert shuttle["reward_points"] == 45
+    assert shuttle["reward_points"] == 27
 
     detail = client.get(
         "/api/v1/surveys/survey-ai-campus", headers=headers
@@ -270,7 +280,7 @@ def test_attendance_notifications_preferences_and_bookmarks(tmp_path: Path) -> N
         "/api/v1/attendance/check-in", headers=student_headers
     )
     assert first.status_code == 200
-    assert first.json()["points_earned"] == 10
+    assert first.json()["points_earned"] == 5
     assert second.json()["already_checked_in"] is True
     assert second.json()["balance"] == first.json()["balance"]
 
@@ -460,4 +470,169 @@ def test_balance_vote_discussion_and_answer_validation(tmp_path: Path) -> None:
         json={"answers": [{"question_id": question_id, "option_ids": []}]},
     )
     assert invalid.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("question_count", "expected"),
+    [
+        (1, 5),
+        (4, 5),
+        (5, 5),
+        (6, 6),
+        (10, 10),
+        (40, 40),
+        (41, 40),
+        (100, 40),
+    ],
+)
+def test_participation_reward_policy(
+    question_count: int, expected: int
+) -> None:
+    assert participation_reward(question_count) == expected
+
+
+def test_reward_boost_quote_payment_and_publish(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    author_headers = dev_headers(client, "demo-author")
+    participant_headers = dev_headers(client, "demo-student")
+
+    direct_reward = client.post(
+        "/api/v1/surveys",
+        headers=author_headers,
+        json={
+            "title": "직접 보상 입력 차단 설문",
+            "reward_points": 15,
+            "questions": [
+                {
+                    "question_type": "text",
+                    "prompt": "의견을 적어주세요.",
+                    "required": False,
+                }
+            ],
+        },
+    )
+    assert direct_reward.status_code == 422
+
+    created = client.post(
+        "/api/v1/surveys",
+        headers=author_headers,
+        json={
+            "title": "4문항 기본 보상과 추가 보상 테스트",
+            "results_visibility": "public",
+            "target_responses": 100,
+            "questions": [
+                {
+                    "question_type": "text",
+                    "prompt": f"선택 문항 {index}",
+                    "required": False,
+                }
+                for index in range(1, 5)
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    survey_id = created.json()["id"]
+    assert created.json()["base_reward_points"] == 5
+    assert created.json()["reward_boost_points"] == 0
+    assert created.json()["reward_points"] == 5
+
+    quote = client.get(
+        f"/api/v1/surveys/{survey_id}/reward-boost/quote",
+        params={"increment_points": 10},
+        headers=author_headers,
+    )
+    assert quote.status_code == 200, quote.text
+    assert quote.json()["base_reward_points"] == 5
+    assert quote.json()["new_reward_points"] == 15
+    assert quote.json()["amount_krw"] == 1000
+    assert quote.json()["charge_scope"] == "survey_flat"
+
+    invalid_quote = client.get(
+        f"/api/v1/surveys/{survey_id}/reward-boost/quote",
+        params={"increment_points": 15},
+        headers=author_headers,
+    )
+    assert invalid_quote.status_code == 422
+    other_user_quote = client.get(
+        f"/api/v1/surveys/{survey_id}/reward-boost/quote",
+        params={"increment_points": 10},
+        headers=participant_headers,
+    )
+    assert other_user_quote.status_code == 404
+
+    first_payload = {
+        "increment_points": 10,
+        "transaction_id": "reward-boost-test-001",
+    }
+    first_purchase = client.post(
+        f"/api/v1/surveys/{survey_id}/reward-boost/mock-purchase",
+        headers=author_headers,
+        json=first_payload,
+    )
+    duplicate_purchase = client.post(
+        f"/api/v1/surveys/{survey_id}/reward-boost/mock-purchase",
+        headers=author_headers,
+        json=first_payload,
+    )
+    assert first_purchase.status_code == 200, first_purchase.text
+    assert first_purchase.json()["amount_krw"] == 1000
+    assert first_purchase.json()["reward_points"] == 15
+    assert first_purchase.json()["duplicate"] is False
+    assert duplicate_purchase.status_code == 200
+    assert duplicate_purchase.json()["duplicate"] is True
+
+    reused_transaction = client.post(
+        f"/api/v1/surveys/{survey_id}/reward-boost/mock-purchase",
+        headers=author_headers,
+        json={
+            "increment_points": 20,
+            "transaction_id": "reward-boost-test-001",
+        },
+    )
+    assert reused_transaction.status_code == 409
+
+    second_purchase = client.post(
+        f"/api/v1/surveys/{survey_id}/reward-boost/mock-purchase",
+        headers=author_headers,
+        json={
+            "increment_points": 10,
+            "transaction_id": "reward-boost-test-002",
+        },
+    )
+    assert second_purchase.status_code == 200
+    assert second_purchase.json()["reward_boost_points"] == 20
+    assert second_purchase.json()["reward_points"] == 25
+
+    detail = client.get(
+        f"/api/v1/surveys/{survey_id}", headers=author_headers
+    )
+    assert detail.json()["reward_boost_points"] == 20
+    assert detail.json()["reward_boost_price_krw"] == 2000
+    assert detail.json()["reward_boost_payment_status"] == "paid"
+
+    published = client.post(
+        f"/api/v1/surveys/{survey_id}/publish",
+        headers=author_headers,
+    )
+    assert published.status_code == 200, published.text
+    assert published.json()["reward_points"] == 25
+
+    response = client.post(
+        f"/api/v1/surveys/{survey_id}/responses",
+        headers=participant_headers,
+        json={"answers": []},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["points_earned"] == 25
+    assert response.json()["base_points"] == 5
+    assert response.json()["author_boost_points"] == 20
+    assert response.json()["deadline_bonus_points"] == 0
+    assert response.json()["balance"] == 3425
+
+    quote_after_publish = client.get(
+        f"/api/v1/surveys/{survey_id}/reward-boost/quote",
+        params={"increment_points": 10},
+        headers=author_headers,
+    )
+    assert quote_after_publish.status_code == 404
 

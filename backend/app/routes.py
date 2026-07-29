@@ -19,9 +19,16 @@ from .domain import (
     level_from_points,
     next_level_points,
     point_entry_view,
+    reward_boost_quote,
     reward_quote,
     KOREA_TZ,
     total_earned,
+)
+from .exchange_domain import (
+    completed_exchange_responses,
+    effective_question_count,
+    question_bucket_label,
+    reserved_responses_for_survey,
 )
 from .points import (
     InsufficientPointsError,
@@ -33,6 +40,8 @@ from .schemas import (
     AdRewardEvent,
     AiSurveyDraft,
     AiSurveyDraftRequest,
+    AiQuestionRewrite,
+    AiQuestionRewriteRequest,
     AuthResult,
     CommentCreate,
     CommentView,
@@ -40,6 +49,7 @@ from .schemas import (
     PhoneRequest,
     PhoneVerify,
     ReportCreate,
+    RewardBoostPurchase,
     ResponseReceipt,
     SurveyCreate,
     SurveyDetail,
@@ -58,6 +68,7 @@ from .security import (
     hash_code,
     require_verified_user,
 )
+from .response_validation import validate_answers
 from .store import JsonStore
 
 
@@ -104,11 +115,26 @@ def university_name(data: dict[str, Any], university_id: str | None) -> str | No
 
 
 def response_count(data: dict[str, Any], survey_id: str) -> int:
-    return sum(1 for item in data["responses"] if item["survey_id"] == survey_id)
+    return sum(
+        1
+        for item in data["responses"]
+        if item["survey_id"] == survey_id
+        and item.get("result_status", "included") == "included"
+    )
 
 
 def like_count(data: dict[str, Any], survey_id: str) -> int:
     return sum(1 for item in data["likes"] if item["survey_id"] == survey_id)
+
+
+def paid_reward_boost_points(
+    data: dict[str, Any], survey_id: str
+) -> int:
+    return sum(
+        int(item["boost_points"])
+        for item in data["survey_reward_payments"]
+        if item["survey_id"] == survey_id and item["status"] == "paid"
+    )
 
 
 def to_survey_summary(
@@ -119,10 +145,19 @@ def to_survey_summary(
     author = find_by_id(data, "users", survey["author_id"])
     status = effective_status(survey)
     quote = reward_quote(survey)
+    paid_boost = paid_reward_boost_points(data, survey["id"])
+    configured_boost = int(quote["reward_boost_points"])
+    if configured_boost == 0:
+        boost_payment_status = "not_required"
+    elif paid_boost >= configured_boost:
+        boost_payment_status = "paid"
+    else:
+        boost_payment_status = "payment_required"
     completed = bool(
         viewer_id
         and any(
             item["survey_id"] == survey["id"] and item["user_id"] == viewer_id
+            and item.get("result_status", "included") == "included"
             for item in data["responses"]
         )
     )
@@ -155,9 +190,14 @@ def to_survey_summary(
     visibility = survey.get("results_visibility", "after_participation")
     can_view_results = bool(
         is_author
-        or visibility == "public"
-        or (visibility == "after_participation" and completed)
-        or (visibility == "paid" and purchased)
+        or (
+            survey.get("respondent_results_enabled", True)
+            and (
+                visibility == "public"
+                or (visibility == "after_participation" and completed)
+                or (visibility == "paid" and purchased)
+            )
+        )
     )
     target = survey.get("target_responses")
     responses = response_count(data, survey["id"])
@@ -209,6 +249,10 @@ def to_survey_summary(
         progress_percentage=progress,
         deadline_imminent=bool(quote["deadline_imminent"]),
         base_reward_points=int(quote["base_reward_points"]),
+        reward_boost_points=configured_boost,
+        boosted_reward_points=int(quote["boosted_reward_points"]),
+        reward_boost_price_krw=int(quote["reward_boost_price_krw"]),
+        reward_boost_payment_status=boost_payment_status,
         reward_multiplier=float(quote["reward_multiplier"]),
         claimable_reward_points=claimable,
         viewer_is_author=is_author,
@@ -220,6 +264,29 @@ def to_survey_summary(
             and not is_author
         ),
         viewer_can_view_results=can_view_results,
+        effective_question_count=effective_question_count(survey),
+        question_bucket=question_bucket_label(effective_question_count(survey)),
+        category_tags=list(survey.get("category_tags", [])),
+        external_access_enabled=bool(survey.get("external_access_enabled", True)),
+        respondent_results_enabled=bool(
+            survey.get("respondent_results_enabled", True)
+        ),
+        exchange_enabled=bool(survey.get("exchange_enabled", False)),
+        exchange_methods=list(survey.get("exchange_methods", [])),
+        exchange_unit=survey.get("exchange_unit", "individual"),
+        team_id=survey.get("team_id"),
+        target_exchange_responses=survey.get("target_exchange_responses"),
+        team_requested_responses=survey.get("team_requested_responses"),
+        auto_repeat=bool(survey.get("auto_repeat", True)),
+        required_respondent_conditions=list(
+            survey.get("required_respondent_conditions", [])
+        ),
+        exchange_completed_responses=completed_exchange_responses(
+            data, survey["id"]
+        ),
+        exchange_reserved_responses=reserved_responses_for_survey(
+            data, survey["id"]
+        ),
     )
 
 
@@ -247,6 +314,7 @@ def build_questions(questions: list[Any]) -> list[dict[str, Any]]:
                 "position": position,
                 "question_type": question.question_type,
                 "prompt": question.prompt,
+                "description": question.description,
                 "required": question.required,
                 "min_choices": question.min_choices,
                 "max_choices": question.max_choices,
@@ -260,6 +328,40 @@ def build_questions(questions: list[Any]) -> list[dict[str, Any]]:
                         question.options, start=1
                     )
                 ],
+                "rows": [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "label": row.label,
+                        "position": row_position,
+                    }
+                    for row_position, row in enumerate(
+                        question.rows, start=1
+                    )
+                ],
+                "columns": [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "label": column.label,
+                        "position": column_position,
+                    }
+                    for column_position, column in enumerate(
+                        question.columns, start=1
+                    )
+                ],
+                "scale_min": question.scale_min,
+                "scale_max": question.scale_max,
+                "scale_min_label": question.scale_min_label,
+                "scale_max_label": question.scale_max_label,
+                "validation": (
+                    question.validation.model_dump()
+                    if question.validation
+                    else None
+                ),
+                "file_rule": (
+                    question.file_rule.model_dump()
+                    if question.file_rule
+                    else None
+                ),
             }
         )
     return output
@@ -272,7 +374,10 @@ def calculate_results(
     if survey is None:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
     responses = [
-        response for response in data["responses"] if response["survey_id"] == survey_id
+        response
+        for response in data["responses"]
+        if response["survey_id"] == survey_id
+        and response.get("result_status", "included") == "included"
     ]
     answers_by_question: dict[str, list[dict[str, Any]]] = {}
     for response in responses:
@@ -288,7 +393,15 @@ def calculate_results(
             "question_type": question["question_type"],
             "answer_count": len(answers),
         }
-        if question["question_type"] in {"single", "multiple", "scale", "balance"}:
+        if question["question_type"] in {
+            "single",
+            "multiple",
+            "scale",
+            "balance",
+            "single_choice",
+            "checkboxes",
+            "dropdown",
+        }:
             counts = {option["id"]: 0 for option in question.get("options", [])}
             for answer in answers:
                 for option_id in answer.get("option_ids", []):
@@ -306,6 +419,57 @@ def calculate_results(
                 }
                 for option in question.get("options", [])
             ]
+        elif question["question_type"] == "linear_scale":
+            values = [
+                answer["value_number"]
+                for answer in answers
+                if answer.get("value_number") is not None
+            ]
+            counts: dict[str, int] = {}
+            for value in values:
+                label = str(int(value) if float(value).is_integer() else value)
+                counts[label] = counts.get(label, 0) + 1
+            item["scale"] = [
+                {"value": value, "count": count}
+                for value, count in sorted(
+                    counts.items(), key=lambda pair: float(pair[0])
+                )
+            ]
+            item["average"] = (
+                round(sum(values) / len(values), 2) if values else None
+            )
+        elif question["question_type"] in {
+            "multiple_choice_grid",
+            "checkbox_grid",
+        }:
+            column_labels = {
+                column["id"]: column["label"]
+                for column in question.get("columns", [])
+            }
+            grid_rows = []
+            for row in question.get("rows", []):
+                counts = {column_id: 0 for column_id in column_labels}
+                for answer in answers:
+                    for column_id in answer.get("grid_answers", {}).get(
+                        row["id"], []
+                    ):
+                        if column_id in counts:
+                            counts[column_id] += 1
+                grid_rows.append(
+                    {
+                        "row_id": row["id"],
+                        "label": row["label"],
+                        "columns": [
+                            {
+                                "column_id": column_id,
+                                "label": column_labels[column_id],
+                                "count": count,
+                            }
+                            for column_id, count in counts.items()
+                        ],
+                    }
+                )
+            item["rows"] = grid_rows
         elif question["question_type"] == "number":
             numbers = [
                 answer["value_number"]
@@ -317,12 +481,39 @@ def calculate_results(
             )
             item["minimum"] = min(numbers) if numbers else None
             item["maximum"] = max(numbers) if numbers else None
-        elif include_text:
-            item["responses"] = [
-                answer["value_text"]
-                for answer in answers
-                if answer.get("value_text")
-            ][:100]
+        elif question["question_type"] in {
+            "text",
+            "short_text",
+            "long_text",
+            "date",
+            "time",
+            "file_upload",
+        }:
+            if include_text:
+                if question["question_type"] == "date":
+                    item["responses"] = [
+                        answer["value_date"]
+                        for answer in answers
+                        if answer.get("value_date")
+                    ][:100]
+                elif question["question_type"] == "time":
+                    item["responses"] = [
+                        answer["value_time"]
+                        for answer in answers
+                        if answer.get("value_time")
+                    ][:100]
+                elif question["question_type"] == "file_upload":
+                    item["responses"] = [
+                        file
+                        for answer in answers
+                        for file in answer.get("file_uploads", [])
+                    ][:100]
+                else:
+                    item["responses"] = [
+                        answer["value_text"]
+                        for answer in answers
+                        if answer.get("value_text")
+                    ][:100]
         output_questions.append(item)
 
     return {
@@ -337,12 +528,19 @@ def ensure_results_access(
     data: dict[str, Any], survey: dict[str, Any], user_id: str
 ) -> None:
     visibility = survey.get("results_visibility", "after_participation")
-    if survey["author_id"] == user_id or visibility == "public":
+    if survey["author_id"] == user_id:
+        return
+    if not survey.get("respondent_results_enabled", True):
+        raise HTTPException(
+            status_code=403, detail="작성자가 응답자 결과 공개를 허용하지 않았습니다."
+        )
+    if visibility == "public":
         return
     if visibility == "after_participation":
         participated = any(
             response["survey_id"] == survey["id"]
             and response["user_id"] == user_id
+            and response.get("result_status", "included") == "included"
             for response in data["responses"]
         )
         if participated:
@@ -607,6 +805,7 @@ def get_my_profile(
         response["survey_id"]
         for response in data["responses"]
         if response["user_id"] == user["id"]
+        and response.get("result_status", "included") == "included"
     }
     earned = total_earned(data, user["id"])
     level = level_from_points(earned)
@@ -696,6 +895,7 @@ def get_my_surveys(
             response["survey_id"]
             for response in data["responses"]
             if response["user_id"] == user["id"]
+            and response.get("result_status", "included") == "included"
         }
         surveys = [
             survey for survey in data["surveys"] if survey["id"] in survey_ids
@@ -738,19 +938,39 @@ def create_survey(
         deadline = deadline.replace(tzinfo=UTC)
     survey = {
         "id": survey_id,
+        "public_slug": str(uuid.uuid4()),
         "author_id": user["id"],
         "title": payload.title,
         "description": payload.description,
         "category": payload.category,
+        "category_tags": list(dict.fromkeys(payload.category_tags)),
         "subcategory": payload.subcategory,
         "survey_type": payload.survey_type,
         "status": "draft",
         "results_visibility": payload.results_visibility,
         "result_price_points": payload.result_price_points,
-        "reward_points": payload.reward_points,
+        "reward_boost_points": 0,
+        "reward_boost_price_krw": 0,
+        "reward_boost_payment_ids": [],
+        "published_reward_policy": None,
         "target_responses": payload.target_responses,
         "deadline": deadline.isoformat() if deadline else None,
         "questions": build_questions(payload.questions),
+        "external_access_enabled": payload.external_access_enabled,
+        "respondent_results_enabled": payload.respondent_results_enabled,
+        "exchange_enabled": payload.exchange_enabled,
+        "exchange_methods": list(dict.fromkeys(payload.exchange_methods)),
+        "exchange_unit": payload.exchange_unit,
+        "team_id": payload.team_id,
+        "target_exchange_responses": payload.target_exchange_responses,
+        "team_requested_responses": payload.team_requested_responses,
+        "auto_repeat": payload.auto_repeat,
+        "required_respondent_conditions": [
+            condition.model_dump()
+            for condition in payload.required_respondent_conditions
+        ],
+        "structure_locked_at": None,
+        "version": 1,
         "bump_count": 0,
         "bumped_at": None,
         "published_at": None,
@@ -759,6 +979,23 @@ def create_survey(
         "updated_at": iso_now(),
     }
     with request.app.state.store.transaction() as data:
+        if payload.exchange_unit == "team":
+            team = find_by_id(data, "teams", payload.team_id or "")
+            if (
+                team is None
+                or user["id"] not in team.get("member_ids", [])
+                or team.get("owner_id") != user["id"]
+            ):
+                raise HTTPException(
+                    status_code=422, detail="관리 중인 팀을 선택해야 합니다."
+                )
+            if int(payload.team_requested_responses or 0) > len(
+                team.get("member_ids", [])
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="희망 교환 응답 수는 팀원 수를 초과할 수 없습니다.",
+                )
         data["surveys"].append(survey)
     return load_survey_detail(request.app.state.store, survey_id, user["id"])
 
@@ -862,15 +1099,68 @@ def update_survey(
             raise HTTPException(
                 status_code=404, detail="수정할 임시저장 설문을 찾을 수 없습니다."
             )
+        if payload.reward_points is not None:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "참여 보상은 직접 수정할 수 없습니다. "
+                    "reward-boost 결제 API를 사용하세요."
+                ),
+            )
+        updates.pop("reward_points", None)
         if "questions" in updates and payload.questions is not None:
             survey["questions"] = build_questions(payload.questions)
             updates.pop("questions", None)
+        if "category_tags" in updates and payload.category_tags is not None:
+            updates["category_tags"] = list(dict.fromkeys(payload.category_tags))
+        if (
+            "required_respondent_conditions" in updates
+            and payload.required_respondent_conditions is not None
+        ):
+            updates["required_respondent_conditions"] = [
+                condition.model_dump()
+                for condition in payload.required_respondent_conditions
+            ]
+        if "exchange_methods" in updates and payload.exchange_methods is not None:
+            updates["exchange_methods"] = list(
+                dict.fromkeys(payload.exchange_methods)
+            )
         if "deadline" in updates:
             deadline = payload.deadline
             if deadline and deadline.tzinfo is None:
                 deadline = deadline.replace(tzinfo=UTC)
             updates["deadline"] = deadline.isoformat() if deadline else None
         survey.update(updates)
+        if survey.get("exchange_enabled"):
+            if not survey.get("exchange_methods"):
+                raise HTTPException(
+                    status_code=422,
+                    detail="교환 기능을 켜면 직접 또는 자동 방식을 선택해야 합니다.",
+                )
+            if not survey.get("deadline"):
+                raise HTTPException(
+                    status_code=422, detail="교환 설문에는 마감일이 필요합니다."
+                )
+            if not survey.get("target_exchange_responses"):
+                raise HTTPException(
+                    status_code=422, detail="목표 교환 응답 수가 필요합니다."
+                )
+        if survey.get("exchange_unit") == "team":
+            team = find_by_id(data, "teams", survey.get("team_id") or "")
+            if (
+                team is None
+                or team.get("owner_id") != user["id"]
+                or user["id"] not in team.get("member_ids", [])
+            ):
+                raise HTTPException(
+                    status_code=422, detail="관리 중인 팀을 선택해야 합니다."
+                )
+            requested = int(survey.get("team_requested_responses") or 0)
+            if requested < 1 or requested > len(team.get("member_ids", [])):
+                raise HTTPException(
+                    status_code=422,
+                    detail="희망 교환 응답 수는 1명 이상, 팀원 수 이하여야 합니다.",
+                )
         if (
             survey.get("results_visibility") == "paid"
             and int(survey.get("result_price_points") or 0) <= 0
@@ -909,8 +1199,170 @@ def delete_survey(
             raise HTTPException(
                 status_code=404, detail="삭제할 임시저장 설문을 찾을 수 없습니다."
             )
+        if int(survey.get("reward_boost_points", 0)) > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "추가 보상 결제가 완료된 설문은 삭제할 수 없습니다. "
+                    "실제 결제 연동 시 환불 절차가 필요합니다."
+                ),
+            )
         data["surveys"].remove(survey)
     return {"deleted": True, "survey_id": survey_id}
+
+
+@router.get(
+    "/surveys/{survey_id}/reward-boost/quote",
+    tags=["surveys"],
+)
+def quote_survey_reward_boost(
+    survey_id: str,
+    request: Request,
+    increment_points: int = Query(
+        ge=10, le=1_000, multiple_of=10
+    ),
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    data = request.app.state.store.snapshot()
+    survey = find_by_id(data, "surveys", survey_id)
+    if (
+        survey is None
+        or survey["author_id"] != user["id"]
+        or survey["status"] != "draft"
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="추가 보상을 설정할 임시저장 설문을 찾을 수 없습니다.",
+        )
+    try:
+        return {
+            **reward_boost_quote(survey, increment_points),
+            "payment_required": True,
+            "payment_mode": "mock",
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post(
+    "/surveys/{survey_id}/reward-boost/mock-purchase",
+    tags=["surveys"],
+)
+def purchase_survey_reward_boost(
+    survey_id: str,
+    payload: RewardBoostPurchase,
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    if request.app.state.settings.environment == "production":
+        raise HTTPException(
+            status_code=404,
+            detail="개발용 결제 API는 운영 환경에서 사용할 수 없습니다.",
+        )
+
+    with request.app.state.store.transaction() as data:
+        existing = next(
+            (
+                item
+                for item in data["survey_reward_payments"]
+                if item["transaction_id"] == payload.transaction_id
+            ),
+            None,
+        )
+        if existing is not None:
+            same_purchase = (
+                existing["survey_id"] == survey_id
+                and existing["author_id"] == user["id"]
+                and int(existing["boost_points"])
+                == payload.increment_points
+            )
+            if not same_purchase:
+                raise HTTPException(
+                    status_code=409,
+                    detail="이미 다른 결제에 사용된 거래 ID입니다.",
+                )
+            return {
+                "payment_id": existing["id"],
+                "transaction_id": existing["transaction_id"],
+                "status": existing["status"],
+                "boost_points_purchased": int(
+                    existing["boost_points"]
+                ),
+                "reward_boost_points": int(
+                    existing["reward_boost_points_after"]
+                ),
+                "reward_points": int(
+                    existing["reward_points_after"]
+                ),
+                "amount_krw": int(existing["amount_krw"]),
+                "currency": existing["currency"],
+                "duplicate": True,
+            }
+
+        survey = find_by_id(data, "surveys", survey_id)
+        if (
+            survey is None
+            or survey["author_id"] != user["id"]
+            or survey["status"] != "draft"
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail="추가 보상을 설정할 임시저장 설문을 찾을 수 없습니다.",
+            )
+        try:
+            quote = reward_boost_quote(
+                survey, payload.increment_points
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        payment_id = str(uuid.uuid4())
+        paid_at = iso_now()
+        payment = {
+            "id": payment_id,
+            "transaction_id": payload.transaction_id,
+            "survey_id": survey_id,
+            "author_id": user["id"],
+            "provider": "mock",
+            "status": "paid",
+            "boost_points": payload.increment_points,
+            "reward_boost_points_after": int(
+                quote["new_reward_boost_points"]
+            ),
+            "reward_points_after": int(quote["new_reward_points"]),
+            "units": payload.increment_points // 10,
+            "amount_krw": int(quote["amount_krw"]),
+            "currency": "KRW",
+            "charge_scope": "survey_flat",
+            "created_at": paid_at,
+            "paid_at": paid_at,
+        }
+        data["survey_reward_payments"].append(payment)
+        survey["reward_boost_points"] = int(
+            quote["new_reward_boost_points"]
+        )
+        survey["reward_boost_price_krw"] = (
+            int(survey.get("reward_boost_price_krw", 0))
+            + int(quote["amount_krw"])
+        )
+        survey.setdefault("reward_boost_payment_ids", []).append(
+            payment_id
+        )
+        survey["updated_at"] = paid_at
+
+    return {
+        "payment_id": payment_id,
+        "transaction_id": payload.transaction_id,
+        "status": "paid",
+        "boost_points_purchased": payload.increment_points,
+        "reward_boost_points": int(
+            quote["new_reward_boost_points"]
+        ),
+        "reward_points": int(quote["new_reward_points"]),
+        "amount_krw": int(quote["amount_krw"]),
+        "currency": "KRW",
+        "duplicate": False,
+    }
 
 
 @router.post("/surveys/{survey_id}/publish", response_model=SurveyDetail, tags=["surveys"])
@@ -927,10 +1379,60 @@ def publish_survey(
             raise HTTPException(
                 status_code=409, detail="임시저장 상태의 설문만 게시할 수 있습니다."
             )
+        if effective_question_count(survey) < 1:
+            raise HTTPException(
+                status_code=409,
+                detail="문항이 없는 초안은 게시할 수 없습니다.",
+            )
         if survey.get("deadline") and parse_datetime(survey["deadline"]) <= utc_now():
             raise HTTPException(
                 status_code=409, detail="마감일이 지난 설문은 게시할 수 없습니다."
             )
+        if survey.get("exchange_enabled"):
+            deadline = parse_datetime(survey.get("deadline"))
+            if deadline is None:
+                raise HTTPException(
+                    status_code=409, detail="교환 설문에는 마감일이 필요합니다."
+                )
+            if deadline - timedelta(hours=24) <= utc_now():
+                raise HTTPException(
+                    status_code=409,
+                    detail="교환 설문은 마감 24시간 전까지 여유가 있어야 합니다.",
+                )
+            if not survey.get("exchange_methods"):
+                raise HTTPException(
+                    status_code=409, detail="교환 방식을 선택해야 합니다."
+                )
+            if not survey.get("target_exchange_responses"):
+                raise HTTPException(
+                    status_code=409, detail="목표 교환 응답 수가 필요합니다."
+                )
+        configured_boost = int(survey.get("reward_boost_points", 0))
+        paid_boost = paid_reward_boost_points(data, survey_id)
+        if paid_boost != configured_boost:
+            raise HTTPException(
+                status_code=402,
+                detail="추가 참여 보상에 대한 결제가 필요합니다.",
+            )
+        policy_quote = reward_quote(survey)
+        survey["published_reward_policy"] = {
+            "version": "survey-reward-v1",
+            "question_count": len(survey.get("questions", [])),
+            "base_reward_points": int(
+                policy_quote["base_reward_points"]
+            ),
+            "reward_boost_points": configured_boost,
+            "boosted_reward_points": int(
+                policy_quote["boosted_reward_points"]
+            ),
+            "amount_paid_krw": int(
+                policy_quote["reward_boost_price_krw"]
+            ),
+            "payment_ids": list(
+                survey.get("reward_boost_payment_ids", [])
+            ),
+            "captured_at": iso_now(),
+        }
         survey["status"] = "published"
         survey["published_at"] = iso_now()
         survey["updated_at"] = iso_now()
@@ -1011,8 +1513,12 @@ def submit_response(
 ) -> ResponseReceipt:
     store = request.app.state.store
     with store.transaction() as data:
+        now = utc_now()
         survey = find_by_id(data, "surveys", survey_id)
-        if survey is None or effective_status(survey) != "published":
+        if (
+            survey is None
+            or effective_status(survey, now=now) != "published"
+        ):
             raise HTTPException(
                 status_code=404, detail="참여 가능한 설문을 찾을 수 없습니다."
             )
@@ -1021,15 +1527,17 @@ def submit_response(
                 status_code=409, detail="자신이 작성한 설문에는 참여할 수 없습니다."
             )
         deadline = parse_datetime(survey.get("deadline"))
-        if deadline and deadline <= utc_now():
+        if deadline and deadline <= now:
             raise HTTPException(status_code=409, detail="마감된 설문입니다.")
         if any(
             response["survey_id"] == survey_id
             and response["user_id"] == user["id"]
+            and response.get("result_status", "included") != "excluded"
             for response in data["responses"]
         ):
             raise HTTPException(status_code=409, detail="이미 참여한 설문입니다.")
 
+        validated_answers = validate_answers(survey, payload.answers)
         questions = survey.get("questions", [])
         question_map = {question["id"]: question for question in questions}
         submitted = {answer.question_id: answer for answer in payload.answers}
@@ -1116,7 +1624,7 @@ def submit_response(
                     status_code=422, detail="필수 숫자 응답이 비어 있습니다."
                 )
 
-        quote = reward_quote(survey)
+        quote = reward_quote(survey, now=now)
         nominal_reward = int(quote["reward_points"])
         reward = max(
             0,
@@ -1126,18 +1634,49 @@ def submit_response(
                 - get_daily_reward_total_from_data(data, user["id"]),
             ),
         )
+        remaining_reward = reward
+        awarded_base = min(
+            int(quote["base_reward_points"]), remaining_reward
+        )
+        remaining_reward -= awarded_base
+        awarded_boost = min(
+            int(quote["reward_boost_points"]), remaining_reward
+        )
+        remaining_reward -= awarded_boost
+        awarded_deadline_bonus = min(
+            int(quote["deadline_bonus_points"]), remaining_reward
+        )
         response_id = str(uuid.uuid4())
         data["responses"].append(
             {
                 "id": response_id,
                 "survey_id": survey_id,
                 "user_id": user["id"],
-                "answers": [
-                    answer.model_dump() for answer in payload.answers
-                ],
+                "answers": validated_answers,
+                "source": "normal_app",
+                "result_status": "included",
+                "exchange_id": None,
+                "respondent_profile_snapshot": {
+                    "university_id": user.get("university_id"),
+                    "university_name": university_name(
+                        data, user.get("university_id")
+                    ),
+                    "year": user.get("year"),
+                    "department": user.get("department"),
+                    "matched_categories": list(
+                        user.get("profile_categories", [])
+                    ),
+                },
                 "points_earned": reward,
-                "submitted_at": iso_now(),
+                "base_points_earned": awarded_base,
+                "author_boost_points_earned": awarded_boost,
+                "deadline_bonus_points_earned": awarded_deadline_bonus,
+                "quoted_reward_points": nominal_reward,
+                "submitted_at": now.isoformat(),
             }
+        )
+        survey["structure_locked_at"] = (
+            survey.get("structure_locked_at") or now.isoformat()
         )
         if reward:
             ledger = add_entry_to_data(
@@ -1147,7 +1686,9 @@ def submit_response(
                 entry_type="survey_participation",
                 reference_type="survey_response",
                 reference_id=response_id,
-                idempotency_key=f"survey-response:{response_id}",
+                idempotency_key=(
+                    f"survey-response:{survey_id}:{user['id']}"
+                ),
             )
             balance = ledger.balance
         else:
@@ -1185,11 +1726,10 @@ def submit_response(
         response_id=response_id,
         points_earned=reward,
         balance=balance,
-        base_points=int(quote["base_reward_points"]),
-        deadline_bonus_points=max(
-            0,
-            nominal_reward - int(quote["base_reward_points"]),
-        ),
+        base_points=awarded_base,
+        author_boost_points=awarded_boost,
+        deadline_bonus_points=awarded_deadline_bonus,
+        quoted_reward_points=nominal_reward,
         daily_cap_applied=reward < nominal_reward,
         badge=badge,
         result_access=result_access,
@@ -1584,6 +2124,7 @@ def ai_survey_analysis(
         item
         for item in snapshot["responses"]
         if item["survey_id"] == survey_id
+        and item.get("result_status", "included") == "included"
     ]
     if not survey_responses:
         raise HTTPException(

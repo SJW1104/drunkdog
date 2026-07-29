@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .ai_provider import AIProvider
 from .config import Settings
 from .engagement_routes import router as engagement_router
+from .exchange_routes import router as exchange_router
+from .research_routes import router as research_router
 from .routes import router
 from .security import TokenService
 from .store import JsonStore
@@ -37,6 +39,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(router)
     application.include_router(engagement_router)
+    application.include_router(exchange_router)
+    application.include_router(research_router)
     return application
 
 
