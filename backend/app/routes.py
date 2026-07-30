@@ -1175,6 +1175,53 @@ def update_survey(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> SurveyDetail:
     updates = payload.model_dump(exclude_unset=True)
+    current = find_by_id(request.app.state.store.snapshot(), "surveys", survey_id)
+    if (
+        current is not None
+        and current["author_id"] == user["id"]
+        and current.get("status") == "published"
+    ):
+        if set(updates) != {"deadline"} or payload.deadline is None:
+            raise HTTPException(
+                status_code=409,
+                detail="게시된 설문은 마감일만 변경할 수 있습니다.",
+            )
+        new_deadline = payload.deadline
+        if new_deadline.tzinfo is None:
+            new_deadline = new_deadline.replace(tzinfo=UTC)
+        if new_deadline - timedelta(hours=24) <= utc_now():
+            raise HTTPException(
+                status_code=409,
+                detail="교환 설문의 마감은 현재 시각보다 24시간 이후여야 합니다.",
+            )
+        with request.app.state.store.transaction() as data:
+            survey = find_by_id(data, "surveys", survey_id)
+            active_cutoffs = [
+                parse_datetime(exchange.get("cutoff_at"))
+                for exchange in data["exchanges"]
+                if exchange.get("state") in {"awaiting_acceptance", "in_progress"}
+                and survey_id
+                in {
+                    exchange["side_a"]["survey_id"],
+                    exchange["side_b"]["survey_id"],
+                }
+            ]
+            minimum_deadline = max(
+                (
+                    cutoff + timedelta(hours=24)
+                    for cutoff in active_cutoffs
+                    if cutoff is not None
+                ),
+                default=None,
+            )
+            if minimum_deadline is not None and new_deadline < minimum_deadline:
+                raise HTTPException(
+                    status_code=409,
+                    detail="진행 중인 교환의 완료 기한보다 이르게 마감할 수 없습니다.",
+                )
+            survey["deadline"] = new_deadline.isoformat()
+            survey["updated_at"] = iso_now()
+        return load_survey_detail(request.app.state.store, survey_id, user["id"])
     with request.app.state.store.transaction() as data:
         survey = find_by_id(data, "surveys", survey_id)
         if (

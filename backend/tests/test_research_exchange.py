@@ -526,3 +526,167 @@ def test_auto_repeat_does_not_rematch_the_same_terminal_pair(tmp_path: Path) -> 
     queue = client.get("/api/v1/exchanges/auto/queue", headers=author)
     assert queue.status_code == 200
     assert any(item["survey_id"] == first["id"] for item in queue.json())
+
+
+def test_team_owner_transfer_and_member_leave(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    owner = dev_headers(client, "demo-author")
+    member = dev_headers(client, "demo-student")
+    team = client.post(
+        "/api/v1/teams",
+        headers=owner,
+        json={"name": "Ownership team", "member_ids": ["demo-student"]},
+    ).json()
+
+    transferred = client.patch(
+        f"/api/v1/teams/{team['id']}/owner",
+        headers=owner,
+        json={"user_id": "demo-student"},
+    )
+    assert transferred.status_code == 200, transferred.text
+    assert transferred.json()["owner_id"] == "demo-student"
+    left = client.post(f"/api/v1/teams/{team['id']}/leave", headers=owner)
+    assert left.status_code == 200, left.text
+    listed = client.get("/api/v1/teams", headers=member).json()
+    assert listed[0]["member_ids"] == ["demo-student"]
+
+
+def test_team_member_removal_respects_survey_required_count(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    owner = dev_headers(client, "demo-author")
+    team = client.post(
+        "/api/v1/teams",
+        headers=owner,
+        json={"name": "Required count team", "member_ids": ["demo-student"]},
+    ).json()
+    create_published_exchange_survey(
+        client,
+        owner,
+        title="Team required count survey",
+        methods=["direct"],
+        exchange_unit="team",
+        team_id=team["id"],
+        team_requested_responses=2,
+    )
+
+    blocked = client.delete(
+        f"/api/v1/teams/{team['id']}/members/demo-student",
+        headers=owner,
+    )
+    assert blocked.status_code == 409
+    assert "필수 응답자 수" in blocked.json()["detail"]
+
+
+def test_team_membership_is_locked_during_active_exchange(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    author = dev_headers(client, "demo-author")
+    counterpart = dev_headers(client, "demo-balance")
+    team_a = client.post(
+        "/api/v1/teams",
+        headers=author,
+        json={"name": "Active team A", "member_ids": ["demo-student"]},
+    ).json()
+    team_b = client.post(
+        "/api/v1/teams",
+        headers=counterpart,
+        json={"name": "Active team B", "member_ids": []},
+    ).json()
+    source = create_published_exchange_survey(
+        client,
+        author,
+        title="Active team source",
+        methods=["direct"],
+        exchange_unit="team",
+        team_id=team_a["id"],
+        team_requested_responses=1,
+    )
+    target = create_published_exchange_survey(
+        client,
+        counterpart,
+        title="Active team target",
+        methods=["direct"],
+        exchange_unit="team",
+        team_id=team_b["id"],
+        team_requested_responses=1,
+    )
+    requested = client.post(
+        "/api/v1/exchanges/direct",
+        headers=author,
+        json={
+            "source_survey_id": source["id"],
+            "target_survey_id": target["id"],
+            "answers": answer_for(target),
+        },
+    )
+    assert requested.status_code == 201, requested.text
+
+    blocked = client.delete(
+        f"/api/v1/teams/{team_a['id']}/members/demo-student",
+        headers=author,
+    )
+    assert blocked.status_code == 409
+    assert "진행 중인 교환" in blocked.json()["detail"]
+
+
+def test_auto_queue_locks_structure_before_a_match_exists(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    author = dev_headers(client, "demo-author")
+    survey = create_published_exchange_survey(
+        client, author, title="Queue structure lock", methods=["auto"]
+    )
+
+    queued = client.post(
+        "/api/v1/exchanges/auto/queue",
+        headers=author,
+        json={"survey_id": survey["id"]},
+    )
+    assert queued.status_code == 200
+    assert queued.json()["status"] == "waiting"
+    with client.app.state.store.transaction() as data:
+        stored = next(item for item in data["surveys"] if item["id"] == survey["id"])
+        assert stored["structure_locked_at"] is not None
+
+
+def test_published_deadline_can_extend_but_not_break_active_exchange(
+    tmp_path: Path,
+) -> None:
+    client = build_client(tmp_path)
+    author = dev_headers(client, "demo-author")
+    counterpart = dev_headers(client, "demo-balance")
+    source = create_published_exchange_survey(
+        client, author, title="Deadline source", methods=["direct"]
+    )
+    target = create_published_exchange_survey(
+        client, counterpart, title="Deadline target", methods=["direct"]
+    )
+    requested = client.post(
+        "/api/v1/exchanges/direct",
+        headers=author,
+        json={
+            "source_survey_id": source["id"],
+            "target_survey_id": target["id"],
+            "answers": answer_for(target),
+        },
+    )
+    assert requested.status_code == 201, requested.text
+
+    shortened = client.patch(
+        f"/api/v1/surveys/{source['id']}",
+        headers=author,
+        json={"deadline": (datetime.now(UTC) + timedelta(days=2)).isoformat()},
+    )
+    assert shortened.status_code == 409
+    extended_deadline = datetime.now(UTC) + timedelta(days=7)
+    extended = client.patch(
+        f"/api/v1/surveys/{source['id']}",
+        headers=author,
+        json={"deadline": extended_deadline.isoformat()},
+    )
+    assert extended.status_code == 200, extended.text
+    assert datetime.fromisoformat(extended.json()["deadline"]) > datetime.now(UTC)
+    metadata_change = client.patch(
+        f"/api/v1/surveys/{source['id']}",
+        headers=author,
+        json={"title": "게시 후 제목 변경"},
+    )
+    assert metadata_change.status_code == 409

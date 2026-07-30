@@ -32,6 +32,9 @@ const headers = {
 행 수로 계산하므로 클라이언트가 별도 계산하지 않는 것이 안전하다.
 
 교환이 시작되어 `structure_locked_at`이 생기면 질문·선택지 구조 편집 UI를 잠근다.
+자동매칭은 상대가 아직 없어도 대기 등록 성공 시 바로 잠긴다. 게시 후에는 마감일
+수정만 허용하며, 서버가 `409`를 반환하면 진행 중 교환의 완료 기한보다 이른 값이라는
+안내를 표시한다.
 
 ### 문항별 답안 매핑
 
@@ -58,6 +61,9 @@ const headers = {
 4. 답안과 함께 `POST /exchanges/direct`를 호출한다.
 5. 응답은 결과에 넣지 말고 “교환 결과 대기 중”으로 표시한다.
 
+`POST /exchanges/direct` 호출 전 화면 이탈은 서버에 신청이 만들어지지 않으므로 별도
+취소 API를 호출하지 않는다. 성공 응답을 받은 뒤의 취소만 `/cancel`을 사용한다.
+
 받은 신청:
 
 1. `GET /exchanges?state=awaiting_acceptance`로 조회한다.
@@ -66,6 +72,16 @@ const headers = {
 4. 응답의 `exchange_completed`가 `true`이면 결과 화면을 갱신한다.
 
 거절은 `/reject`, 진행 중 취소는 `/cancel`을 사용한다.
+
+### 팀 관리 화면
+
+- 팀원 추가: `POST /teams/{teamId}/members`
+- 팀원 내보내기: `DELETE /teams/{teamId}/members/{memberId}`
+- 자진 탈퇴: `POST /teams/{teamId}/leave`
+- 팀장 변경: `PATCH /teams/{teamId}/owner`
+
+활성 교환이 있거나 팀 설문의 필수 응답자 수를 지킬 수 없으면 구성 변경 API가
+`409`를 반환한다. 팀장에게는 탈퇴 버튼 대신 팀장 변경을 먼저 안내한다.
 
 ## 4. 자동 매칭 화면
 

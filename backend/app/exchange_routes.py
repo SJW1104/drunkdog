@@ -776,6 +776,39 @@ def _new_exchange(
     }
 
 
+def _team_has_active_exchange(data: dict[str, Any], team_id: str) -> bool:
+    return any(
+        exchange.get("state") in ACTIVE_EXCHANGE_STATES
+        and any(
+            side.get("actor_type") == "team" and side.get("actor_id") == team_id
+            for side in (exchange["side_a"], exchange["side_b"])
+        )
+        for exchange in data["exchanges"]
+    )
+
+
+def _ensure_team_membership_change_allowed(
+    data: dict[str, Any], team: dict[str, Any], *, next_member_count: int
+) -> None:
+    reconcile_exchanges(data)
+    if _team_has_active_exchange(data, team["id"]):
+        raise HTTPException(
+            status_code=409,
+            detail="진행 중인 교환이 있는 동안에는 팀원을 변경할 수 없습니다.",
+        )
+    required_counts = [
+        int(survey.get("team_requested_responses") or 0)
+        for survey in data["surveys"]
+        if survey.get("team_id") == team["id"]
+        and survey.get("status") in {"draft", "published"}
+    ]
+    if required_counts and max(required_counts) > next_member_count:
+        raise HTTPException(
+            status_code=409,
+            detail="팀 설문의 필수 응답자 수보다 팀원 수를 적게 만들 수 없습니다.",
+        )
+
+
 @router.post("/teams", status_code=201, tags=["teams"])
 def create_team(
     payload: TeamCreate,
@@ -840,8 +873,82 @@ def add_team_member(
         if member is None or not member.get("university_verified"):
             raise HTTPException(status_code=422, detail="인증된 사용자가 아닙니다.")
         if member["id"] not in team["member_ids"]:
+            _ensure_team_membership_change_allowed(
+                data, team, next_member_count=len(team["member_ids"]) + 1
+            )
             team["member_ids"].append(member["id"])
             team["updated_at"] = _now_iso()
+        return dict(team)
+
+
+@router.delete("/teams/{team_id}/members/{member_id}", tags=["teams"])
+def remove_team_member(
+    team_id: str,
+    member_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    with request.app.state.store.transaction() as data:
+        team = _find(data, "teams", team_id)
+        if team is None or team.get("owner_id") != user["id"]:
+            raise HTTPException(status_code=404, detail="관리할 팀을 찾을 수 없습니다.")
+        if member_id == team.get("owner_id"):
+            raise HTTPException(
+                status_code=409,
+                detail="팀장은 다른 팀원에게 팀장을 넘긴 뒤 탈퇴해야 합니다.",
+            )
+        if member_id not in team.get("member_ids", []):
+            raise HTTPException(status_code=404, detail="팀원을 찾을 수 없습니다.")
+        _ensure_team_membership_change_allowed(
+            data, team, next_member_count=len(team["member_ids"]) - 1
+        )
+        team["member_ids"].remove(member_id)
+        team["updated_at"] = _now_iso()
+        return dict(team)
+
+
+@router.post("/teams/{team_id}/leave", tags=["teams"])
+def leave_team(
+    team_id: str,
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    with request.app.state.store.transaction() as data:
+        team = _find(data, "teams", team_id)
+        if team is None or user["id"] not in team.get("member_ids", []):
+            raise HTTPException(status_code=404, detail="탈퇴할 팀을 찾을 수 없습니다.")
+        if team.get("owner_id") == user["id"]:
+            raise HTTPException(
+                status_code=409,
+                detail="팀장은 다른 팀원에게 팀장을 넘긴 뒤 탈퇴해야 합니다.",
+            )
+        _ensure_team_membership_change_allowed(
+            data, team, next_member_count=len(team["member_ids"]) - 1
+        )
+        team["member_ids"].remove(user["id"])
+        team["updated_at"] = _now_iso()
+        return {"left": True, "team_id": team_id}
+
+
+@router.patch("/teams/{team_id}/owner", tags=["teams"])
+def transfer_team_owner(
+    team_id: str,
+    payload: TeamMemberUpdate,
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    with request.app.state.store.transaction() as data:
+        team = _find(data, "teams", team_id)
+        if team is None or team.get("owner_id") != user["id"]:
+            raise HTTPException(status_code=404, detail="관리할 팀을 찾을 수 없습니다.")
+        if payload.user_id == user["id"]:
+            raise HTTPException(status_code=409, detail="이미 현재 팀장입니다.")
+        if payload.user_id not in team.get("member_ids", []):
+            raise HTTPException(
+                status_code=422, detail="팀장 권한은 현재 팀원에게만 넘길 수 있습니다."
+            )
+        team["owner_id"] = payload.user_id
+        team["updated_at"] = _now_iso()
         return dict(team)
 
 
@@ -1267,6 +1374,9 @@ def enqueue_auto_match(
                 "updated_at": _now_iso(),
             }
             data["auto_match_queue"].append(entry)
+        survey["structure_locked_at"] = (
+            survey.get("structure_locked_at") or _now_iso()
+        )
         candidate = _auto_candidate(data, entry)
         if candidate is None:
             return {
