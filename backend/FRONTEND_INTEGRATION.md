@@ -1,277 +1,121 @@
-# 프런트엔드 연동 가이드
+# 백엔드 연동 가이드
 
-현재 설문 생성 화면은 실제 API의 `draft → 견적 → Mock 결제 → publish` 흐름과
-연결되어 있습니다. 나머지 화면별 mock 데이터와 `localStorage` 기능은 아래 계약에 맞춰
-단계적으로 교체합니다. 백엔드의 필드 이름은 `snake_case`이고 프런트 표시 모델은
-어댑터에서 변환합니다.
+이 문서는 프론트엔드 코드를 수정한 기록이 아니라, 현재 백엔드와 연결할 때 필요한
+호출 순서를 정리한 계약서다.
 
-## 1. API 클라이언트
-
-프런트 `.env`:
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:4000/api/v1
-```
-
-Axios 예시:
+## 1. 기본 설정
 
 ```ts
-import axios from "axios";
-
-export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("suniversity-api-access-token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const API_BASE_URL = "http://127.0.0.1:4000/api/v1";
 ```
 
-브라우저에서 프런트를 `http://localhost:5173`으로 실행하는 경우 CORS가 허용되어 있습니다.
-
-## 2. 개발용 로그인
-
-실제 로그인 UI를 연결하기 전에는 다음 API로 토큰을 받습니다.
-
-```http
-POST /dev/login?user_id=demo-author
-```
-
-응답의 `access_token`을 저장합니다.
+로그인 이후 요청:
 
 ```ts
-const { data } = await api.post("/dev/login", null, {
-  params: { user_id: "demo-author" },
-});
-localStorage.setItem("suniversity-api-access-token", data.access_token);
+const headers = {
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${accessToken}`,
+};
 ```
 
-설문 작성·게시 화면은 `demo-author`를 사용합니다. 참여 API를 연동할 때는 작성자 본인의
-설문 참여가 금지되므로 `demo-student` 같은 별도 계정을 사용합니다. 사용 가능한 계정은
-`/dev/dummy-users`에서 확인할 수 있습니다.
+개발 중에는 `POST /dev/login?user_id=demo-author`로 토큰을 받을 수 있다.
 
-## 3. 홈 설문 카드
+## 2. 설문 작성 화면
 
-추천 호출:
+1. `POST /surveys`로 0문항 초안을 생성한다.
+2. `PATCH /surveys/{id}`로 질문과 교환 설정을 저장한다.
+3. `POST /ai/questions/rewrite` 결과에서 원본·수정본을 나란히 보여준다.
+4. 작성자가 선택·재수정한 질문을 다시 설문에 저장한다.
+5. `POST /surveys/{id}/publish`로 게시한다.
+
+`effective_question_count`와 `question_bucket`은 서버 값을 사용한다. 특히 그리드 문항은
+행 수로 계산하므로 클라이언트가 별도 계산하지 않는 것이 안전하다.
+
+교환이 시작되어 `structure_locked_at`이 생기면 질문·선택지 구조 편집 UI를 잠근다.
+
+## 3. 직접 교환 화면
+
+1. 내 설문을 선택한다.
+2. `GET /exchanges/recommendations?survey_id={id}`로 추천 목록을 받는다.
+3. 상대 설문을 작성한다.
+4. 답안과 함께 `POST /exchanges/direct`를 호출한다.
+5. 응답은 결과에 넣지 말고 “교환 결과 대기 중”으로 표시한다.
+
+받은 신청:
+
+1. `GET /exchanges?state=awaiting_acceptance`로 조회한다.
+2. `POST /exchanges/{id}/accept`를 호출한다.
+3. 상대 설문 응답 후 `POST /exchanges/{id}/responses`를 호출한다.
+4. 응답의 `exchange_completed`가 `true`이면 결과 화면을 갱신한다.
+
+거절은 `/reject`, 진행 중 취소는 `/cancel`을 사용한다.
+
+## 4. 자동 매칭 화면
 
 ```http
-GET /surveys?sort=hot&limit=10
-GET /surveys?sort=deadline&limit=10
-GET /surveys?sort=latest&limit=20
+POST /exchanges/auto/queue
+Content-Type: application/json
+
+{"survey_id": "survey-id"}
 ```
 
-로그인 토큰을 함께 보내면 `is_completed`, `is_liked`, `is_bookmarked`,
-`viewer_can_respond`, `viewer_can_view_results`가 사용자 기준으로 계산됩니다.
+- `waiting`: 상대 탐색 중
+- `matched`: 연결 완료, 바로 상대 설문 응답 가능
 
-기존 카드 모델 변환 예시:
+`GET /exchanges/auto/queue`는 활성 대기·매칭 항목만 반환한다. 자동 매칭에는 수락
+버튼을 표시하지 않는다.
 
-```ts
-export function toSurveyCard(survey: any) {
-  return {
-    id: survey.id,
-    title: survey.title,
-    eyebrow: survey.category,
-    tone: survey.deadline_imminent ? "orange" : "blue",
-    point: survey.claimable_reward_points,
-    meta: `${survey.question_count}문항 · 약 ${survey.estimated_minutes}분`,
-    count: `${survey.response_count}/${survey.target_responses ?? "∞"}명`,
-    completed: survey.is_completed,
-    bookmarked: survey.is_bookmarked,
-  };
-}
-```
+## 5. 교환 카드에서 사용할 필드
 
-카테고리 탭은 `GET /survey-categories`를 사용합니다.
-
-## 4. 설문 상세와 응답
-
-상세 화면 진입:
-
-```http
-GET /surveys/{survey_id}
-```
-
-`questions[].id`와 `questions[].options[].id`는 응답 제출 때 반드시 서버가 내려준 값을
-그대로 사용해야 합니다.
-
-| 문항 타입 | 제출 필드 |
+| 필드 | UI 의미 |
 |---|---|
-| `single`, `scale`, `balance` | `option_ids: ["선택한 ID"]` |
-| `multiple` | `option_ids: ["ID 1", "ID 2"]` |
-| `text` | `value_text: "입력 내용"` |
-| `number` | `value_number: 3` |
+| `state` | 현재 교환 상태 |
+| `mode` | `direct` 또는 `auto` |
+| `scope` | `individual` 또는 `team` |
+| `can_accept` | 수락 버튼 표시 여부 |
+| `can_respond` | 설문 응답 버튼 표시 여부 |
+| `my_response_submitted` | 내 응답 제출 여부 |
+| `cutoff_at` | 교환 완료 기한 |
+| `terminal_reason` | 취소·만료 안내 |
 
-예시:
-
-```ts
-await api.post(`/surveys/${surveyId}/responses`, {
-  answers: [
-    { question_id: questionId, option_ids: [optionId] },
-  ],
-});
-```
-
-응답에는 실제 적립 포인트, 보너스, 잔액, 획득 배지, 결과 열람 가능 여부가 포함됩니다.
-밸런스게임은 `balance_result`로 즉시 비율도 반환합니다.
-
-## 5. 설문 만들기
-
-프런트의 camelCase 입력값을 다음처럼 변환합니다.
-
-```ts
-function toCreatePayload(form: any) {
-  return {
-    title: form.title,
-    description: form.description ?? "",
-    category: form.category,
-    subcategory: form.subcategory ?? null,
-    survey_type: form.type === "balance" ? "balance" : "standard",
-    results_visibility: form.resultsVisibility ?? "after_participation",
-    result_price_points: Number(form.resultPricePoints ?? 0),
-    target_responses: form.targetCount
-      ? Number(form.targetCount)
-      : null,
-    deadline: new Date(form.deadline).toISOString(),
-    questions: form.questions.map((question: any) => ({
-      question_type: question.type,
-      prompt: question.title,
-      required: question.required ?? true,
-      options: (question.options ?? []).map((label: string) => ({ label })),
-    })),
-  };
-}
-```
-
-생성 직후에는 `draft`입니다. 게시 버튼에서 받은 `survey.id`로 한 번 더 호출합니다.
-
-기본 참여 보상은 서버가 계산합니다.
-
-```text
-기본 보상 = 문항 수 기준 최소 5P, 최대 40P
-4문항 설문 = 기본 5P
-```
-
-작성자가 추가 보상을 선택하지 않으면 바로 게시합니다. `+10P` 이상 추가하려면 먼저
-서버 견적을 확인합니다.
-
-```http
-GET /surveys/{survey_id}/reward-boost/quote?increment_points=10
-```
-
-주요 응답:
-
-```json
-{
-  "base_reward_points": 5,
-  "current_reward_boost_points": 0,
-  "increment_points": 10,
-  "new_reward_points": 15,
-  "amount_krw": 1000,
-  "currency": "KRW",
-  "charge_scope": "survey_flat"
-}
-```
-
-사용자가 결제를 확인하면 개발용 Mock 결제를 호출합니다. 재시도에도 중복 결제가 되지
-않도록 프런트에서 같은 `transaction_id`를 유지해야 합니다.
-
-```ts
-await api.post(`/surveys/${surveyId}/reward-boost/mock-purchase`, {
-  increment_points: 10,
-  transaction_id: crypto.randomUUID(),
-});
-```
-
-`+20P`를 한 번에 구매하면 2,000원이며, `+10P`를 두 번 구매해도 총 2,000원입니다.
-결제가 완료된 추가 보상만 설문에 적용됩니다. 실제 결제 연동 시 이 Mock API를
-PG·앱스토어 영수증 검증 API로 교체합니다.
-
-그 다음 설문을 게시합니다.
-
-```http
-POST /surveys/{survey_id}/publish
-```
-
-밸런스게임은 `balance` 문항 하나와 선택지 정확히 2개가 필요합니다.
-밸런스게임에는 이 추가 보상 결제를 적용하지 않습니다.
+결과 수치를 낙관적으로 증가시키지 않는다. 서버가 `completed`를 반환한 뒤 결과 API를
+다시 조회한다.
 
 ## 6. 결과 화면
 
-```http
-GET /surveys/{survey_id}/results
-```
+- 그래프·통계: `GET /surveys/{id}/results`
+- 작성자 응답표: `GET /surveys/{id}/responses/table`
+- CSV: `GET /surveys/{id}/results.csv`
+- 홈 요약: `GET /research/dashboard`
 
-- `200`: 결과 표시
-- `402`: 유료 결과이므로 서버가 설문 상세에서 내려준 `result_price_points`를 안내한 뒤
-  `POST /surveys/{survey_id}/results/purchase`
-- `403`: 비공개이거나 아직 참여하지 않아 열람 불가
-- `409`: 집계할 응답이 아직 없음
+응답표의 `pending: true`는 교환 보류 응답이 있다는 뜻이다. 보류 응답 수나 진행도를
+통계에 섞지 말고 “교환 완료 대기 중인 응답이 있습니다” 정도로만 표시한다.
 
-결과 가격과 포인트 잔액을 프런트에 고정값으로 두지 않습니다. 항상 설문 상세와
-`GET /wallet` 응답을 기준으로 표시합니다.
+작성자 화면만 응답자의 학교·학년·필수 조건 관련 프로필을 표시한다.
 
-작성자용 추가 기능:
+## 7. 외부 링크
 
-```http
-POST /ai/surveys/{survey_id}/analysis
-POST /surveys/{survey_id}/reports/ppt
-```
+1. 작성자가 `GET /surveys/{id}/share-link`로 URL/slug를 받는다.
+2. 외부 사용자는 인증 없이 `GET /public/surveys/{slug}`로 설문을 연다.
+3. `POST /public/surveys/{slug}/responses`로 응답한다.
+4. 받은 `result_token`으로 `GET /public/results/{token}`을 호출한다.
 
-PPT API는 현재 개발용 HTML 내용을 `.ppt` 미디어 타입으로 내려주는 mock입니다.
-응답의 `download_url`을 기준 URL과 합쳐 다운로드합니다.
+외부 참여 화면에서는 로그인·대학교 인증을 요구하지 않는다.
 
-## 7. 사용자 기능
+## 8. 오류 처리
 
-| 화면/기능 | API |
+모든 오류는 기본적으로 `detail` 문자열을 표시할 수 있다.
+
+| 코드 | 화면 처리 |
 |---|---|
-| 내 정보 | `GET /users/me/profile` |
-| 작성·참여 설문 | `GET /users/me/surveys?kind=created|participated` |
-| 관심사·알림·대표 칭호 | `PATCH /users/me/preferences` |
-| 출석 상태/체크 | `GET /attendance/today`, `POST /attendance/check-in` |
-| 알림 목록/읽음 | `GET /notifications`, `PATCH /notifications/{id}/read` |
-| 모두 읽음 | `POST /notifications/read-all` |
-| 북마크 토글 | `POST /surveys/{id}/bookmark` |
-| 저장한 설문 | `GET /users/me/bookmarks` |
-| 포인트 | `GET /wallet` |
-| 랭킹 | `GET /rankings` |
-| 교환 상품 | `GET /rewards/products` |
-| 상품 교환 | `POST /rewards/exchanges` |
-| 내 쿠폰/사용 | `GET /users/me/coupons`, `POST /coupons/{id}/use` |
-| 개발용 광고 완료 | `POST /ads/rewarded/mock-complete` |
+| `401` | 로그인 만료 처리 |
+| `403` | 대학교 인증 또는 권한 안내 |
+| `404` | 삭제·접근 불가 안내 후 목록으로 이동 |
+| `409` | 마감, 중복 신청, 10건 제한, 목표 응답 완료 등 상태 메시지 |
+| `422` | 질문별 입력 오류 표시 |
 
-## 8. 밸런스게임
+교환 목록이나 대시보드를 조회하면 서버가 만료·조기 마감·팀원 부족 상태를 자동
+정리한다. 필요하면 앱 재진입 시 `POST /exchanges/reconcile`을 한 번 호출할 수 있다.
 
-```http
-GET  /balance-games/categories
-GET  /balance-games
-GET  /balance-games/{game_id}
-POST /balance-games/{game_id}/vote
-GET  /balance-games/{game_id}/posts
-POST /balance-games/{game_id}/posts
-POST /balance-posts/{post_id}/replies
-POST /balance-posts/{post_id}/like
-```
-
-투표 요청:
-
-```json
-{
-  "choice_id": "서버가 내려준 선택지 ID"
-}
-```
-
-투표한 사용자만 토론 글과 답글을 작성할 수 있으며, 서버가 선택한 팀을 자동 지정합니다.
-
-## 9. 프런트에서 제거할 로컬 상태
-
-API 연결 후 아래 데이터는 `localStorage`의 값을 진실의 원천으로 사용하지 않습니다.
-
-- 설문 목록·상세·응답 여부
-- 포인트 잔액과 거래 내역
-- 좋아요·북마크
-- 출석 기록과 알림 읽음 상태
-- 쿠폰과 밸런스게임 투표·토론
-
-`localStorage`에는 개발 단계에서 로그인 토큰과 UI 전용 설정만 남기는 것이 안전합니다.
+전체 필드 스키마와 최신 응답 예시는 실행 중인 Swagger(`/docs`)와
+[API_SPEC.md](./API_SPEC.md)를 참고한다.

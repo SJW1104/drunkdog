@@ -1,793 +1,330 @@
-# SUNIVERSITY MVP API 명세서
+# SUNIVERSITY 백엔드 API 명세
 
-이 문서는 `backend/`에 구현된 JSON 더미데이터 백엔드 API를 기준으로 작성되었습니다.
-SMS, 이메일, OpenAI, AdMob 같은 외부 사업자 API 자체가 아니라, SUNIVERSITY 앱과 프론트엔드가
-호출하는 내부 REST API를 설명합니다.
+이 문서는 현재 JSON 기반 MVP의 설문 제작·교환·결과 API를 설명한다. 실제 실행 중인
+요청/응답 스키마는 FastAPI Swagger(`http://127.0.0.1:4000/docs`)가 최종 기준이다.
 
 ## 1. 공통 규칙
 
 | 항목 | 값 |
 |---|---|
-| 기본 URL | `http://127.0.0.1:4000/api/v1` |
+| Base URL | `http://127.0.0.1:4000/api/v1` |
 | 데이터 형식 | `application/json` |
-| 인증 방식 | `Authorization: Bearer {access_token}` |
-| ID 형식 | UUID 문자열. 대학 ID 등 일부 기준정보는 고정 문자열 사용 |
-| 날짜 형식 | ISO 8601 문자열. 예: `2026-07-23T14:30:00+00:00` |
-| 오류 형식 | `{ "detail": "오류 설명" }` |
-| 자동 문서 | 서버 실행 후 `http://127.0.0.1:4000/docs` |
+| 인증 | `Authorization: Bearer {access_token}` |
+| 날짜 | 타임존을 포함한 ISO 8601 |
+| 오류 본문 | `{"detail": "오류 설명"}` |
 
-### 공통 상태 코드
+대학교 인증이 필요한 API는 인증되지 않은 사용자의 요청을 `403`으로 거절한다. 일반
+공개 링크 API는 로그인과 대학교 인증이 필요 없다.
+
+### 상태 코드
 
 | 코드 | 의미 |
 |---|---|
 | `200` | 조회·수정 성공 |
-| `201` | 리소스 생성 성공 |
-| `400` | 인증번호 오류 등 잘못된 요청 |
-| `401` | 로그인 토큰 또는 웹훅 인증 실패 |
-| `402` | 포인트 부족 또는 유료 결과 열람권 필요 |
-| `403` | 학교 미인증 또는 접근 권한 없음 |
-| `404` | 대상 리소스를 찾을 수 없음 |
-| `409` | 중복 참여, 이미 처리된 상태, 마감된 설문 |
-| `422` | 필드 검증 실패 또는 잘못된 문항·선택지 |
-| `429` | 일일 광고 보상 횟수 초과 |
-| `503` | 외부 AI·SMS·이메일 공급자 사용 불가 |
+| `201` | 생성·응답 제출 성공 |
+| `400` | OTP 등 잘못된 요청 |
+| `401` | 토큰 없음·만료·위조 |
+| `403` | 대학교 미인증, 조건 불충족, 권한 없음 |
+| `404` | 리소스가 없거나 접근 권한이 없어 숨김 처리됨 |
+| `409` | 현재 상태에서 처리 불가, 중복, 제한 초과 |
+| `422` | 요청 필드 또는 설문 응답 검증 실패 |
+| `503` | AI 공급자 장애 |
 
-### 접근 권한 구분
+## 2. 인증과 개발 로그인
 
-| 구분 | 설명 |
-|---|---|
-| 공개 | 토큰 없이 호출 가능 |
-| 로그인 | 유효한 Bearer 토큰 필요 |
-| 학교 인증 | 로그인 후 대학교 이메일 인증까지 완료해야 함 |
-| 내부 웹훅 | 앱 사용자가 아닌 외부 연동 서버만 호출 |
-
-## 2. 전체 엔드포인트
-
-| 영역 | 메서드 | 경로 | 권한 | 설명 |
-|---|---|---|---|---|
-| 시스템 | GET | `/health` | 공개 | 서버 상태 확인 |
-| 개발 | GET | `/dev/dummy-users` | 개발 전용 | 더미 사용자 목록 |
-| 개발 | POST | `/dev/login` | 개발 전용 | 더미 사용자 즉시 로그인 |
-| 개발 | POST | `/dev/reset` | 개발 전용 | 시드 JSON으로 초기화 |
-| 인증 | GET | `/universities` | 공개 | 인증 가능한 학교 목록 |
-| 인증 | POST | `/auth/phone/request` | 공개 | 휴대전화 OTP 발급 |
-| 인증 | POST | `/auth/phone/verify` | 공개 | OTP 검증 및 로그인 |
-| 인증 | POST | `/auth/university/request` | 로그인 | 학교 이메일 OTP 발급 |
-| 인증 | POST | `/auth/university/verify` | 로그인 | 학교 인증 및 최초 포인트 지급 |
-| 사용자 | GET | `/users/me` | 로그인 | 내 프로필 조회 |
-| 사용자 | PATCH | `/users/me` | 로그인 | 닉네임 변경 |
-| 사용자 | GET | `/users/me/profile` | 로그인 | 활동 통계와 레벨 조회 |
-| 사용자 | GET | `/users/me/surveys` | 로그인 | 작성·참여 설문 조회 |
-| 사용자 | PATCH | `/users/me/preferences` | 로그인 | 관심사·알림·대표 칭호 변경 |
-| 사용자 | GET | `/users/me/bookmarks` | 로그인 | 저장한 설문 조회 |
-| 출석 | GET | `/attendance/today` | 로그인 | 오늘 출석과 연속 출석 조회 |
-| 출석 | POST | `/attendance/check-in` | 학교 인증 | 오늘 출석 및 5P 지급 |
-| 알림 | GET | `/notifications` | 로그인 | 알림 목록과 안 읽은 수 조회 |
-| 알림 | PATCH | `/notifications/{notification_id}/read` | 로그인 | 알림 한 건 읽음 처리 |
-| 알림 | POST | `/notifications/read-all` | 로그인 | 알림 모두 읽음 처리 |
-| 설문 | GET | `/survey-categories` | 공개 | 카테고리별 설문 수 조회 |
-| 설문 | POST | `/surveys` | 학교 인증 | 설문 임시저장 생성 |
-| 설문 | GET | `/surveys` | 공개 | 게시된 설문 피드 조회 |
-| 설문 | GET | `/surveys/{survey_id}` | 로그인 | 설문 상세 조회 |
-| 설문 | PATCH | `/surveys/{survey_id}` | 학교 인증·작성자 | 임시저장 수정 |
-| 설문 | DELETE | `/surveys/{survey_id}` | 학교 인증·작성자 | 임시저장 삭제 |
-| 설문 | GET | `/surveys/{survey_id}/reward-boost/quote` | 학교 인증·작성자 | 추가 참여 보상 결제 견적 |
-| 설문 | POST | `/surveys/{survey_id}/reward-boost/mock-purchase` | 학교 인증·작성자·개발 전용 | 추가 참여 보상 Mock 결제 |
-| 설문 | POST | `/surveys/{survey_id}/publish` | 학교 인증·작성자 | 설문 게시 |
-| 설문 | POST | `/surveys/{survey_id}/close` | 학교 인증·작성자 | 설문 마감 |
-| 설문 | GET | `/surveys/{survey_id}/progress` | 공개 | 응답 진행률 조회 |
-| 응답 | POST | `/surveys/{survey_id}/responses` | 학교 인증 | 설문 응답 제출 |
-| 결과 | GET | `/surveys/{survey_id}/results` | 로그인·열람 권한 | 결과 통계 조회 |
-| 결과 | POST | `/surveys/{survey_id}/results/purchase` | 학교 인증 | 유료 결과 열람권 구매 |
-| 커뮤니티 | GET | `/surveys/{survey_id}/comments` | 공개 | 댓글·대댓글 조회 |
-| 커뮤니티 | POST | `/surveys/{survey_id}/comments` | 학교 인증 | 댓글·대댓글 작성 |
-| 커뮤니티 | POST | `/surveys/{survey_id}/like` | 학교 인증 | 좋아요 토글 |
-| 커뮤니티 | POST/PUT/DELETE | `/surveys/{survey_id}/bookmark` | 로그인 | 북마크 토글·저장·해제 |
-| 커뮤니티 | POST | `/reports` | 학교 인증 | 설문·댓글·사용자 신고 |
-| 포인트 | GET | `/wallet` | 로그인 | 잔액과 원장 내역 조회 |
-| 포인트 | GET | `/rankings` | 로그인 | 전체·학교 랭킹 조회 |
-| 리워드 | GET | `/rewards/products` | 공개 | 교환 가능한 상품 조회 |
-| 리워드 | POST | `/rewards/exchanges` | 학교 인증 | 포인트로 상품 교환 |
-| 리워드 | GET | `/users/me/coupons` | 로그인 | 발급된 쿠폰 조회 |
-| 리워드 | POST | `/coupons/{exchange_id}/use` | 로그인 | 쿠폰 사용 처리 |
-| AI | POST | `/ai/survey-drafts` | 학교 인증 | AI 설문 초안 생성 |
-| AI | POST | `/ai/surveys/{survey_id}/analysis` | 학교 인증·작성자 | AI 심층 분석 |
-| 리포트 | POST | `/surveys/{survey_id}/reports/ppt` | 학교 인증·열람 권한 | Mock PPT 리포트 생성 |
-| 리포트 | GET | `/mock-files/{report_id}` | 공개·개발 전용 | Mock 리포트 다운로드 |
-| 밸런스 | GET | `/balance-games/categories` | 공개 | 밸런스게임 카테고리 |
-| 밸런스 | GET | `/balance-games` | 공개 | 밸런스게임 목록 |
-| 밸런스 | GET | `/balance-games/{game_id}` | 공개 | 게임과 실시간 비율 조회 |
-| 밸런스 | POST | `/balance-games/{game_id}/vote` | 학교 인증 | 투표 및 2P 지급 |
-| 밸런스 | GET/POST | `/balance-games/{game_id}/posts` | 조회 공개·작성 학교 인증 | 팀별 토론 |
-| 밸런스 | POST | `/balance-posts/{post_id}/replies` | 학교 인증 | 토론 답글 |
-| 밸런스 | POST | `/balance-posts/{post_id}/like` | 학교 인증 | 토론 좋아요 |
-| 광고 | POST | `/ads/rewarded/mock-complete` | 학교 인증·개발 전용 | 개발용 광고 보상 |
-| 광고 | POST | `/integrations/admob/rewarded` | 내부 웹훅 | 검증된 리워드 광고 포인트 지급 |
-
-## 3. 시스템 API
-
-### GET `/health`
-
-서버가 요청을 받을 수 있는지 확인합니다.
-
-응답 `200`:
-
-```json
-{
-  "status": "ok",
-  "storage": "json"
-}
-```
-
-## 4. 인증 API
-
-### GET `/universities`
-
-학교 이메일 인증에 사용할 학교와 허용 도메인을 조회합니다.
-
-응답 `200`:
-
-```json
-[
-  {
-    "id": "korea-sejong",
-    "name": "고려대학교 세종캠퍼스",
-    "email_domains": ["korea.ac.kr"]
-  }
-]
-```
-
-### POST `/auth/phone/request`
-
-휴대전화 번호로 6자리 인증번호를 발급합니다.
-
-요청:
-
-```json
-{
-  "phone": "010-1234-5678"
-}
-```
-
-응답 `200`:
-
-```json
-{
-  "expires_in_seconds": 300,
-  "dev_code": "123456"
-}
-```
-
-`dev_code`는 개발 환경에서만 반환하는 테스트용 인증번호입니다. 운영 환경에서는 응답에서
-제거하고 SMS 발송 어댑터를 사용해야 합니다.
-
-### POST `/auth/phone/verify`
-
-인증번호를 검증합니다. 처음 접속한 번호는 회원을 생성하고, 기존 번호는 로그인 처리합니다.
-
-요청:
-
-```json
-{
-  "phone": "010-1234-5678",
-  "code": "123456"
-}
-```
-
-응답 `200`:
-
-```json
-{
-  "access_token": "signed-access-token",
-  "token_type": "bearer",
-  "user": {
-    "id": "09a3e489-3bd4-4fbf-a6b6-d342fc3a4203",
-    "phone": "01012345678",
-    "nickname": "수니5678",
-    "email": null,
-    "university_id": null,
-    "university_verified": false,
-    "role": "user",
-    "created_at": "2026-07-23 12:00:00"
-  }
-}
-```
-
-이후 인증이 필요한 요청에는 다음 헤더를 사용합니다.
-
-```http
-Authorization: Bearer signed-access-token
-```
-
-### POST `/auth/university/request`
-
-선택한 학교의 이메일 도메인을 확인하고 학교 이메일 OTP를 발급합니다.
-
-요청:
-
-```json
-{
-  "university_id": "korea-sejong",
-  "email": "student@korea.ac.kr"
-}
-```
-
-응답은 전화 OTP 발급 응답과 같습니다. 개발 환경에서는 `dev_code`가 포함됩니다.
-
-주요 오류:
-
-- `404`: 등록되지 않은 학교
-- `422`: 해당 학교의 이메일 도메인이 아님
-- `503`: 운영 이메일 발송 어댑터가 설정되지 않음
-
-### POST `/auth/university/verify`
-
-학교 이메일 OTP를 확인하고 사용자를 학교 인증 상태로 변경합니다. 최초 성공 시 2,500P를
-한 번만 지급합니다.
-
-요청:
-
-```json
-{
-  "email": "student@korea.ac.kr",
-  "code": "654321"
-}
-```
-
-응답 `200`: 갱신된 사용자 객체
-
-## 5. 사용자 API
-
-### GET `/users/me`
-
-현재 로그인한 사용자 정보를 조회합니다.
-
-### PATCH `/users/me`
-
-닉네임을 변경합니다. 닉네임은 2~20자입니다.
-
-요청:
-
-```json
-{
-  "nickname": "세종캠퍼스러"
-}
-```
-
-응답 `200`: 갱신된 사용자 객체
-
-## 6. 설문 API
-
-### 문항 유형
-
-| `question_type` | 설명 | 답변 필드 |
+| 메서드 | 경로 | 설명 |
 |---|---|---|
-| `single` | 객관식 단일 선택 | `option_ids`에 1개 |
-| `multiple` | 객관식 복수 선택 | `option_ids`에 여러 개 |
-| `text` | 주관식 | `value_text` |
-| `number` | 숫자 입력 | `value_number` |
-| `scale` | 척도형 | `option_ids`에 1개 |
-| `balance` | 밸런스게임 | 선택지 정확히 2개, 답변은 1개 |
+| `GET` | `/health` | 서버 상태 확인 |
+| `GET` | `/universities` | 인증 가능한 대학교 목록 |
+| `POST` | `/auth/phone/request` | 휴대전화 OTP 발급 |
+| `POST` | `/auth/phone/verify` | 휴대전화 OTP 검증 및 로그인 |
+| `POST` | `/auth/university/request` | 대학교 이메일 OTP 발급 |
+| `POST` | `/auth/university/verify` | 대학교 인증 완료 |
+| `POST` | `/dev/login?user_id=demo-author` | 개발용 즉시 로그인 |
+| `POST` | `/dev/reset` | 개발 JSON 데이터를 seed 상태로 초기화 |
 
-### 결과 공개 유형
+개발 로그인 응답의 `access_token`을 이후 요청의 Bearer 토큰으로 사용한다.
 
-| `results_visibility` | 설명 |
-|---|---|
-| `public` | 로그인 사용자는 누구나 열람 가능 |
-| `after_participation` | 설문 참여자와 작성자만 열람 가능 |
-| `private` | 작성자만 열람 가능 |
-| `paid` | 작성자 또는 포인트로 열람권을 구매한 사용자만 가능 |
+## 3. 설문
 
-### POST `/surveys`
+### 지원 문항
 
-설문과 문항을 생성합니다. 최초 상태는 `draft`입니다.
+`question_type`은 다음 값을 지원한다.
 
-요청 예시:
+- `short_text`, `long_text`
+- `single_choice`, `checkboxes`, `dropdown`
+- `linear_scale`
+- `multiple_choice_grid`, `checkbox_grid`
+- `date`, `time`, `file_upload`
+
+질문에는 `required`, `description`, `validation`, 선택지, 척도 범위 등을 설정할 수 있다.
+그리드형 문항의 교환용 유효 문항 수는 질문 객체 수가 아니라 행(`rows`) 수로 계산한다.
+
+문항 구간은 `1~5`, `6~10`, `11~15`처럼 5개 단위다. 문항이 0개인 설문은 초안으로
+저장할 수 있지만 게시·교환할 수 없다.
+
+### 설문 생성
+
+`POST /surveys`
+
+대학교 인증이 필요하다. 교환 필드를 생략하면 일반 설문 초안으로 생성할 수 있다.
 
 ```json
 {
-  "title": "캠퍼스 셔틀이 생긴다면 이용하시겠어요?",
-  "description": "셔틀버스 도입 수요를 조사합니다.",
-  "category": "대학생활",
-  "survey_type": "standard",
-  "results_visibility": "after_participation",
-  "result_price_points": 0,
-  "target_responses": 100,
-  "deadline": "2026-08-01T23:59:59+09:00",
+  "title": "대학생의 생성형 AI 활용 조사",
+  "description": "논문 연구용 설문입니다.",
+  "category": "연구·프로젝트",
+  "category_tags": ["AI", "학습"],
+  "deadline": "2026-08-15T23:59:00+09:00",
   "questions": [
     {
-      "question_type": "single",
-      "prompt": "셔틀이 생기면 이용하시겠어요?",
+      "question_type": "single_choice",
+      "prompt": "생성형 AI를 사용한 적이 있나요?",
       "required": true,
       "options": [
-        {"label": "네"},
-        {"label": "아니요"}
+        {"label": "있다"},
+        {"label": "없다"}
       ]
-    },
-    {
-      "question_type": "text",
-      "prompt": "희망 노선을 알려주세요.",
-      "required": false,
-      "options": []
     }
-  ]
+  ],
+  "external_access_enabled": true,
+  "respondent_results_enabled": true,
+  "exchange_enabled": true,
+  "exchange_methods": ["direct", "auto"],
+  "exchange_unit": "individual",
+  "target_exchange_responses": 20,
+  "auto_repeat": true,
+  "required_respondent_conditions": [
+    {"field": "year", "values": ["2", "3", "4"]}
+  ],
+  "results_visibility": "after_participation"
 }
 ```
 
-응답 `201`: 생성된 설문 상세 객체. 서버에서 생성한 설문·문항·선택지 ID가 포함됩니다.
-
-검증 규칙:
-
-- 설문 제목: 2~150자
-- 문항: 1~100개
-- 선택형 문항: 선택지 2개 이상
-- 밸런스 문항: 선택지 정확히 2개
-- `paid` 결과: `result_price_points`가 1 이상이어야 함
-- 참여 보상은 서버가 계산하므로 요청에 `reward_points`를 직접 넣을 수 없음
-
-### GET `/surveys`
-
-게시 상태인 설문 피드를 조회합니다.
-
-쿼리 파라미터:
-
-| 이름 | 기본값 | 설명 |
-|---|---:|---|
-| `sort` | `latest` | `latest`, `hot`, `deadline` 중 하나 |
-| `category` | 없음 | 카테고리 일치 필터 |
-| `limit` | `20` | 1~100 |
-| `offset` | `0` | 페이지 시작 위치 |
-
-응답 항목에는 `response_count`, `like_count`, `question_count`가 포함됩니다.
-
-### GET `/surveys/{survey_id}`
-
-설문과 문항·선택지를 조회합니다. 임시저장 설문은 작성자만 조회할 수 있습니다.
-
-### POST `/surveys/{survey_id}/publish`
-
-작성자가 `draft` 설문을 게시합니다. 성공 시 상태가 `published`로 변경됩니다.
-
-### 추가 참여 보상 견적과 결제
-
-기본 보상은 문항 수와 같고 최소 5P, 최대 40P입니다. 따라서 4문항 설문의 기본
-참여 보상은 5P입니다.
-
-```http
-GET /surveys/{survey_id}/reward-boost/quote?increment_points=10
-```
-
-응답 예시:
+팀 설문은 다음 필드를 사용한다.
 
 ```json
 {
-  "survey_id": "survey-uuid",
-  "question_count": 4,
-  "base_reward_points": 5,
-  "current_reward_boost_points": 0,
-  "increment_points": 10,
-  "new_reward_boost_points": 10,
-  "new_reward_points": 15,
-  "unit_reward_points": 10,
-  "unit_price_krw": 1000,
-  "amount_krw": 1000,
-  "currency": "KRW",
-  "charge_scope": "survey_flat"
+  "exchange_unit": "team",
+  "team_id": "팀 ID",
+  "team_requested_responses": 3
 }
 ```
 
-개발용 결제:
+`team_requested_responses`는 해당 팀원 수 이하여야 한다.
 
-```http
-POST /surveys/{survey_id}/reward-boost/mock-purchase
-```
+### 설문 엔드포인트
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `POST` | `/surveys` | 초안 생성 |
+| `GET` | `/surveys` | 게시 설문 목록 |
+| `GET` | `/surveys/{survey_id}` | 설문 상세 |
+| `PATCH` | `/surveys/{survey_id}` | 작성자 초안 수정 |
+| `DELETE` | `/surveys/{survey_id}` | 작성자 초안 삭제 |
+| `POST` | `/surveys/{survey_id}/publish` | 게시 |
+| `POST` | `/surveys/{survey_id}/close` | 조기 마감 |
+| `GET` | `/users/me/surveys` | 내 작성·참여 설문 |
+| `GET` | `/survey-categories` | 카테고리 목록 |
+
+교환이 시작되어 `structure_locked_at`이 설정된 뒤에는 질문 구조를 변경할 수 없다.
+제목·설명 등 안전한 메타데이터만 수정할 수 있다.
+
+## 4. 팀
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `POST` | `/teams` | 팀 생성 |
+| `GET` | `/teams` | 내가 속한 팀 목록 |
+| `POST` | `/teams/{team_id}/members` | 팀장이 인증 사용자를 추가 |
+| `GET` | `/teams/{team_id}/reliability` | 팀 신뢰도 |
+
+개인은 개인 설문과, 팀은 팀 설문과만 교환된다. 팀 교환의 양쪽 필수 응답 수는 같을
+필요가 없다. 각 팀이 자신의 설문에 설정한 `team_requested_responses`만큼 상대 설문에
+응답하며, 한 명이라도 부족하면 전체 교환 결과가 반영되지 않는다.
+
+## 5. 직접(선택) 교환
+
+직접 교환은 내 설문과 같거나 더 높은 문항 구간의 설문에만 신청할 수 있다. 추천
+목록은 카테고리 유사도와 문항 수 등을 반영해 정렬한다.
+
+### 추천 조회
+
+`GET /exchanges/recommendations?survey_id={내 설문 ID}&limit=20`
+
+신청 가능한 설문만 반환한다.
+
+### 교환 신청
+
+`POST /exchanges/direct`
+
+신청과 동시에 신청자가 상대 설문에 응답한다. 이 응답은 `held` 상태로 저장되어 통계에
+포함되지 않는다.
 
 ```json
 {
-  "increment_points": 10,
-  "transaction_id": "client-stable-transaction-id"
-}
-```
-
-서버가 금액을 계산하며, 같은 거래 ID와 같은 요청을 재전송하면 `duplicate: true`로
-기존 결제를 반환합니다. 같은 거래 ID를 다른 금액이나 설문에 사용하면 `409`입니다.
-Mock 결제는 개발 환경에서만 사용할 수 있습니다.
-
-추가 보상은 `+10P`마다 설문 한 건 기준 1,000원입니다. 목표 응답 수에 비례하는
-예산 결제가 아니며, 결제가 완료된 보상만 게시 시점에 정책으로 고정됩니다.
-
-### POST `/surveys/{survey_id}/close`
-
-작성자가 게시된 설문을 수동 마감합니다. 성공 시 상태가 `closed`로 변경됩니다.
-
-### GET `/surveys/{survey_id}/progress`
-
-응답 수와 목표 달성률을 조회합니다.
-
-응답 `200`:
-
-```json
-{
-  "survey_id": "survey-uuid",
-  "response_count": 42,
-  "target_responses": 100,
-  "percentage": 42.0
-}
-```
-
-목표 응답 수를 설정하지 않은 경우 `percentage`는 `null`입니다.
-
-## 7. 응답 API
-
-### POST `/surveys/{survey_id}/responses`
-
-게시된 설문에 응답합니다. 한 사용자는 한 설문에 한 번만 참여할 수 있습니다.
-
-요청 예시:
-
-```json
-{
+  "source_survey_id": "내 설문 ID",
+  "target_survey_id": "상대 설문 ID",
   "answers": [
     {
-      "question_id": "single-question-uuid",
-      "option_ids": ["selected-option-uuid"]
-    },
-    {
-      "question_id": "multiple-question-uuid",
-      "option_ids": ["option-a-uuid", "option-b-uuid"]
-    },
-    {
-      "question_id": "text-question-uuid",
-      "value_text": "정문에서 기숙사까지 필요합니다."
-    },
-    {
-      "question_id": "number-question-uuid",
-      "value_number": 4
+      "question_id": "질문 ID",
+      "option_ids": ["선택지 ID"]
     }
   ]
 }
 ```
 
-응답 `201`:
+### 상대방 처리
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `POST` | `/exchanges/{exchange_id}/accept` | 받은 직접 신청 수락 |
+| `POST` | `/exchanges/{exchange_id}/responses` | 상대 설문 응답 |
+| `POST` | `/exchanges/{exchange_id}/reject` | 수락 전 거절 |
+| `POST` | `/exchanges/{exchange_id}/cancel` | 진행 중 교환 수동 취소 |
+| `GET` | `/exchanges?state={state}` | 내 교환 목록 |
+
+취소 요청 예시:
 
 ```json
-{
-  "response_id": "response-uuid",
-  "points_earned": 15,
-  "base_points": 5,
-  "author_boost_points": 10,
-  "deadline_bonus_points": 0,
-  "quoted_reward_points": 15,
-  "daily_cap_applied": false,
-  "balance": 2515,
-  "badge": null,
-  "result_access": true,
-  "balance_result": null
-}
+{"reason": "연구 일정 변경"}
 ```
 
-서버 검증 사항:
+개인 직접 교환은 신청자가 먼저 답하고, 상대 작성자가 수락 후 답하면 완료된다. 팀
+교환은 각 팀의 필수 인원 전원이 응답해야 완료된다.
 
-- 게시 상태 및 마감일 확인
-- 사용자 중복 참여 확인
-- 설문에 포함된 문항·선택지인지 확인
-- 필수 문항 누락 확인
-- 단일·복수 선택 개수 확인
-- 포인트 지급 및 일일 한도 적용
+## 6. 자동 매칭
 
-## 8. 결과 API
+자동 매칭은 동일 문항 구간끼리만 연결한다. 1차 조건은 문항 구간과 필수 응답자 조건,
+2차 우선순위는 신뢰도 80%와 대기 시간 20%다.
 
-### GET `/surveys/{survey_id}/results`
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `POST` | `/exchanges/auto/queue` | 자동 매칭 대기 등록 |
+| `GET` | `/exchanges/auto/queue` | 내 활성 대기·매칭 항목 |
 
-공개 정책에 따라 설문 집계 결과를 조회합니다.
-
-선택형 결과 예시:
+등록 요청:
 
 ```json
-{
-  "survey_id": "survey-uuid",
-  "title": "캠퍼스 셔틀 수요 조사",
-  "response_count": 10,
-  "questions": [
-    {
-      "question_id": "question-uuid",
-      "prompt": "셔틀을 이용하시겠어요?",
-      "question_type": "single",
-      "answer_count": 10,
-      "options": [
-        {
-          "option_id": "option-uuid",
-          "label": "네",
-          "count": 8,
-          "percentage": 80.0
-        }
-      ]
-    }
-  ]
-}
+{"survey_id": "자동 매칭할 설문 ID"}
 ```
 
-숫자 문항은 `average`, `minimum`, `maximum`을 반환합니다. 주관식 원문 목록은 개인정보
-노출을 줄이기 위해 설문 작성자에게만 최대 100개까지 반환합니다.
+상대가 없으면 `status: "waiting"`, 연결되면 `status: "matched"`와 교환 객체를 반환한다.
+자동 매칭은 별도의 수락 단계가 없으며 양쪽이 `/exchanges/{id}/responses`로 상대 설문에
+응답한다.
 
-### POST `/surveys/{survey_id}/results/purchase`
+`auto_repeat: true`이면 목표 교환 응답 수를 채울 때까지 완료·취소 후 자동으로 다시
+대기한다. 한 번 종료된 동일한 두 설문은 즉시 다시 연결하지 않는다.
 
-`results_visibility=paid`인 설문의 열람권을 포인트로 구매합니다.
+## 7. 교환 상태와 예외 규칙
 
-요청 본문은 없습니다.
+### 교환 상태
 
-응답 `200`:
-
-```json
-{
-  "purchased": true,
-  "balance": 2300
-}
-```
-
-같은 사용자가 같은 설문을 다시 구매해도 중복 차감되지 않습니다. 결제액의 70%는 설문 작성자
-포인트로 지급되며 30%는 플랫폼 몫입니다.
-
-## 9. 커뮤니티 API
-
-### GET `/surveys/{survey_id}/comments`
-
-삭제되지 않은 댓글과 대댓글을 작성 순서대로 조회합니다.
-
-응답 예시:
-
-```json
-[
-  {
-    "id": "comment-uuid",
-    "survey_id": "survey-uuid",
-    "parent_id": null,
-    "body": "흥미로운 설문이네요.",
-    "display_name": "세종캠퍼스러",
-    "university_name": "고려대학교 세종캠퍼스",
-    "created_at": "2026-07-23 12:00:00"
-  }
-]
-```
-
-익명 댓글은 `display_name`이 `익명`, `university_name`이 `null`로 반환됩니다.
-
-### POST `/surveys/{survey_id}/comments`
-
-댓글 또는 대댓글을 작성합니다.
-
-요청:
-
-```json
-{
-  "body": "저도 셔틀이 필요하다고 생각합니다.",
-  "parent_id": null,
-  "display_mode": "nickname"
-}
-```
-
-| 필드 | 값 |
+| 상태 | 의미 |
 |---|---|
-| `body` | 1~1,000자 |
-| `parent_id` | 일반 댓글은 `null`, 대댓글은 부모 댓글 ID |
-| `display_mode` | `anonymous` 또는 `nickname` |
+| `awaiting_acceptance` | 직접 신청 후 상대 수락 대기 |
+| `in_progress` | 수락 또는 자동 연결 후 응답 진행 |
+| `completed` | 양쪽 의무 응답 완료, 결과 반영됨 |
+| `rejected` | 직접 신청 거절 |
+| `cancelled` | 수동 취소, 설문 조기 마감, 팀원 부족 |
+| `expired` | 교환 완료 기한 초과 |
 
-### POST `/surveys/{survey_id}/like`
+### 응답 결과 상태
 
-좋아요를 토글합니다. 별도 요청 본문은 없습니다.
-
-```json
-{
-  "liked": true,
-  "like_count": 15
-}
-```
-
-### POST `/reports`
-
-설문·댓글·사용자를 신고합니다.
-
-요청:
-
-```json
-{
-  "target_type": "comment",
-  "target_id": "comment-uuid",
-  "reason": "욕설이 포함되어 있습니다."
-}
-```
-
-`target_type`은 `survey`, `comment`, `user` 중 하나입니다.
-
-응답 `201`:
-
-```json
-{
-  "report_id": "report-uuid",
-  "status": "pending"
-}
-```
-
-## 10. 포인트 API
-
-### GET `/wallet`
-
-현재 잔액, 오늘 획득한 보상, 최근 포인트 원장을 조회합니다.
-
-쿼리 파라미터 `limit`은 기본 50, 최대 200입니다.
-
-응답 예시:
-
-```json
-{
-  "balance": 2510,
-  "daily_reward_total": 10,
-  "daily_reward_limit": 1000,
-  "transactions": [
-    {
-      "id": "ledger-uuid",
-      "amount": 10,
-      "entry_type": "rewarded_ad",
-      "reference_type": "admob_transaction",
-      "reference_id": "ad-transaction-id",
-      "balance_after": 2510,
-      "created_at": "2026-07-23 12:00:00"
-    }
-  ]
-}
-```
-
-현재 포인트 처리 규칙:
-
-| 이벤트 | 포인트 |
-|---|---:|
-| 학교 인증 최초 완료 | `+2,500P` |
-| 설문 참여 | 문항 수 기준 최소 `5P`, 최대 `40P` |
-| 작성자 추가 보상 | `+10P`마다 설문 한 건 기준 `1,000원` 결제 |
-| 마감까지 24시간 이하인 설문 참여 | 무료 기본 참여 포인트만 `1.5배` |
-| 출석 체크 | 하루 한 번 `+5P` |
-| 일반 일일 획득 한도 | `1,000P` |
-| 리워드 광고 | `+10P`, 하루 최대 5회 |
-| AI 심층 분석 | `-200P` |
-| 유료 결과 열람 | 작성자가 설정한 포인트 차감 |
-
-포인트 적립·차감은 클라이언트가 금액을 직접 지정하지 않습니다. 설문 제출, 학교 인증, 검증된
-광고 웹훅 등 서버 이벤트에 의해 원장이 생성됩니다.
-
-## 11. AI API
-
-### POST `/ai/survey-drafts`
-
-주제와 대상에 맞는 설문 제목·설명·문항 초안을 만듭니다.
-
-요청:
-
-```json
-{
-  "topic": "도서관 운영 시간 연장",
-  "audience": "고려대학교 세종캠퍼스 재학생",
-  "tone": "friendly",
-  "question_count": 8
-}
-```
-
-| 필드 | 규칙 |
+| 상태 | 의미 |
 |---|---|
-| `topic` | 2~500자 |
-| `audience` | 최대 200자 |
-| `tone` | `friendly`, `neutral`, `academic` |
-| `question_count` | 2~30개 |
+| `held` | 교환 진행 중 보류, 통계·표·CSV에서 제외 |
+| `included` | 교환 완료 또는 일반 링크 응답, 결과에 포함 |
+| `excluded` | 취소·거절·만료로 폐기, 결과에서 제외 |
 
-응답은 `POST /surveys`의 `title`, `description`, `questions` 필드와 호환됩니다. 사용자는 AI
-초안을 검토·수정한 뒤 설문 생성 API로 저장해야 합니다.
+### 제한과 자동 정리
 
-### POST `/ai/surveys/{survey_id}/analysis`
+- 교환 완료 기한은 양쪽 설문 마감 중 빠른 시점의 24시간 전이다.
+- 기한이 지나면 미완료 교환을 자동으로 `expired` 처리한다.
+- 설문이 조기 마감·삭제되면 관련 활성 교환을 취소한다.
+- 팀의 조건 충족 활성 인원이 남은 의무 응답 수보다 적으면 전체 교환을 취소한다.
+- 보낸 직접 신청 최대 10건, 받은 직접 신청 최대 10건이다.
+- 설문별 활성 자동 교환·대기는 최대 10건이다.
+- 완료·예약 응답이 `target_exchange_responses`를 넘지 않도록 새 교환을 막는다.
+- 수동 취소자는 신뢰도가 하락하고 상대방은 불이익을 받지 않는다.
 
-설문 작성자가 집계 결과를 바탕으로 심층 분석을 생성합니다. 성공 시 200P가 차감됩니다.
+JSON MVP에는 상시 실행되는 백그라운드 작업자가 없다. 교환·결과 대시보드 API가 호출될
+때 상태를 자동 보정하며, 명시적으로 실행하려면 다음 API를 사용할 수 있다.
 
-요청 본문은 없습니다.
-
-응답 예시:
-
-```json
-{
-  "analysis": {
-    "summary": "총 100명이 참여했으며 셔틀 도입 찬성이 우세했습니다.",
-    "findings": [
-      "응답자의 72%가 셔틀 이용 의향을 표시했습니다.",
-      "기숙사와 정문 연결 수요가 가장 높았습니다."
-    ],
-    "cautions": [
-      "이 결과는 자발적으로 참여한 사용자 표본에 한정됩니다."
-    ]
-  },
-  "points_charged": 200,
-  "balance": 2300
-}
-```
-
-AI 공급자에는 전화번호, 학교 이메일, 사용자 ID가 아니라 서버에서 계산한 집계 통계만
-전달합니다.
-
-## 12. 광고 연동 API
-
-### POST `/integrations/admob/rewarded`
-
-광고 검증 계층이 정상 광고 시청을 확인한 뒤 호출하는 내부 API입니다.
-
-필수 헤더:
-
-```http
-X-Webhook-Secret: configured-webhook-secret
-```
-
-요청:
+`POST /exchanges/reconcile`
 
 ```json
 {
-  "transaction_id": "admob-transaction-001",
-  "user_id": "user-uuid",
-  "reward_amount": 10
+  "terminalized": 1,
+  "auto_matches_created": 0,
+  "active_for_user": 2
 }
 ```
 
-응답:
+## 8. 신뢰도
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `GET` | `/users/me/reliability` | 개인 신뢰도 |
+| `GET` | `/teams/{team_id}/reliability` | 팀 신뢰도 |
+
+초기 신뢰도는 30점이다. 현재 공식은 아래와 같다.
+
+```text
+신뢰도 = 100 × (완료 슬롯 + 1.5) / (의무 슬롯 + 5)
+```
+
+0~100 범위, 소수 첫째 자리로 반환한다. 자동 매칭 우선순위는 신뢰도 80%, 최대 72시간
+동안 증가하는 대기 점수 20%를 반영한다.
+
+## 9. 공개 링크
+
+외부 참여자는 앱 계정과 대학교 인증이 필요 없다.
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `GET` | `/surveys/{survey_id}/share-link` | 작성자가 공개 링크 발급·조회 |
+| `GET` | `/public/surveys/{slug}` | 외부 참여용 설문 조회 |
+| `POST` | `/public/surveys/{slug}/responses` | 외부 응답 제출 |
+| `GET` | `/public/results/{token}` | 외부 응답자의 결과 조회 |
+
+외부 링크 응답은 교환이 아니므로 검증 성공 즉시 `included`가 된다.
+
+## 10. 결과
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `GET` | `/surveys/{survey_id}/results` | 요약·질문별 통계와 그래프 데이터 |
+| `GET` | `/surveys/{survey_id}/responses/table` | 작성자용 개별 응답 표 |
+| `GET` | `/surveys/{survey_id}/results.csv` | 작성자용 CSV 다운로드 |
+| `GET` | `/research/dashboard` | 내 설문·교환·신뢰도 요약 |
+
+교환 응답은 `completed` 이후에만 결과에 포함된다. 보류 중인 응답은 진행 수치로
+노출하지 않고 `pending` 여부만 제공한다.
+
+작성자는 응답자의 학교·학년과 필수 조건 충족에 필요한 프로필 범위를 볼 수 있다.
+일반 응답자는 통계 그래프를 볼 수 있지만 개별 응답자의 개인정보는 볼 수 없다.
+
+## 11. AI 질문 다듬기
+
+`POST /ai/questions/rewrite`
 
 ```json
 {
-  "accepted": true,
-  "reward": 10,
-  "balance": 2520,
-  "duplicate": false
+  "prompt": "학교 수업 만족하나요?",
+  "description": "수업 전반을 묻는 질문",
+  "question_type": "single_choice"
 }
 ```
 
-같은 `transaction_id`가 다시 전달되면 포인트를 중복 지급하지 않고 `duplicate: true`를
-반환합니다.
+응답은 원본과 수정본, 수정 이유를 함께 제공한다. 작성자가 둘 중 하나를 선택하고,
+AI 수정본도 설문 저장 전에 다시 편집할 수 있다. `AI_MODE=mock`이면 외부 API 없이
+고정된 개발용 수정 결과를 반환한다.
 
-이 엔드포인트의 `X-Webhook-Secret`은 SUNIVERSITY 내부 어댑터 인증용입니다. 운영 환경에서
-AdMob 원본 콜백을 받을 때는 그 앞단에서 Google SSV의 ECDSA 서명을 별도로 검증해야 합니다.
+## 12. 현재 MVP 범위 주의사항
 
-## 13. 참여·리워드·밸런스게임 API 요약
-
-### 출석과 알림
-
-- `GET /attendance/today`: 오늘 출석 여부, 연속 출석 수, 최근 7일 기록을 반환합니다.
-- `POST /attendance/check-in`: 한국 날짜 기준 하루 한 번 5P를 지급합니다. 재호출은
-  `already_checked_in: true`이며 중복 지급하지 않습니다.
-- `GET /notifications`: `items`, `unread_count`, `total`, 페이지 정보를 반환합니다.
-- 읽음 처리는 한 건 또는 전체에 대해 여러 번 호출해도 안전합니다.
-
-### 북마크와 기프티콘
-
-- `POST /surveys/{survey_id}/bookmark`는 현재 상태를 토글합니다.
-- 명시적 저장·해제는 같은 경로에 `PUT`, `DELETE`를 사용합니다.
-- `POST /rewards/exchanges` 요청은 `{ "product_id": "...", "quantity": 1 }`입니다.
-- 교환 성공 시 포인트가 차감되고 개발용 쿠폰 코드가 발급됩니다.
-
-### Mock 광고와 리포트
-
-- `POST /ads/rewarded/mock-complete` 요청의 `transaction_id`를 생략하면 서버가 생성합니다.
-  하루 최대 5번, 회당 10P이며 같은 거래 ID는 중복 지급하지 않습니다.
-- `POST /surveys/{survey_id}/reports/ppt`는 400P를 차감합니다. 같은 응답 버전의 리포트는
-  캐시되어 다시 차감되지 않습니다.
-- 현재 다운로드 파일은 연동 검증용 mock입니다. 운영용 실제 PowerPoint 생성기는
-  별도 파일 생성 작업으로 교체해야 합니다.
-
-### 밸런스게임
-
-- 목록과 상세는 비로그인 조회가 가능하며 토큰이 있으면 `my_choice`가 포함됩니다.
-- 투표 요청은 `{ "choice_id": "option-id" }`이며 결과 비율과 적립 포인트를 즉시 반환합니다.
-- 투표를 완료한 사용자만 토론 글·답글을 작성할 수 있고 선택한 팀은 서버가 지정합니다.
-
-## 14. 실제 서비스 전 후속 범위
-
-현재 JSON MVP 이후에 추가하거나 외부 서비스로 교체해야 하는 범위입니다.
-
-- 설문 복제와 유료 끌어올리기
-- 현금 출금과 지급대행
-- StoreKit·Google Play 결제 검증
-- 친구 초대와 실제 푸시 토큰 전송
-- 관리자 신고 심사·포인트 회수·회원 정지
-- 실제 CSV·Excel·PowerPoint 파일 생성과 비동기 작업 큐
-- 운영용 AI 분석, SMS·학교 이메일, AdMob SSV 연동
+- 데이터는 `data/runtime.json`에 저장되며 단일 프로세스 실행을 전제로 한다.
+- 실제 배포 전 PostgreSQL 트랜잭션, 백그라운드 작업자, 분산 잠금이 필요하다.
+- 기존 포인트·리워드·밸런스게임 API 일부는 호환을 위해 코드에 남아 있으나 현재
+  SUNIVERSITY 설문 교환 제품 범위가 아니며 새 화면에서 사용하지 않는다.
+- Swagger의 스키마가 이 문서와 다르면 실행 중인 Swagger를 우선 확인한다.

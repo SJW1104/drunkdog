@@ -17,6 +17,7 @@ from .exchange_domain import (
     reliability_for_actor,
     reserved_responses_for_survey,
 )
+from .exchange_routes import reconcile_exchanges
 from .response_validation import validate_answers
 from .routes import calculate_results, effective_status, find_by_id, university_name
 from .schemas import (
@@ -334,65 +335,66 @@ def research_dashboard(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
-    data = request.app.state.store.snapshot()
-    surveys = [
-        survey
-        for survey in data["surveys"]
-        if survey["author_id"] == user["id"]
-    ]
-    active_exchange_count = sum(
-        1
-        for exchange in data["exchanges"]
-        if exchange.get("state") in {"awaiting_acceptance", "in_progress"}
-        and any(
-            side.get("actor_type") == "user"
-            and side.get("actor_id") == user["id"]
-            or side.get("actor_type") == "team"
-            and user["id"]
-            in (
-                find_by_id(data, "teams", side.get("actor_id")) or {}
-            ).get("member_ids", [])
-            for side in (exchange["side_a"], exchange["side_b"])
-        )
-    )
-    return {
-        "user": {
-            "id": user["id"],
-            "nickname": user["nickname"],
-            "university_verified": user.get("university_verified", False),
-            "university": university_name(data, user.get("university_id")),
-        },
-        "reliability": reliability_for_actor(
-            data, actor_type="user", actor_id=user["id"]
-        ),
-        "active_exchange_count": active_exchange_count,
-        "surveys": [
-            {
-                "id": survey["id"],
-                "title": survey["title"],
-                "status": effective_status(survey),
-                "response_count": sum(
-                    1
-                    for response in data["responses"]
-                    if response["survey_id"] == survey["id"]
-                    and response.get("result_status", "included") == "included"
-                ),
-                "exchange_completed_responses": completed_exchange_responses(
-                    data, survey["id"]
-                ),
-                "exchange_reserved_responses": reserved_responses_for_survey(
-                    data, survey["id"]
-                ),
-                "question_count": effective_question_count(survey),
-                "question_bucket": question_bucket_label(
-                    effective_question_count(survey)
-                ),
-            }
-            for survey in sorted(
-                surveys, key=lambda item: item["created_at"], reverse=True
+    with request.app.state.store.transaction() as data:
+        reconcile_exchanges(data)
+        surveys = [
+            survey
+            for survey in data["surveys"]
+            if survey["author_id"] == user["id"]
+        ]
+        active_exchange_count = sum(
+            1
+            for exchange in data["exchanges"]
+            if exchange.get("state") in {"awaiting_acceptance", "in_progress"}
+            and any(
+                side.get("actor_type") == "user"
+                and side.get("actor_id") == user["id"]
+                or side.get("actor_type") == "team"
+                and user["id"]
+                in (
+                    find_by_id(data, "teams", side.get("actor_id")) or {}
+                ).get("member_ids", [])
+                for side in (exchange["side_a"], exchange["side_b"])
             )
-        ],
-    }
+        )
+        return {
+            "user": {
+                "id": user["id"],
+                "nickname": user["nickname"],
+                "university_verified": user.get("university_verified", False),
+                "university": university_name(data, user.get("university_id")),
+            },
+            "reliability": reliability_for_actor(
+                data, actor_type="user", actor_id=user["id"]
+            ),
+            "active_exchange_count": active_exchange_count,
+            "surveys": [
+                {
+                    "id": survey["id"],
+                    "title": survey["title"],
+                    "status": effective_status(survey),
+                    "response_count": sum(
+                        1
+                        for response in data["responses"]
+                        if response["survey_id"] == survey["id"]
+                        and response.get("result_status", "included") == "included"
+                    ),
+                    "exchange_completed_responses": completed_exchange_responses(
+                        data, survey["id"]
+                    ),
+                    "exchange_reserved_responses": reserved_responses_for_survey(
+                        data, survey["id"]
+                    ),
+                    "question_count": effective_question_count(survey),
+                    "question_bucket": question_bucket_label(
+                        effective_question_count(survey)
+                    ),
+                }
+                for survey in sorted(
+                    surveys, key=lambda item: item["created_at"], reverse=True
+                )
+            ],
+        }
 
 
 @router.patch("/users/me/research-profile", tags=["users"])

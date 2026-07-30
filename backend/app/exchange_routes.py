@@ -99,6 +99,16 @@ def _survey_is_open_for_exchange(survey: dict[str, Any], method: str) -> None:
         raise HTTPException(status_code=409, detail="마감일이 없는 설문은 교환할 수 없습니다.")
 
 
+def _survey_exchange_window_open(survey: dict[str, Any]) -> bool:
+    deadline_value = survey.get("deadline")
+    if survey.get("status") != "published" or not deadline_value:
+        return False
+    deadline = datetime.fromisoformat(deadline_value)
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+    return deadline.timestamp() - 24 * 60 * 60 > _now().timestamp()
+
+
 def _required_counts(
     left: dict[str, Any], right: dict[str, Any]
 ) -> tuple[int, int]:
@@ -232,6 +242,22 @@ def _active_pair_exists(
     return any(
         exchange.get("state") in ACTIVE_EXCHANGE_STATES
         and {
+            exchange["side_a"]["survey_id"],
+            exchange["side_b"]["survey_id"],
+        }
+        == pair
+        for exchange in data["exchanges"]
+    )
+
+
+def _pair_has_history(
+    data: dict[str, Any], first_id: str, second_id: str
+) -> bool:
+    """Prevent auto-repeat from immediately matching the same two surveys again."""
+
+    pair = {first_id, second_id}
+    return any(
+        {
             exchange["side_a"]["survey_id"],
             exchange["side_b"]["survey_id"],
         }
@@ -479,6 +505,111 @@ def _expire_due_exchanges(data: dict[str, Any]) -> None:
         _ensure_auto_requeue(data, exchange)
 
 
+def _cancel_unavailable_survey_exchanges(data: dict[str, Any]) -> None:
+    for exchange in data["exchanges"]:
+        if exchange.get("state") not in ACTIVE_EXCHANGE_STATES:
+            continue
+        unavailable_sides = [
+            side_key
+            for side_key in ("side_a", "side_b")
+            if (
+                _find(data, "surveys", exchange[side_key]["survey_id"]) is None
+                or (
+                    _find(data, "surveys", exchange[side_key]["survey_id"]) or {}
+                ).get("status")
+                != "published"
+            )
+        ]
+        if not unavailable_sides:
+            continue
+        responsible_side = unavailable_sides[0] if len(unavailable_sides) == 1 else None
+        exchange["state"] = "cancelled"
+        exchange["terminal_reason"] = "진행 중인 설문이 조기 마감되거나 삭제됐습니다."
+        exchange["cancelled_by_side"] = responsible_side
+        exchange["cancelled_at"] = _now_iso()
+        exchange["updated_at"] = _now_iso()
+        _discard_exchange_responses(data, exchange, reason="survey_unavailable")
+        _record_reliability(
+            data,
+            exchange,
+            terminal_state="cancelled",
+            responsible_side=responsible_side,
+            neutral=responsible_side is None,
+        )
+        _remove_queue_entries(data, exchange)
+        _ensure_auto_requeue(data, exchange)
+
+
+def _cancel_impossible_team_exchanges(data: dict[str, Any]) -> None:
+    for exchange in data["exchanges"]:
+        if (
+            exchange.get("state") not in ACTIVE_EXCHANGE_STATES
+            or exchange.get("scope") != "team"
+        ):
+            continue
+        impossible_side: str | None = None
+        for side_key in ("side_a", "side_b"):
+            side = exchange[side_key]
+            target_side = exchange[_opposite_side(side_key)]
+            target_survey = _find(data, "surveys", target_side["survey_id"])
+            if target_survey is None:
+                continue
+            remaining = max(
+                0,
+                int(side.get("outgoing_required", 0))
+                - int(side.get("completed_outgoing", 0)),
+            )
+            if remaining and len(
+                eligible_team_members(data, side["actor_id"], target_survey)
+            ) < remaining:
+                impossible_side = side_key
+                break
+        if impossible_side is None:
+            continue
+        exchange["state"] = "cancelled"
+        exchange["terminal_reason"] = (
+            "조건을 충족하는 활성 팀원이 부족해 교환을 완료할 수 없습니다."
+        )
+        exchange["cancelled_by_side"] = impossible_side
+        exchange["cancelled_at"] = _now_iso()
+        exchange["updated_at"] = _now_iso()
+        _discard_exchange_responses(data, exchange, reason="insufficient_team_members")
+        _record_reliability(
+            data,
+            exchange,
+            terminal_state="cancelled",
+            responsible_side=impossible_side,
+        )
+        _remove_queue_entries(data, exchange)
+        _ensure_auto_requeue(data, exchange)
+
+
+def reconcile_exchanges(data: dict[str, Any]) -> dict[str, int]:
+    """Lazily apply deadline, feasibility, and auto-repeat rules.
+
+    The JSON MVP has no background worker, so exchange endpoints call this
+    function before reading or mutating exchange state.
+    """
+
+    before_terminal = sum(
+        exchange.get("state") not in ACTIVE_EXCHANGE_STATES
+        for exchange in data["exchanges"]
+    )
+    before_matches = len(data["exchanges"])
+    _expire_due_exchanges(data)
+    _cancel_unavailable_survey_exchanges(data)
+    _cancel_impossible_team_exchanges(data)
+    _process_auto_queue(data)
+    after_terminal = sum(
+        exchange.get("state") not in ACTIVE_EXCHANGE_STATES
+        for exchange in data["exchanges"]
+    )
+    return {
+        "terminalized": after_terminal - before_terminal,
+        "auto_matches_created": len(data["exchanges"]) - before_matches,
+    }
+
+
 def _remove_queue_entries(
     data: dict[str, Any], exchange: dict[str, Any]
 ) -> None:
@@ -504,6 +635,7 @@ def _ensure_auto_requeue(
         survey = _find(data, "surveys", exchange[side_key]["survey_id"])
         if (
             survey is None
+            or not _survey_exchange_window_open(survey)
             or not survey.get("auto_repeat", True)
             or "auto" not in survey.get("exchange_methods", [])
             or not survey_has_remaining_exchange_capacity(data, survey)
@@ -721,7 +853,7 @@ def direct_recommendations(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> list[dict[str, Any]]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         source = _find(data, "surveys", survey_id)
         if source is None:
             raise HTTPException(status_code=404, detail="내 설문을 찾을 수 없습니다.")
@@ -784,7 +916,7 @@ def create_direct_exchange(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         source = _find(data, "surveys", payload.source_survey_id)
         target = _find(data, "surveys", payload.target_survey_id)
         if source is None or target is None:
@@ -837,7 +969,7 @@ def accept_direct_exchange(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         exchange = _find(data, "exchanges", exchange_id)
         if (
             exchange is None
@@ -867,7 +999,7 @@ def submit_exchange_response(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         exchange = _find(data, "exchanges", exchange_id)
         if exchange is None or exchange.get("state") not in ACTIVE_EXCHANGE_STATES:
             raise HTTPException(status_code=404, detail="응답할 교환을 찾을 수 없습니다.")
@@ -901,7 +1033,7 @@ def reject_direct_exchange(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         exchange = _find(data, "exchanges", exchange_id)
         if (
             exchange is None
@@ -932,7 +1064,7 @@ def cancel_exchange(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         exchange = _find(data, "exchanges", exchange_id)
         if exchange is None or exchange.get("state") not in ACTIVE_EXCHANGE_STATES:
             raise HTTPException(status_code=404, detail="취소할 교환을 찾을 수 없습니다.")
@@ -972,7 +1104,7 @@ def list_exchanges(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> list[dict[str, Any]]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         _process_auto_queue(data)
         rows = [
             exchange
@@ -997,7 +1129,7 @@ def _auto_candidate(
         target = _find(data, "surveys", other_entry["survey_id"])
         if target is None:
             continue
-        if _active_pair_exists(data, source["id"], target["id"]):
+        if _pair_has_history(data, source["id"], target["id"]):
             continue
         if _count_active_auto(data, source["id"]) >= 10:
             continue
@@ -1046,8 +1178,15 @@ def _process_auto_queue(data: dict[str, Any]) -> None:
         if entry.get("status") != "waiting":
             continue
         source = _find(data, "surveys", entry["survey_id"])
-        if source is None:
+        if (
+            source is None
+            or not _survey_exchange_window_open(source)
+            or not source.get("exchange_enabled")
+            or "auto" not in source.get("exchange_methods", [])
+            or not survey_has_remaining_exchange_capacity(data, source)
+        ):
             entry["status"] = "expired"
+            entry["updated_at"] = _now_iso()
             continue
         candidate = _auto_candidate(data, entry)
         if candidate is None:
@@ -1083,7 +1222,7 @@ def enqueue_auto_match(
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
     with request.app.state.store.transaction() as data:
-        _expire_due_exchanges(data)
+        reconcile_exchanges(data)
         survey = _find(data, "surveys", payload.survey_id)
         if survey is None:
             raise HTTPException(status_code=404, detail="자동 매칭 설문을 찾을 수 없습니다.")
@@ -1096,6 +1235,11 @@ def enqueue_auto_match(
         ):
             raise HTTPException(status_code=404, detail="자동 매칭 설문을 찾을 수 없습니다.")
         _survey_is_open_for_exchange(survey, "auto")
+        if not _survey_exchange_window_open(survey):
+            raise HTTPException(
+                status_code=409,
+                detail="설문 마감 24시간 전이 지나 자동 매칭을 시작할 수 없습니다.",
+            )
         if not survey_has_remaining_exchange_capacity(data, survey):
             raise HTTPException(status_code=409, detail="목표 교환 응답 수를 채웠습니다.")
         if _count_active_auto(data, survey["id"]) >= 10:
@@ -1160,18 +1304,35 @@ def get_auto_queue(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> list[dict[str, Any]]:
-    data = request.app.state.store.snapshot()
-    return [
-        entry
-        for entry in data["auto_match_queue"]
-        if _user_is_actor_member(
-            data,
-            actor_type=entry["actor_type"],
-            actor_id=entry["actor_id"],
-            user_id=user["id"],
+    with request.app.state.store.transaction() as data:
+        reconcile_exchanges(data)
+        return [
+            entry
+            for entry in data["auto_match_queue"]
+            if _user_is_actor_member(
+                data,
+                actor_type=entry["actor_type"],
+                actor_id=entry["actor_id"],
+                user_id=user["id"],
+            )
+            and entry.get("status") in {"waiting", "matched"}
+        ]
+
+
+@router.post("/exchanges/reconcile", tags=["exchanges"])
+def reconcile_exchange_state(
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    with request.app.state.store.transaction() as data:
+        summary = reconcile_exchanges(data)
+        summary["active_for_user"] = sum(
+            1
+            for exchange in data["exchanges"]
+            if exchange.get("state") in ACTIVE_EXCHANGE_STATES
+            and _side_for_user(data, exchange, user["id"]) is not None
         )
-        and entry.get("status") in {"waiting", "matched"}
-    ]
+        return summary
 
 
 @router.get("/users/me/reliability", tags=["exchanges"])
@@ -1179,10 +1340,11 @@ def my_reliability(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
-    data = request.app.state.store.snapshot()
-    return reliability_for_actor(
-        data, actor_type="user", actor_id=user["id"]
-    )
+    with request.app.state.store.transaction() as data:
+        reconcile_exchanges(data)
+        return reliability_for_actor(
+            data, actor_type="user", actor_id=user["id"]
+        )
 
 
 @router.get("/teams/{team_id}/reliability", tags=["teams"])
@@ -1191,8 +1353,9 @@ def team_reliability(
     request: Request,
     user: dict[str, Any] = Depends(require_verified_user),
 ) -> dict[str, Any]:
-    data = request.app.state.store.snapshot()
-    team = _find(data, "teams", team_id)
-    if team is None or user["id"] not in team.get("member_ids", []):
-        raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
-    return reliability_for_actor(data, actor_type="team", actor_id=team_id)
+    with request.app.state.store.transaction() as data:
+        reconcile_exchanges(data)
+        team = _find(data, "teams", team_id)
+        if team is None or user["id"] not in team.get("member_ids", []):
+            raise HTTPException(status_code=404, detail="팀을 찾을 수 없습니다.")
+        return reliability_for_actor(data, actor_type="team", actor_id=team_id)

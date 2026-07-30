@@ -400,3 +400,129 @@ def test_team_exchange_uses_asymmetric_counts_and_all_or_nothing(
     assert client.get(
         f"/api/v1/surveys/{target['id']}/results", headers=counterpart
     ).json()["response_count"] == 2
+
+
+def test_manual_cancel_excludes_held_response_and_penalizes_only_canceller(
+    tmp_path: Path,
+) -> None:
+    client = build_client(tmp_path)
+    author = dev_headers(client, "demo-author")
+    counterpart = dev_headers(client, "demo-balance")
+    source = create_published_exchange_survey(
+        client, author, title="Manual cancellation source", methods=["direct"]
+    )
+    target = create_published_exchange_survey(
+        client, counterpart, title="Manual cancellation target", methods=["direct"]
+    )
+    requested = client.post(
+        "/api/v1/exchanges/direct",
+        headers=author,
+        json={
+            "source_survey_id": source["id"],
+            "target_survey_id": target["id"],
+            "answers": answer_for(target),
+        },
+    )
+    assert requested.status_code == 201, requested.text
+
+    cancelled = client.post(
+        f"/api/v1/exchanges/{requested.json()['id']}/cancel",
+        headers=author,
+        json={"reason": "연구 계획 변경으로 직접 취소"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["state"] == "cancelled"
+    assert client.get(
+        f"/api/v1/surveys/{target['id']}/results", headers=counterpart
+    ).json()["response_count"] == 0
+    assert client.get(
+        "/api/v1/users/me/reliability", headers=author
+    ).json()["score"] == 25.0
+    assert client.get(
+        "/api/v1/users/me/reliability", headers=counterpart
+    ).json()["score"] == 30.0
+
+
+def test_reconcile_expires_overdue_exchange_and_keeps_results_out(
+    tmp_path: Path,
+) -> None:
+    client = build_client(tmp_path)
+    author = dev_headers(client, "demo-author")
+    counterpart = dev_headers(client, "demo-balance")
+    source = create_published_exchange_survey(
+        client, author, title="Expired source", methods=["direct"]
+    )
+    target = create_published_exchange_survey(
+        client, counterpart, title="Expired target", methods=["direct"]
+    )
+    requested = client.post(
+        "/api/v1/exchanges/direct",
+        headers=author,
+        json={
+            "source_survey_id": source["id"],
+            "target_survey_id": target["id"],
+            "answers": answer_for(target),
+        },
+    )
+    assert requested.status_code == 201, requested.text
+    exchange_id = requested.json()["id"]
+
+    with client.app.state.store.transaction() as data:
+        exchange = next(item for item in data["exchanges"] if item["id"] == exchange_id)
+        exchange["cutoff_at"] = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+
+    reconciled = client.post("/api/v1/exchanges/reconcile", headers=author)
+    assert reconciled.status_code == 200, reconciled.text
+    assert reconciled.json()["terminalized"] == 1
+    exchanges = client.get("/api/v1/exchanges", headers=author)
+    expired = next(item for item in exchanges.json() if item["id"] == exchange_id)
+    assert expired["state"] == "expired"
+    assert client.get(
+        f"/api/v1/surveys/{target['id']}/results", headers=counterpart
+    ).json()["response_count"] == 0
+
+
+def test_auto_repeat_does_not_rematch_the_same_terminal_pair(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    author = dev_headers(client, "demo-author")
+    counterpart = dev_headers(client, "demo-balance")
+    first = create_published_exchange_survey(
+        client, author, title="Auto history A", methods=["auto"]
+    )
+    second = create_published_exchange_survey(
+        client, counterpart, title="Auto history B", methods=["auto"]
+    )
+    assert client.post(
+        "/api/v1/exchanges/auto/queue",
+        headers=author,
+        json={"survey_id": first["id"]},
+    ).status_code == 200
+    matched = client.post(
+        "/api/v1/exchanges/auto/queue",
+        headers=counterpart,
+        json={"survey_id": second["id"]},
+    )
+    assert matched.status_code == 200, matched.text
+    exchange_id = matched.json()["exchange"]["id"]
+
+    cancelled = client.post(
+        f"/api/v1/exchanges/{exchange_id}/cancel",
+        headers=author,
+        json={"reason": "자동 재매칭 중복 방지 확인"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["state"] == "cancelled"
+    exchanges = client.get("/api/v1/exchanges", headers=author).json()
+    same_pair = [
+        item
+        for item in exchanges
+        if {
+            item["my_survey"]["id"],
+            item["counterpart_survey"]["id"],
+        }
+        == {first["id"], second["id"]}
+    ]
+    assert len(same_pair) == 1
+    queue = client.get("/api/v1/exchanges/auto/queue", headers=author)
+    assert queue.status_code == 200
+    assert any(item["survey_id"] == first["id"] for item in queue.json())
