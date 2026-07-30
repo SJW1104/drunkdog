@@ -5044,6 +5044,348 @@ button:disabled {
   min-height: 34px;
 }
 
+/* Readability and deadline states */
+.screen {
+  font-family: 'Pretendard Variable', Pretendard, 'SUIT Variable', SUIT,
+    'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  letter-spacing: -.012em;
+}
+
+.screen h1,
+.screen h2,
+.screen h3,
+.screen b,
+.screen strong {
+  letter-spacing: -.035em;
+}
+
+.screen p,
+.screen small {
+  line-height: 1.55;
+}
+
+.topbar > strong {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.bottom-nav small {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.eyebrow,
+.question-kicker,
+.modal-kicker,
+.section-title span {
+  font-size: 11px;
+}
+
+.section-title h2 {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.section-title > button,
+.section-title > select,
+.tag {
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.welcome > span {
+  font-size: 13px;
+}
+
+.welcome h1,
+.exchange-intro h1,
+.create-step > h1 {
+  font-weight: 820;
+  line-height: 1.22;
+}
+
+.survey-card h3 {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.42;
+}
+
+.survey-card p {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.survey-card-meta {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.survey-card-foot small,
+.survey-card-foot strong {
+  font-size: 10px;
+}
+
+.matching-rule b,
+.queue-guide b,
+.result-benefit b {
+  font-size: 11px;
+}
+
+.matching-rule span,
+.queue-guide span,
+.result-benefit p {
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.queue-list h3 {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.queue-list header small,
+.queue-list article > p,
+.queue-list article > button,
+.request-actions button {
+  font-size: 10px;
+}
+
+.dual-progress small {
+  font-size: 9px;
+}
+
+.dual-progress b {
+  font-size: 11px;
+}
+
+.detail-description {
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.owner-row small,
+.detail-stats small,
+.target-box,
+.preview-box li,
+.preview-box > small {
+  font-size: 10px;
+}
+
+.detail-stats b {
+  font-size: 12px;
+}
+
+.primary-button,
+.secondary-button,
+.demo-button {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.form-field > span,
+.response-settings h3,
+.response-settings label > span,
+.question-settings label > span,
+.profile-form label > span {
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select,
+.question-main-input textarea,
+.question-main-input select,
+.question-description,
+.profile-form input,
+.profile-form select {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.form-field > small,
+.create-step > p,
+.question-editor > header > span small,
+.question-editor > header p,
+.question-tools button,
+.question-settings,
+.profile-menu small,
+.notification-list p,
+.notification-list small,
+.manage-survey-list p,
+.manage-survey-list header small,
+.comment-list header small,
+.comment-list article > p,
+.comment-reply p {
+  font-size: 10px;
+}
+
+.profile-menu b,
+.notification-list b,
+.manage-survey-list h3,
+.comment-list header b,
+.comment-reply b {
+  font-size: 11px;
+}
+
+.choice-list > button {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.question-page h1 {
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.38;
+}
+
+.question-page > p {
+  font-size: 11px;
+}
+
+.survey-card.is-closed {
+  border-color: #e1e3e7;
+  background: #f2f3f5;
+  box-shadow: none;
+}
+
+.survey-card.is-closed .survey-card-main {
+  color: #7b8491;
+}
+
+.survey-card.is-closed h3,
+.survey-card.is-closed .survey-card-foot strong {
+  color: #66707e;
+}
+
+.survey-card.is-closed .progress {
+  background: #e0e3e7;
+}
+
+.survey-card.is-closed .progress i {
+  background: #aeb5bf;
+}
+
+.survey-card-meta .is-closed-label {
+  color: #737d8b;
+  font-weight: 800;
+}
+
+.closed-notice {
+  display: flex;
+  margin: 12px 0;
+  padding: 13px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dfe2e7;
+  border-radius: 14px;
+  background: #f1f2f4;
+  color: #6f7987;
+}
+
+.closed-notice > svg {
+  flex: 0 0 auto;
+}
+
+.closed-notice b {
+  display: block;
+  color: #46505e;
+  font-size: 11px;
+}
+
+.closed-notice p {
+  margin: 3px 0 0;
+  font-size: 10px;
+}
+
+.closed-state {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.closed-state > i {
+  display: grid;
+  width: 70px;
+  height: 70px;
+  margin-bottom: 14px;
+  place-items: center;
+  border-radius: 22px;
+  background: #e8eaee;
+  color: #747e8d;
+  font-style: normal;
+}
+
+.closed-state h1 {
+  margin: 14px 0 8px;
+  color: var(--ink);
+  font-size: 27px;
+  line-height: 1.3;
+}
+
+.closed-state p {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.closed-state .primary-button {
+  width: 100%;
+}
+
+.empty-surveys,
+.auto-empty {
+  display: grid;
+  padding: 22px 16px;
+  justify-items: center;
+  gap: 6px;
+  border: 1px dashed #cfd4dc;
+  border-radius: 16px;
+  background: rgba(244, 245, 247, .8);
+  color: #7a8492;
+  text-align: center;
+}
+
+.empty-surveys b,
+.auto-empty b {
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.empty-surveys p,
+.auto-empty small {
+  margin: 0;
+  font-size: 10px;
+}
+
+.auto-empty {
+  margin-top: 12px;
+  grid-template-columns: 32px 1fr;
+  justify-items: start;
+  text-align: left;
+}
+
+.auto-empty > span {
+  display: grid;
+  gap: 2px;
+}
+
+.manage-survey-list article.is-closed {
+  background: #f5f5f6;
+  box-shadow: none;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.demo-button:disabled {
+  border-color: #dde1e6;
+  background: #e8eaee;
+  color: #8a94a2;
+  opacity: 1;
+}
+
 @media (min-width: 600px) {
   body {
     display: grid;

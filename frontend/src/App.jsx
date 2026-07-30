@@ -18,6 +18,38 @@ const QUESTION_TYPES = [
 
 const CHOICE_TYPES = new Set(['single', 'multiple', 'dropdown'])
 const GRID_TYPES = new Set(['singleGrid', 'multipleGrid'])
+const DAY_MS = 86400000
+
+function toInputDate(date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 10)
+}
+
+const TODAY = toInputDate(new Date())
+const DEFAULT_DEADLINE = toInputDate(new Date(Date.now() + DAY_MS * 14))
+
+function getDeadlineState(deadline) {
+  const endAt = new Date(`${deadline}T23:59:59`).getTime()
+  const remaining = endAt - Date.now()
+  const expired = Number.isNaN(endAt) || remaining < 0
+  const within24Hours = !expired && remaining <= DAY_MS
+  const days = expired ? 0 : Math.max(1, Math.ceil(remaining / DAY_MS))
+  return {
+    expired,
+    within24Hours,
+    days,
+    label: expired ? '마감됨' : within24Hours ? '오늘 마감' : `${days}일 남음`,
+  }
+}
+
+function formatDeadline(deadline) {
+  const [, month, day] = deadline.split('-')
+  return `${Number(month)}월 ${Number(day)}일`
+}
+
+function isSurveyClosed(survey) {
+  return Boolean(survey?.closed) || getDeadlineState(survey?.deadline).expired
+}
 
 const initialSurveys = [
   {
@@ -274,25 +306,27 @@ function Modal({ children, onClose, className = '' }) {
 }
 
 function SurveyCard({ survey, onOpen, completed = false, exchange = false, eligible = true }) {
-  const days = Math.max(0, Math.ceil((new Date(`${survey.deadline}T23:59:59`) - new Date()) / 86400000))
+  const deadlineState = getDeadlineState(survey.deadline)
+  const closed = isSurveyClosed(survey)
   return (
-    <article className={`survey-card ${completed ? 'is-completed' : ''}`}>
+    <article className={`survey-card ${completed ? 'is-completed' : ''} ${closed ? 'is-closed' : ''}`}>
       <button type="button" className="survey-card-main" onClick={onOpen}>
         <div className="survey-card-tags">
           {survey.hot ? <span className="tag tag--pink">HOT</span> : null}
           <span className="tag tag--blue">{survey.category}</span>
+          {closed ? <span className="tag tag--gray">마감됨</span> : null}
           {exchange ? <span className="tag tag--purple">매칭 {survey.matchScore}점</span> : null}
         </div>
         <h3>{survey.title}</h3>
         <p>{survey.description}</p>
         <div className="survey-card-meta">
           <span><Icon name="clipboard" size={15} />{survey.questionCount}문항 · 약 {survey.minutes}분</span>
-          <span className={days <= 3 ? 'is-urgent' : ''}><Icon name="clock" size={15} />{days ? `${days}일 남음` : '오늘 마감'}</span>
+          <span className={deadlineState.expired ? 'is-closed-label' : deadlineState.days <= 3 ? 'is-urgent' : ''}><Icon name="clock" size={15} />{deadlineState.label}</span>
         </div>
         <Progress value={survey.participants / survey.target * 100} tone={completed ? 'gray' : 'blue'} />
         <div className="survey-card-foot">
           <small>{survey.owner} · 신뢰도 {survey.trust}%</small>
-          <strong>{completed ? '참여 완료' : exchange ? eligible ? '교환 가능' : '조건 불일치' : `${survey.participants}/${survey.target}명`}</strong>
+          <strong>{closed ? '응답 마감' : completed ? '참여 완료' : exchange ? eligible ? '교환 가능' : '조건 불일치' : `${survey.participants}/${survey.target}명`}</strong>
         </div>
       </button>
     </article>
@@ -301,7 +335,9 @@ function SurveyCard({ survey, onOpen, completed = false, exchange = false, eligi
 
 function HomeScreen({ navigate, surveys, completed, profile, unread }) {
   const [query, setQuery] = useState('')
-  const visible = surveys.filter((survey) => `${survey.title} ${survey.category}`.toLowerCase().includes(query.toLowerCase()))
+  const visible = surveys
+    .filter((survey) => `${survey.title} ${survey.category}`.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => Number(isSurveyClosed(a)) - Number(isSurveyClosed(b)))
   return (
     <div className="screen has-nav">
       <TopBar
@@ -360,7 +396,9 @@ function HomeScreen({ navigate, surveys, completed, profile, unread }) {
 function ExchangeScreen({ navigate, surveys, requests, setRequests, profile }) {
   const [tab, setTab] = useState('recommend')
   const [sort, setSort] = useState('score')
-  const recommended = [...surveys].sort((a, b) => sort === 'score' ? b.matchScore - a.matchScore : new Date(a.deadline) - new Date(b.deadline))
+  const recommended = surveys
+    .filter((survey) => !isSurveyClosed(survey))
+    .sort((a, b) => sort === 'score' ? b.matchScore - a.matchScore : new Date(a.deadline) - new Date(b.deadline))
   return (
     <div className="screen has-nav">
       <TopBar title="설문 교환" right={<button className="round-icon" type="button" onClick={() => navigate('exchangeHelp')} aria-label="도움말">?</button>} />
@@ -391,6 +429,7 @@ function ExchangeScreen({ navigate, surveys, requests, setRequests, profile }) {
             <div className="matching-rule"><Icon name="shield" size={18} /><p><b>내 설문: 11~15문항</b><span>같거나 더 높은 구간에만 직접 교환을 신청할 수 있어요.</span></p></div>
             <div className="survey-stack">
               {recommended.map((survey) => <SurveyCard key={survey.id} survey={survey} exchange eligible={survey.questionCount >= 11} onOpen={() => navigate('surveyDetail', survey.id)} />)}
+              {!recommended.length ? <div className="empty-surveys"><Icon name="clock" /><b>교환 가능한 설문이 없어요</b><p>마감되지 않은 새 설문이 등록되면 여기에 보여드릴게요.</p></div> : null}
             </div>
           </section>
         ) : (
@@ -411,6 +450,7 @@ function ExchangeQueue({ requests, setRequests, navigate, compact = false }) {
     requested: ['수락 대기', 'gray'],
     rejected: ['교환 거절', 'gray'],
     cancelled: ['자동 취소', 'gray'],
+    expired: ['기한 만료', 'gray'],
   }
   const decideRequest = (requestId, accepted) => {
     setRequests((current) => current.map((request) => request.id === requestId ? { ...request, status: accepted ? 'waiting-me' : 'rejected' } : request))
@@ -430,8 +470,8 @@ function ExchangeQueue({ requests, setRequests, navigate, compact = false }) {
                 <span><small>우리 팀</small><b>{request.ours}/{request.people}명</b><Progress value={request.ours / request.people * 100} /></span>
                 <span><small>상대 팀</small><b>{request.theirs}/{request.people}명</b><Progress value={request.theirs / request.people * 100} tone="purple" /></span>
               </div>
-              {request.status === 'incoming' ? <div className="request-actions"><button type="button" onClick={() => decideRequest(request.id, false)}>거절</button><button type="button" onClick={() => decideRequest(request.id, true)}>수락</button></div> : <button type="button" disabled={request.status === 'rejected' || request.status === 'cancelled'} onClick={() => request.status === 'waiting-me' ? navigate('participate', request.surveyId, { exchangeId: request.id }) : navigate('exchangeStatus', request.id)}>
-                {request.status === 'waiting-me' ? '상대 설문 참여하기' : request.status === 'rejected' ? '거절한 신청' : request.status === 'cancelled' ? '마감 24시간 전 자동 취소' : '진행 상황 보기'} <Icon name="chevron" size={16} />
+              {request.status === 'incoming' ? <div className="request-actions"><button type="button" onClick={() => decideRequest(request.id, false)}>거절</button><button type="button" onClick={() => decideRequest(request.id, true)}>수락</button></div> : <button type="button" disabled={['rejected', 'cancelled', 'expired'].includes(request.status)} onClick={() => request.status === 'waiting-me' ? navigate('participate', request.surveyId, { exchangeId: request.id }) : navigate('exchangeStatus', request.id)}>
+                {request.status === 'waiting-me' ? '상대 설문 참여하기' : request.status === 'rejected' ? '거절한 신청' : request.status === 'cancelled' ? '마감 24시간 전 자동 취소' : request.status === 'expired' ? '설문 마감으로 교환 종료' : '진행 상황 보기'} <Icon name="chevron" size={16} />
               </button>}
             </article>
           )
@@ -450,8 +490,11 @@ function SurveyDetailScreen({ survey, onBack, navigate, profile, onRequest, comp
   const [reportReason, setReportReason] = useState('')
   const [reported, setReported] = useState(false)
   if (!survey) return null
-  const canExchange = survey.questionCount >= 11
+  const deadlineState = getDeadlineState(survey.deadline)
+  const closed = isSurveyClosed(survey)
+  const canExchange = survey.questionCount >= 11 && !closed
   const submit = () => {
+    if (closed) return
     onRequest(survey, mode, people)
     setSent(true)
   }
@@ -459,13 +502,14 @@ function SurveyDetailScreen({ survey, onBack, navigate, profile, onRequest, comp
     <div className="screen">
       <TopBar title="설문 상세" onBack={onBack} right={<button type="button" className="round-icon" onClick={() => setReportOpen(true)} aria-label="설문 더보기"><Icon name="more" /></button>} />
       <main className="page detail-page">
-        <div className="detail-tags"><span className="tag tag--blue">{survey.category}</span>{survey.hot ? <span className="tag tag--pink">HOT</span> : null}</div>
+        <div className="detail-tags"><span className="tag tag--blue">{survey.category}</span>{survey.hot ? <span className="tag tag--pink">HOT</span> : null}{closed ? <span className="tag tag--gray">응답 마감</span> : null}</div>
         <h1>{survey.title}</h1>
         <p className="detail-description">{survey.description}</p>
+        {closed ? <section className="closed-notice"><Icon name="clock" /><div><b>이 설문은 응답이 마감됐어요</b><p>{completed ? '내가 참여한 결과는 계속 확인할 수 있어요.' : '새로운 응답과 교환 신청은 더 이상 받지 않아요.'}</p></div></section> : null}
         <div className="owner-row"><span className="owner-avatar">{survey.owner.slice(0, 1)}</span><div><b>{survey.owner}</b><small><Icon name="shield" size={13} /> 신뢰도 {survey.trust}%</small></div><button type="button" className={favorite ? 'is-favorite' : ''} onClick={() => onFavorite(survey.id)}>{favorite ? '즐겨찾기 됨' : '즐겨찾기'}</button></div>
         <section className="detail-stats">
           <span><Icon name="clipboard" /><b>{survey.questionCount}문항</b><small>{survey.band}</small></span>
-          <span><Icon name="clock" /><b>약 {survey.minutes}분</b><small>{survey.deadline} 마감</small></span>
+          <span><Icon name="clock" /><b>{deadlineState.label}</b><small>{formatDeadline(survey.deadline)} 마감</small></span>
           <span><Icon name="users" /><b>{survey.participants}명</b><small>목표 {survey.target}명</small></span>
         </section>
         <section className="target-box"><span>응답 대상</span><div>{survey.targetTags.map((tag) => <i key={tag}>{tag}</i>)}</div></section>
@@ -481,8 +525,8 @@ function SurveyDetailScreen({ survey, onBack, navigate, profile, onRequest, comp
         <section className="result-benefit"><Icon name="chart" /><div><b>참여 후 비교 결과를 확인해 보세요</b><p>성별·MBTI·학교별 결과와 나와 같은 답을 고른 비율을 볼 수 있어요.</p></div></section>
       </main>
       <footer className="sticky-actions">
-        <button type="button" className="secondary-button" disabled={!canExchange} onClick={() => setExchangeModal(true)}>{canExchange ? '교환 신청' : '교환 조건 불일치'}</button>
-        <button type="button" className="primary-button" onClick={() => navigate(completed ? 'respondentResult' : 'participate', survey.id)}>{completed ? '내 응답 결과 보기' : '바로 참여하기'}</button>
+        <button type="button" className="secondary-button" disabled={!canExchange} onClick={() => setExchangeModal(true)}>{closed ? '교환 마감' : canExchange ? '교환 신청' : '교환 조건 불일치'}</button>
+        <button type="button" className="primary-button" disabled={closed && !completed} onClick={() => navigate(completed ? 'respondentResult' : 'participate', survey.id)}>{completed ? '내 응답 결과 보기' : closed ? '응답 마감' : '바로 참여하기'}</button>
       </footer>
       {exchangeModal ? (
         <Modal onClose={() => setExchangeModal(false)} className="exchange-modal">
@@ -520,8 +564,9 @@ function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
   const [mode, setMode] = useState('team')
   const [people, setPeople] = useState(Math.min(3, profile.teamSize))
   const [phase, setPhase] = useState('setup')
-  const match = surveys[0]
+  const match = surveys.find((survey) => !isSurveyClosed(survey))
   const start = () => {
+    if (!match) return
     setPhase('searching')
     window.setTimeout(() => setPhase('matched'), 1300)
   }
@@ -549,10 +594,11 @@ function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
             <span><i><Icon name="shield" /></i><b>신뢰도</b><em>80% 이상 우선</em></span>
             <span><i><Icon name="users" /></i><b>기본 정보</b><em>응답 대상 적합도 반영</em></span>
           </section>
-          <button type="button" className="primary-button bottom-cta" onClick={start}>자동 매칭 시작</button>
+          {!match ? <div className="auto-empty"><Icon name="clock" /><span><b>매칭 가능한 설문이 없어요</b><small>마감되지 않은 설문을 먼저 등록해 주세요.</small></span></div> : null}
+          <button type="button" className="primary-button bottom-cta" disabled={!match} onClick={start}>자동 매칭 시작</button>
         </> : null}
         {phase === 'searching' ? <div className="matching-search"><div className="orbit"><span>•ᴗ•</span><i /><i /><i /></div><h1>가장 잘 맞는 팀을<br />찾고 있어요</h1><p>문항 수, 참여 인원, 신뢰도를 비교하고 있어요.</p><div className="search-steps"><span className="done"><Icon name="check" /> 문항 수 구간 확인</span><span className="done"><Icon name="check" /> 참여 인원 확인</span><span><i className="loader" /> 매칭 점수 계산</span></div></div> : null}
-        {phase === 'matched' ? <div className="match-result">
+        {phase === 'matched' && match ? <div className="match-result">
           <div className="celebrate">✦ <span>•ᴗ•</span> <span>•ᴗ•</span> ✦</div>
           <span className="eyebrow">MATCH FOUND</span>
           <h1>딱 맞는 팀을 찾았어요!</h1>
@@ -579,7 +625,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile }) {
   const [title, setTitle] = useState(savedDraft?.title || '')
   const [description, setDescription] = useState(savedDraft?.description || '')
   const [category, setCategory] = useState(savedDraft?.category || '대학생활')
-  const [deadline, setDeadline] = useState(savedDraft?.deadline || '2026-08-15')
+  const [deadline, setDeadline] = useState(savedDraft?.deadline && savedDraft.deadline >= TODAY ? savedDraft.deadline : DEFAULT_DEADLINE)
   const [basicFields, setBasicFields] = useState(savedDraft?.basicFields || ['학년', '성별', '재학 여부'])
   const [questions, setQuestions] = useState(savedDraft?.questions || [emptyQuestion()])
   const [teamSurvey, setTeamSurvey] = useState(savedDraft?.teamSurvey || false)
@@ -645,7 +691,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile }) {
           <label className="form-field"><span>설문 설명</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="설문의 목적과 응답자에게 전할 말을 적어주세요." /></label>
           <div className="form-grid">
             <label className="form-field"><span>카테고리</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{['대학생활', '진로·취업', '소비', '연애·관계', 'IT·서비스', '연구·논문'].map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="form-field"><span>마감 기한</span><input type="date" value={deadline} min="2026-07-31" onChange={(event) => setDeadline(event.target.value)} /></label>
+            <label className="form-field"><span>마감 기한</span><input type="date" value={deadline} min={TODAY} onChange={(event) => setDeadline(event.target.value)} /></label>
           </div>
           <div className="deadline-note"><Icon name="clock" /><span><b>마감 24시간 전 교환 자동 종료</b><small>성사되지 않은 교환 신청은 자동 취소돼요.</small></span></div>
         </section> : null}
@@ -782,6 +828,7 @@ function OptionList({ values, onUpdate, onRemove, onAdd, label = '선택지' }) 
 
 function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
   const questions = survey?.questions?.length ? survey.questions.filter((question) => question.type !== 'section').slice(0, 8) : demoQuestions
+  const closed = isSurveyClosed(survey)
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
@@ -799,6 +846,18 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
       onComplete(survey.id, answers, isExchange)
     }
   }
+  if (closed) return (
+    <div className="screen">
+      <TopBar title="설문 참여" onBack={onBack} />
+      <main className="page closed-state">
+        <i><Icon name="clock" size={34} /></i>
+        <span className="tag tag--gray">응답 마감</span>
+        <h1>설문 참여 기간이<br />종료됐어요.</h1>
+        <p>{formatDeadline(survey.deadline)}에 마감된 설문이에요.<br />다른 설문에서 의견을 들려주세요.</p>
+        <button type="button" className="primary-button" onClick={onBack}>설문 목록으로 돌아가기</button>
+      </main>
+    </div>
+  )
   if (submitted) return <SurveySubmitted survey={survey} isExchange={isExchange} />
   return (
     <div className="screen participate-screen">
@@ -1040,12 +1099,15 @@ function ProfileEditScreen({ profile, setProfile, onBack }) {
   )
 }
 
-function MySurveysScreen({ surveys, selectedSurvey, navigate, onBack }) {
+function MySurveysScreen({ surveys, setSurveys, selectedSurvey, navigate, onBack }) {
   const mine = surveys.filter((survey) => survey.mine)
   const list = mine.length ? mine : [{ ...selectedSurvey, id: 'my-demo', mine: true, title: '대학생의 AI 활용과 취업 준비', participants: 53, target: 100 }]
   const [closedIds, setClosedIds] = useStoredState('suniversity-closed-surveys', [])
   const hasDraft = Boolean(localStorage.getItem('suniversity-new-draft'))
-  const toggleClosed = (id) => setClosedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
+  const toggleClosed = (id) => {
+    setClosedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
+    setSurveys((current) => current.map((survey) => survey.id === id ? { ...survey, closed: !survey.closed } : survey))
+  }
   return (
     <div className="screen">
       <TopBar title="내 설문 관리" onBack={onBack} right={<button type="button" className="round-icon" onClick={() => navigate('create')}><Icon name="plus" /></button>} />
@@ -1054,13 +1116,14 @@ function MySurveysScreen({ surveys, selectedSurvey, navigate, onBack }) {
         {hasDraft ? <button type="button" className="draft-banner" onClick={() => navigate('create')}><i><Icon name="edit" /></i><span><b>작성 중인 임시저장이 있어요</b><small>이어서 문항을 완성해 보세요.</small></span><Icon name="chevron" /></button> : null}
         <div className="section-title"><div><span>MY SURVEYS</span><h2>게시한 설문</h2></div></div>
         <div className="manage-survey-list">{list.map((survey) => {
-          const closed = closedIds.includes(survey.id)
-          return <article key={survey.id}>
-            <header><span className={`tag ${closed ? 'tag--gray' : 'tag--blue'}`}>{closed ? '응답 마감' : '응답 수집 중'}</span><small>{survey.deadline} 마감</small></header>
+          const timedOut = getDeadlineState(survey.deadline).expired
+          const closed = timedOut || Boolean(survey.closed) || closedIds.includes(survey.id)
+          return <article key={survey.id} className={closed ? 'is-closed' : ''}>
+            <header><span className={`tag ${closed ? 'tag--gray' : 'tag--blue'}`}>{timedOut ? '기한 만료' : closed ? '응답 마감' : '응답 수집 중'}</span><small>{formatDeadline(survey.deadline)} 마감</small></header>
             <h3>{survey.title}</h3>
             <p>{survey.questionCount}문항 · 응답 {survey.participants}/{survey.target}명</p>
             <Progress value={survey.participants / survey.target * 100} />
-            <div><button type="button" onClick={() => navigate('creatorResults', survey.id)}><Icon name="chart" /> 결과</button><button type="button" onClick={() => navigate('shareSurvey', survey.id)}><Icon name="share" /> 공유</button><button type="button" onClick={() => navigate('create')}><Icon name="edit" /> 수정</button><button type="button" className={closed ? '' : 'danger'} onClick={() => toggleClosed(survey.id)}>{closed ? '다시 받기' : '응답 마감'}</button></div>
+            <div><button type="button" onClick={() => navigate('creatorResults', survey.id)}><Icon name="chart" /> 결과</button><button type="button" onClick={() => navigate('shareSurvey', survey.id)}><Icon name="share" /> 공유</button><button type="button" disabled={timedOut} onClick={() => navigate('create')}><Icon name="edit" /> 수정</button><button type="button" disabled={timedOut} className={closed ? '' : 'danger'} onClick={() => toggleClosed(survey.id)}>{timedOut ? '기한 만료' : closed ? '다시 받기' : '응답 마감'}</button></div>
           </article>
         })}</div>
       </main>
@@ -1229,12 +1292,35 @@ function App() {
   const selectedRequest = requests.find((request) => request.id === selectedId)
   const unread = notifications.filter((notice) => !notice.read).length
   useEffect(() => {
-    const cutoff = Date.now() + 86400000
-    setRequests((current) => current.map((request) => {
-      const shouldCancel = request.deadlineISO && new Date(`${request.deadlineISO}T00:00:00`).getTime() <= cutoff && ['incoming', 'requested'].includes(request.status)
-      return shouldCancel ? { ...request, status: 'cancelled' } : request
+    const syncDeadlines = () => setRequests((current) => current.map((request) => {
+      if (!request.deadlineISO || ['completed', 'rejected', 'cancelled', 'expired'].includes(request.status)) return request
+      const remaining = new Date(`${request.deadlineISO}T23:59:59`).getTime() - Date.now()
+      if (remaining < 0) return { ...request, status: 'expired' }
+      if (remaining <= DAY_MS && ['incoming', 'requested'].includes(request.status)) return { ...request, status: 'cancelled' }
+      return request
     }))
+    syncDeadlines()
+    const timer = window.setInterval(syncDeadlines, 60000)
+    return () => window.clearInterval(timer)
   }, [setRequests])
+  useEffect(() => {
+    const deadlineNotices = requests
+      .filter((request) => ['cancelled', 'expired'].includes(request.status))
+      .map((request) => ({
+        id: `deadline-${request.id}-${request.status}`,
+        type: 'deadline',
+        title: request.status === 'cancelled' ? '교환 신청이 자동 취소됐어요' : '교환 가능 기간이 종료됐어요',
+        body: request.status === 'cancelled' ? `${request.title} 설문이 마감 24시간 전이라 신청을 정리했어요.` : `${request.title} 설문이 마감되어 진행 중인 교환을 종료했어요.`,
+        time: '방금 전',
+        read: false,
+      }))
+    if (!deadlineNotices.length) return
+    setNotifications((current) => {
+      const existing = new Set(current.map((notice) => notice.id))
+      const additions = deadlineNotices.filter((notice) => !existing.has(notice.id))
+      return additions.length ? [...additions, ...current] : current
+    })
+  }, [requests, setNotifications])
 
   const navigate = (next, id = null, meta = {}) => {
     setPreviousScreen(screen)
@@ -1264,6 +1350,7 @@ function App() {
     }
   }
   const addRequest = (survey, mode, people) => {
+    if (isSurveyClosed(survey)) return
     const request = { id: `exchange-${Date.now()}`, type: mode === 'team' ? '팀 교환' : '개인 교환', status: 'requested', surveyId: survey.id, title: survey.title, partner: survey.owner, people: mode === 'team' ? people : 1, ours: 0, theirs: 0, deadline: survey.deadline.slice(5).replace('-', '월 ') + '일', deadlineISO: survey.deadline }
     setRequests((current) => [request, ...current].slice(0, 10))
   }
@@ -1282,7 +1369,7 @@ function App() {
   if (screen === 'notifications') return <NotificationsScreen navigate={navigate} notifications={notifications} setNotifications={setNotifications} />
   if (screen === 'profile') return <ProfileScreen {...common} favoriteIds={favorites} />
   if (screen === 'profileEdit') return <ProfileEditScreen profile={profile} setProfile={setProfile} onBack={back} />
-  if (screen === 'mySurveys') return <MySurveysScreen surveys={surveys} selectedSurvey={selectedSurvey} navigate={navigate} onBack={back} />
+  if (screen === 'mySurveys') return <MySurveysScreen surveys={surveys} setSurveys={setSurveys} selectedSurvey={selectedSurvey} navigate={navigate} onBack={back} />
   if (screen === 'favorites') return <FavoritesScreen onBack={back} navigate={navigate} />
   if (screen === 'exchangeHistory') return <ExchangeHistoryScreen requests={requests} onBack={back} navigate={navigate} />
   if (screen === 'schoolVerification') return <SchoolVerificationScreen profile={profile} onBack={back} />
