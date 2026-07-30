@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import re
 import secrets
+import statistics
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -367,8 +368,81 @@ def build_questions(questions: list[Any]) -> list[dict[str, Any]]:
     return output
 
 
+MIN_RESULT_GROUP_SIZE = 5
+
+
+def _protected_group(items: list[str]) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+    for item in items:
+        counts[item] = counts.get(item, 0) + 1
+    groups = [
+        {"label": label, "count": count, "suppressed": False}
+        for label, count in sorted(counts.items())
+        if count >= MIN_RESULT_GROUP_SIZE
+    ]
+    hidden_count = sum(count for count in counts.values() if count < MIN_RESULT_GROUP_SIZE)
+    if hidden_count:
+        groups.append(
+            {
+                "label": "기타/응답자 5명 미만",
+                "count": hidden_count,
+                "suppressed": True,
+            }
+        )
+    return {"minimum_group_size": MIN_RESULT_GROUP_SIZE, "groups": groups}
+
+
+def _group_statistics(
+    survey: dict[str, Any], responses: list[dict[str, Any]]
+) -> dict[str, Any]:
+    snapshots = [
+        response.get("respondent_profile_snapshot") or {} for response in responses
+    ]
+    output = {
+        "university": _protected_group(
+            [
+                str(snapshot["university_name"])
+                for snapshot in snapshots
+                if snapshot.get("university_name")
+            ]
+        ),
+        "year": _protected_group(
+            [
+                str(snapshot["year"])
+                for snapshot in snapshots
+                if snapshot.get("year") is not None
+            ]
+        ),
+    }
+    condition_fields = {
+        condition.get("field")
+        for condition in survey.get("required_respondent_conditions", [])
+    }
+    if "department" in condition_fields:
+        output["department"] = _protected_group(
+            [
+                str(snapshot["department"])
+                for snapshot in snapshots
+                if snapshot.get("department")
+            ]
+        )
+    if "profile_category" in condition_fields:
+        output["profile_category"] = _protected_group(
+            [
+                str(category)
+                for snapshot in snapshots
+                for category in snapshot.get("matched_categories", [])
+            ]
+        )
+    return output
+
+
 def calculate_results(
-    data: dict[str, Any], survey_id: str, *, include_text: bool
+    data: dict[str, Any],
+    survey_id: str,
+    *,
+    include_text: bool,
+    include_files: bool = False,
 ) -> dict[str, Any]:
     survey = find_by_id(data, "surveys", survey_id)
     if survey is None:
@@ -438,6 +512,9 @@ def calculate_results(
             item["average"] = (
                 round(sum(values) / len(values), 2) if values else None
             )
+            item["median"] = statistics.median(values) if values else None
+            item["minimum"] = min(values) if values else None
+            item["maximum"] = max(values) if values else None
         elif question["question_type"] in {
             "multiple_choice_grid",
             "checkbox_grid",
@@ -449,10 +526,12 @@ def calculate_results(
             grid_rows = []
             for row in question.get("rows", []):
                 counts = {column_id: 0 for column_id in column_labels}
+                row_answer_count = 0
                 for answer in answers:
-                    for column_id in answer.get("grid_answers", {}).get(
-                        row["id"], []
-                    ):
+                    selected = answer.get("grid_answers", {}).get(row["id"], [])
+                    if selected:
+                        row_answer_count += 1
+                    for column_id in selected:
                         if column_id in counts:
                             counts[column_id] += 1
                 grid_rows.append(
@@ -464,6 +543,9 @@ def calculate_results(
                                 "column_id": column_id,
                                 "label": column_labels[column_id],
                                 "count": count,
+                                "percentage": round(
+                                    count * 100 / max(1, row_answer_count), 1
+                                ),
                             }
                             for column_id, count in counts.items()
                         ],
@@ -479,6 +561,7 @@ def calculate_results(
             item["average"] = (
                 round(sum(numbers) / len(numbers), 2) if numbers else None
             )
+            item["median"] = statistics.median(numbers) if numbers else None
             item["minimum"] = min(numbers) if numbers else None
             item["maximum"] = max(numbers) if numbers else None
         elif question["question_type"] in {
@@ -503,11 +586,12 @@ def calculate_results(
                         if answer.get("value_time")
                     ][:100]
                 elif question["question_type"] == "file_upload":
-                    item["responses"] = [
-                        file
-                        for answer in answers
-                        for file in answer.get("file_uploads", [])
-                    ][:100]
+                    if include_files:
+                        item["responses"] = [
+                            file
+                            for answer in answers
+                            for file in answer.get("file_uploads", [])
+                        ][:100]
                 else:
                     item["responses"] = [
                         answer["value_text"]
@@ -520,6 +604,8 @@ def calculate_results(
         "survey_id": survey_id,
         "title": survey["title"],
         "response_count": len(responses),
+        "minimum_group_size": MIN_RESULT_GROUP_SIZE,
+        "group_statistics": _group_statistics(survey, responses),
         "questions": output_questions,
     }
 
@@ -1751,7 +1837,8 @@ def get_results(
     return calculate_results(
         data,
         survey_id,
-        include_text=survey["author_id"] == user["id"],
+        include_text=True,
+        include_files=survey["author_id"] == user["id"],
     )
 
 

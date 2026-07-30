@@ -158,7 +158,7 @@ def get_public_result(token: str, request: Request) -> dict[str, Any]:
     survey = find_by_id(data, "surveys", receipt["survey_id"])
     if survey is None or not survey.get("respondent_results_enabled", True):
         raise HTTPException(status_code=403, detail="응답자 결과가 공개되지 않았습니다.")
-    return calculate_results(data, survey["id"], include_text=False)
+    return calculate_results(data, survey["id"], include_text=True)
 
 
 @router.get("/surveys/{survey_id}/share-link", tags=["surveys"])
