@@ -5048,7 +5048,7 @@ button:disabled {
   body {
     display: grid;
     min-height: 100vh;
-    padding: 22px;
+    padding: 8px 16px;
     place-items: center;
     background:
       radial-gradient(circle at 20% 10%, rgba(189, 227, 255, .4), transparent 25%),
@@ -5057,8 +5057,8 @@ button:disabled {
   }
 
   #root {
-    height: min(900px, calc(100vh - 44px));
-    min-height: 690px;
+    height: min(950px, calc(100vh - 16px));
+    min-height: 700px;
     border: 9px solid #252b34;
     border-radius: 48px;
     box-shadow: 0 30px 80px rgba(31, 38, 49, .27), inset 0 0 0 2px #535b67;
@@ -5101,7 +5101,7 @@ button:disabled {
     bottom: auto;
     left: 50%;
     width: 412px;
-    height: min(882px, calc(100vh - 62px));
+    height: min(932px, calc(100vh - 34px));
     border-radius: 39px;
     transform: translate(-50%, -50%);
   }
