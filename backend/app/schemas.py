@@ -542,6 +542,11 @@ class ReportCreate(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
 
 
+class ReportResolution(BaseModel):
+    decision: Literal["accepted", "rejected"]
+    note: str = Field(default="", max_length=1000)
+
+
 class AiSurveyDraftRequest(BaseModel):
     topic: str = Field(min_length=2, max_length=500)
     audience: str = Field(default="대학생", max_length=200)

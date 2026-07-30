@@ -690,3 +690,82 @@ def test_published_deadline_can_extend_but_not_break_active_exchange(
         json={"title": "게시 후 제목 변경"},
     )
     assert metadata_change.status_code == 409
+
+
+def test_report_invalidation_retracts_results_and_reliability_without_penalty(
+    tmp_path: Path,
+) -> None:
+    client = build_client(tmp_path)
+    author = dev_headers(client, "demo-author")
+    counterpart = dev_headers(client, "demo-balance")
+    reporter = dev_headers(client, "demo-student")
+    source = create_published_exchange_survey(
+        client, author, title="Invalidation source", methods=["direct"]
+    )
+    target = create_published_exchange_survey(
+        client, counterpart, title="Invalidation target", methods=["direct"]
+    )
+    requested = client.post(
+        "/api/v1/exchanges/direct",
+        headers=author,
+        json={
+            "source_survey_id": source["id"],
+            "target_survey_id": target["id"],
+            "answers": answer_for(target),
+        },
+    )
+    exchange_id = requested.json()["id"]
+    assert client.post(
+        f"/api/v1/exchanges/{exchange_id}/accept", headers=counterpart
+    ).status_code == 200
+    completed = client.post(
+        f"/api/v1/exchanges/{exchange_id}/responses",
+        headers=counterpart,
+        json={"answers": answer_for(source)},
+    )
+    assert completed.json()["exchange_completed"] is True
+    assert client.get(
+        f"/api/v1/surveys/{target['id']}/results", headers=counterpart
+    ).json()["response_count"] == 1
+
+    report = client.post(
+        "/api/v1/reports",
+        headers=reporter,
+        json={
+            "target_type": "survey",
+            "target_id": source["id"],
+            "reason": "연구 윤리 위반 의심",
+        },
+    )
+    assert report.status_code == 201
+    with client.app.state.store.transaction() as data:
+        admin = next(item for item in data["users"] if item["id"] == "demo-author")
+        admin["role"] = "admin"
+    resolved = client.post(
+        f"/api/v1/reports/{report.json()['report_id']}/resolve",
+        headers=author,
+        json={"decision": "accepted", "note": "신고 검토 후 무효 처리"},
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["invalidated_exchange_count"] == 1
+    exchanges = client.get("/api/v1/exchanges", headers=author).json()
+    assert next(item for item in exchanges if item["id"] == exchange_id)["state"] == (
+        "invalidated"
+    )
+    assert client.get(
+        f"/api/v1/surveys/{target['id']}/results", headers=counterpart
+    ).json()["response_count"] == 0
+    assert client.get(
+        "/api/v1/users/me/reliability", headers=author
+    ).json()["score"] == 30.0
+    assert client.get(
+        "/api/v1/users/me/reliability", headers=counterpart
+    ).json()["score"] == 30.0
+    notification_types = {
+        item["type"]
+        for item in client.get(
+            "/api/v1/notifications", headers=counterpart
+        ).json()["items"]
+    }
+    assert "exchange_completed" in notification_types
+    assert "exchange_invalidated" in notification_types

@@ -443,16 +443,29 @@ def calculate_results(
     *,
     include_text: bool,
     include_files: bool = False,
+    profile_filters: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     survey = find_by_id(data, "surveys", survey_id)
     if survey is None:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
-    responses = [
+    all_responses = [
         response
         for response in data["responses"]
         if response["survey_id"] == survey_id
         and response.get("result_status", "included") == "included"
     ]
+    responses = all_responses
+    if profile_filters:
+        def matches(response: dict[str, Any]) -> bool:
+            snapshot = response.get("respondent_profile_snapshot") or {}
+            for field, expected in profile_filters.items():
+                if field == "profile_category":
+                    if expected not in snapshot.get("matched_categories", []):
+                        return False
+                elif str(snapshot.get(field) or "") != expected:
+                    return False
+            return True
+        responses = [response for response in all_responses if matches(response)]
     answers_by_question: dict[str, list[dict[str, Any]]] = {}
     for response in responses:
         for answer in response.get("answers", []):
@@ -604,6 +617,8 @@ def calculate_results(
         "survey_id": survey_id,
         "title": survey["title"],
         "response_count": len(responses),
+        "total_response_count": len(all_responses),
+        "applied_profile_filters": profile_filters or {},
         "minimum_group_size": MIN_RESULT_GROUP_SIZE,
         "group_statistics": _group_statistics(survey, responses),
         "questions": output_questions,
@@ -1874,6 +1889,9 @@ def submit_response(
 def get_results(
     survey_id: str,
     request: Request,
+    university: str | None = None,
+    year: str | None = None,
+    profile_category: str | None = None,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     data = request.app.state.store.snapshot()
@@ -1881,11 +1899,26 @@ def get_results(
     if survey is None:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
     ensure_results_access(data, survey, user["id"])
+    filters = {
+        key: value
+        for key, value in {
+            "university_name": university,
+            "year": year,
+            "profile_category": profile_category,
+        }.items()
+        if value is not None
+    }
+    if filters and survey["author_id"] != user["id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="응답자 프로필 필터는 설문 작성자만 사용할 수 있습니다.",
+        )
     return calculate_results(
         data,
         survey_id,
         include_text=True,
         include_files=survey["author_id"] == user["id"],
+        profile_filters=filters,
     )
 
 

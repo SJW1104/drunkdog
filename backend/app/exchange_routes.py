@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from .domain import add_notification
 from .exchange_domain import (
     ACTIVE_EXCHANGE_STATES,
     category_similarity,
@@ -28,6 +29,7 @@ from .schemas import (
     DirectExchangeCreate,
     ExchangeCancelRequest,
     ExchangeResponseSubmit,
+    ReportResolution,
     TeamCreate,
     TeamMemberUpdate,
 )
@@ -82,6 +84,38 @@ def _user_can_manage_actor(
         return actor_id == user_id
     team = _find(data, "teams", actor_id)
     return bool(team and team.get("owner_id") == user_id)
+
+
+def _actor_user_ids(
+    data: dict[str, Any], actor_type: str, actor_id: str
+) -> list[str]:
+    if actor_type == "user":
+        return [actor_id]
+    team = _find(data, "teams", actor_id)
+    return list(team.get("member_ids", [])) if team else []
+
+
+def _notify_actor(
+    data: dict[str, Any],
+    side: dict[str, Any],
+    *,
+    notification_type: str,
+    title: str,
+    body: str,
+    exchange_id: str,
+) -> None:
+    for user_id in _actor_user_ids(
+        data, side["actor_type"], side["actor_id"]
+    ):
+        add_notification(
+            data,
+            user_id=user_id,
+            notification_type=notification_type,
+            title=title,
+            body=body,
+            target={"screen": "exchange", "resource_id": exchange_id},
+            idempotency_key=f"{notification_type}:{exchange_id}:{user_id}",
+        )
 
 
 def _survey_is_open_for_exchange(survey: dict[str, Any], method: str) -> None:
@@ -411,6 +445,15 @@ def _publish_exchange(data: dict[str, Any], exchange: dict[str, Any]) -> None:
     exchange["completed_at"] = _now_iso()
     exchange["updated_at"] = _now_iso()
     _record_reliability(data, exchange, terminal_state="completed")
+    for side_key in ("side_a", "side_b"):
+        _notify_actor(
+            data,
+            exchange[side_key],
+            notification_type="exchange_completed",
+            title="설문 교환이 완료됐습니다",
+            body="양쪽 응답이 완료되어 설문 결과에 반영됐습니다.",
+            exchange_id=exchange["id"],
+        )
     _remove_queue_entries(data, exchange)
     _ensure_auto_requeue(data, exchange)
 
@@ -608,6 +651,41 @@ def reconcile_exchanges(data: dict[str, Any]) -> dict[str, int]:
         "terminalized": after_terminal - before_terminal,
         "auto_matches_created": len(data["exchanges"]) - before_matches,
     }
+
+
+def _invalidate_exchange(
+    data: dict[str, Any], exchange: dict[str, Any], *, reason: str
+) -> None:
+    if exchange.get("state") == "invalidated":
+        return
+    response_ids = {
+        *exchange["side_a"].get("response_ids", []),
+        *exchange["side_b"].get("response_ids", []),
+    }
+    for response in data["responses"]:
+        if response["id"] in response_ids:
+            response["result_status"] = "excluded"
+            response["excluded_reason"] = "report_invalidated"
+            response["excluded_at"] = _now_iso()
+    data["reliability_events"] = [
+        event
+        for event in data["reliability_events"]
+        if event.get("exchange_id") != exchange["id"]
+    ]
+    exchange["state"] = "invalidated"
+    exchange["terminal_reason"] = reason
+    exchange["invalidated_at"] = _now_iso()
+    exchange["updated_at"] = _now_iso()
+    _remove_queue_entries(data, exchange)
+    for side_key in ("side_a", "side_b"):
+        _notify_actor(
+            data,
+            exchange[side_key],
+            notification_type="exchange_invalidated",
+            title="설문 교환이 무효화됐습니다",
+            body="신고 처리로 응답과 신뢰도 기록이 무패널티로 제외됐습니다.",
+            exchange_id=exchange["id"],
+        )
 
 
 def _remove_queue_entries(
@@ -1066,6 +1144,14 @@ def create_direct_exchange(
         data["exchanges"].append(exchange)
         source["structure_locked_at"] = source.get("structure_locked_at") or _now_iso()
         target["structure_locked_at"] = target.get("structure_locked_at") or _now_iso()
+        _notify_actor(
+            data,
+            exchange["side_b"],
+            notification_type="exchange_requested",
+            title="새 설문 교환 신청이 도착했습니다",
+            body="신청을 확인하고 상대 설문에 응답해 주세요.",
+            exchange_id=exchange["id"],
+        )
         return _exchange_view(data, exchange, user["id"])
 
 
@@ -1095,6 +1181,14 @@ def accept_direct_exchange(
         exchange["accepted_at"] = _now_iso()
         exchange["state"] = "in_progress"
         exchange["updated_at"] = _now_iso()
+        _notify_actor(
+            data,
+            exchange["side_a"],
+            notification_type="exchange_accepted",
+            title="설문 교환 신청이 수락됐습니다",
+            body="상대방의 응답 완료를 기다리고 있습니다.",
+            exchange_id=exchange["id"],
+        )
         return _exchange_view(data, exchange, user["id"])
 
 
@@ -1160,6 +1254,14 @@ def reject_direct_exchange(
         exchange["terminal_reason"] = "상대방이 신청을 거절했습니다."
         exchange["updated_at"] = _now_iso()
         _discard_exchange_responses(data, exchange, reason="rejected")
+        _notify_actor(
+            data,
+            exchange["side_a"],
+            notification_type="exchange_rejected",
+            title="설문 교환 신청이 거절됐습니다",
+            body="보류 중이던 응답은 결과에서 제외됐습니다.",
+            exchange_id=exchange["id"],
+        )
         return _exchange_view(data, exchange, user["id"])
 
 
@@ -1197,6 +1299,14 @@ def cancel_exchange(
             exchange,
             terminal_state="cancelled",
             responsible_side=side_key,
+        )
+        _notify_actor(
+            data,
+            exchange[_opposite_side(side_key)],
+            notification_type="exchange_cancelled",
+            title="진행 중인 설문 교환이 취소됐습니다",
+            body="보류 중이던 응답은 결과에서 제외됐습니다.",
+            exchange_id=exchange["id"],
         )
         _remove_queue_entries(data, exchange)
         _ensure_auto_requeue(data, exchange)
@@ -1443,6 +1553,46 @@ def reconcile_exchange_state(
             and _side_for_user(data, exchange, user["id"]) is not None
         )
         return summary
+
+
+@router.post("/reports/{report_id}/resolve", tags=["reports"])
+def resolve_report(
+    report_id: str,
+    payload: ReportResolution,
+    request: Request,
+    user: dict[str, Any] = Depends(require_verified_user),
+) -> dict[str, Any]:
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다.")
+    with request.app.state.store.transaction() as data:
+        report = _find(data, "reports", report_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="신고를 찾을 수 없습니다.")
+        if report.get("status") != "pending":
+            raise HTTPException(status_code=409, detail="이미 처리된 신고입니다.")
+        report["status"] = payload.decision
+        report["resolution_note"] = payload.note
+        report["resolved_by"] = user["id"]
+        report["resolved_at"] = _now_iso()
+        invalidated_count = 0
+        if payload.decision == "accepted" and report["target_type"] == "survey":
+            survey = _find(data, "surveys", report["target_id"])
+            if survey is None:
+                raise HTTPException(status_code=404, detail="신고 대상 설문이 없습니다.")
+            survey["status"] = "invalidated"
+            survey["invalidated_at"] = _now_iso()
+            for exchange in data["exchanges"]:
+                if report["target_id"] in {
+                    exchange["side_a"]["survey_id"],
+                    exchange["side_b"]["survey_id"],
+                }:
+                    _invalidate_exchange(data, exchange, reason=payload.note or "신고 승인")
+                    invalidated_count += 1
+        return {
+            "report_id": report_id,
+            "status": report["status"],
+            "invalidated_exchange_count": invalidated_count,
+        }
 
 
 @router.get("/users/me/reliability", tags=["exchanges"])

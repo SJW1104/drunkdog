@@ -126,6 +126,10 @@ Content-Type: application/json
 
 작성자 화면만 응답자의 학교·학년·필수 조건 관련 프로필을 표시한다.
 
+작성자 결과 화면은 `university`, `year`, `profile_category` 쿼리로 서버 집계를
+필터링한다. 화면에는 `total_response_count`와 필터된 `response_count`를 구분해서
+표시한다. 참여자 화면에서는 이 필터를 호출하지 않는다.
+
 `group_statistics`의 각 그룹에는 `suppressed`가 포함된다. `true`이면 응답자 5명 미만
 그룹을 합친 항목이므로 원래 학교·학년·조건 이름을 추측하거나 별도로 표시하지 않는다.
 주관식·날짜·시간 원문은 참여자 결과에도 표시할 수 있지만 응답자 프로필과 연결하지
@@ -157,3 +161,7 @@ Content-Type: application/json
 
 전체 필드 스키마와 최신 응답 예시는 실행 중인 Swagger(`/docs`)와
 [API_SPEC.md](./API_SPEC.md)를 참고한다.
+
+교환 알림의 `target.screen`이 `exchange`이면 `resource_id`를 교환 상세 ID로 사용한다.
+`exchange_requested`, `exchange_accepted`, `exchange_completed`,
+`exchange_rejected`, `exchange_cancelled`, `exchange_invalidated` 유형을 지원한다.

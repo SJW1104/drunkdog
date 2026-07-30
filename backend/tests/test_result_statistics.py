@@ -113,3 +113,64 @@ def test_files_are_only_returned_when_explicitly_allowed() -> None:
 
     assert "responses" not in participant["questions"][0]
     assert author["questions"][0]["responses"] == [{"file_name": "private.pdf"}]
+
+
+def test_author_profile_filter_keeps_total_and_filtered_counts() -> None:
+    survey = {
+        "id": "survey",
+        "title": "필터 결과",
+        "questions": [
+            {
+                "id": "choice",
+                "prompt": "선택",
+                "question_type": "single_choice",
+                "options": [
+                    {"id": "yes", "label": "예"},
+                    {"id": "no", "label": "아니오"},
+                ],
+            }
+        ],
+    }
+    data = {
+        "surveys": [survey],
+        "responses": [
+            {
+                "id": "a",
+                "survey_id": "survey",
+                "result_status": "included",
+                "respondent_profile_snapshot": {
+                    "university_name": "A대학교",
+                    "year": 3,
+                    "matched_categories": ["research"],
+                },
+                "answers": [{"question_id": "choice", "option_ids": ["yes"]}],
+            },
+            {
+                "id": "b",
+                "survey_id": "survey",
+                "result_status": "included",
+                "respondent_profile_snapshot": {
+                    "university_name": "B대학교",
+                    "year": 4,
+                    "matched_categories": ["other"],
+                },
+                "answers": [{"question_id": "choice", "option_ids": ["no"]}],
+            },
+        ],
+    }
+
+    result = calculate_results(
+        data,
+        "survey",
+        include_text=True,
+        profile_filters={
+            "university_name": "A대학교",
+            "year": "3",
+            "profile_category": "research",
+        },
+    )
+
+    assert result["total_response_count"] == 2
+    assert result["response_count"] == 1
+    assert result["questions"][0]["options"][0]["count"] == 1
+    assert result["questions"][0]["options"][1]["count"] == 0
