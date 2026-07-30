@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Literal
 
@@ -130,6 +131,16 @@ class FileRule(BaseModel):
     max_files: int = Field(default=1, ge=1, le=10)
     max_size_mb: int = Field(default=10, ge=1, le=100)
 
+    @field_validator("allowed_types")
+    @classmethod
+    def validate_allowed_types(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip().lower() for value in values]
+        if any(not value or "/" not in value for value in cleaned):
+            raise ValueError("파일 MIME 형식은 'type/subtype' 형태여야 합니다.")
+        if len(cleaned) != len(set(cleaned)):
+            raise ValueError("허용 파일 형식은 중복될 수 없습니다.")
+        return cleaned
+
 
 class QuestionCreate(BaseModel):
     question_type: QuestionType
@@ -172,6 +183,33 @@ class QuestionCreate(BaseModel):
                 raise ValueError("선형 척도의 최댓값은 최솟값보다 커야 합니다.")
         if self.max_choices and self.min_choices and self.max_choices < self.min_choices:
             raise ValueError("max_choices는 min_choices보다 작을 수 없습니다.")
+        return self
+
+
+    @model_validator(mode="after")
+    def validate_research_constraints(self) -> "QuestionCreate":
+        option_labels = [item.label.strip() for item in self.options]
+        if len(option_labels) != len(set(option_labels)):
+            raise ValueError("같은 선택지 문구를 중복해서 사용할 수 없습니다.")
+        if self.question_type in {"multiple_choice_grid", "checkbox_grid"}:
+            row_labels = [item.label.strip() for item in self.rows]
+            column_labels = [item.label.strip() for item in self.columns]
+            if len(row_labels) != len(set(row_labels)):
+                raise ValueError("그리드 행 문구는 중복될 수 없습니다.")
+            if len(column_labels) != len(set(column_labels)):
+                raise ValueError("그리드 열 문구는 중복될 수 없습니다.")
+        if self.question_type in {"multiple", "checkboxes"}:
+            if self.min_choices and self.min_choices > len(self.options):
+                raise ValueError("최소 선택 개수가 전체 선택지 수보다 많습니다.")
+            if self.max_choices and self.max_choices > len(self.options):
+                raise ValueError("최대 선택 개수가 전체 선택지 수보다 많습니다.")
+        elif self.min_choices is not None or self.max_choices is not None:
+            raise ValueError("선택 개수 제한은 체크박스 문항에만 사용할 수 있습니다.")
+        if self.validation and self.validation.pattern:
+            try:
+                re.compile(self.validation.pattern)
+            except re.error as exc:
+                raise ValueError("유효성 검사의 정규식이 올바르지 않습니다.") from exc
         return self
 
 
@@ -376,7 +414,7 @@ class SurveyDetail(SurveySummary):
 class AnswerSubmit(BaseModel):
     question_id: str
     option_ids: list[str] = Field(default_factory=list)
-    value_text: str | None = Field(default=None, max_length=5000)
+    value_text: str | None = Field(default=None, max_length=10_000)
     value_number: float | None = None
     value_date: str | None = Field(default=None, max_length=30)
     value_time: str | None = Field(default=None, max_length=30)
@@ -389,6 +427,17 @@ class AnswerSubmit(BaseModel):
         if len(option_ids) != len(set(option_ids)):
             raise ValueError("같은 선택지를 중복해서 제출할 수 없습니다.")
         return option_ids
+
+
+    @field_validator("grid_answers")
+    @classmethod
+    def unique_grid_options(
+        cls, grid_answers: dict[str, list[str]]
+    ) -> dict[str, list[str]]:
+        for selected in grid_answers.values():
+            if len(selected) != len(set(selected)):
+                raise ValueError("그리드의 같은 열을 중복해서 제출할 수 없습니다.")
+        return grid_answers
 
 
 class SurveyResponseSubmit(BaseModel):

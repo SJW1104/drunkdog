@@ -63,6 +63,47 @@
 문항 구간은 `1~5`, `6~10`, `11~15`처럼 5개 단위다. 문항이 0개인 설문은 초안으로
 저장할 수 있지만 게시·교환할 수 없다.
 
+### 문항별 응답 필드와 검증
+
+한 문항의 답안에는 해당 유형의 필드만 보낼 수 있다. 예를 들어 객관식 답안에
+`value_text`를 함께 보내면 `422`가 반환된다.
+
+| 문항 유형 | 답안 필드 | 주요 검증 |
+|---|---|---|
+| `short_text` | `value_text` | 기본 최대 500자, 길이·정규식 조건 |
+| `long_text` | `value_text` | 기본 최대 10,000자, 길이·정규식 조건 |
+| `single_choice`, `dropdown` | `option_ids` | 정확히 1개, 실제 선택지 ID |
+| `checkboxes` | `option_ids` | 중복 금지, 최소·최대 선택 개수 |
+| `linear_scale` | `value_number` | 정수, 설정된 최솟값~최댓값 |
+| `multiple_choice_grid` | `grid_answers` | 필수 행마다 열 ID 정확히 1개 |
+| `checkbox_grid` | `grid_answers` | 필수 행마다 열 ID 1개 이상 |
+| `date` | `value_date` | 실제 존재하는 `YYYY-MM-DD` |
+| `time` | `value_time` | 실제 존재하는 `HH:MM` 또는 `HH:MM:SS` |
+| `file_upload` | `file_uploads` | 개수·크기·MIME 및 메타데이터 검증 |
+
+파일 메타데이터 한 건의 형식:
+
+```json
+{
+  "file_name": "consent.pdf",
+  "mime_type": "application/pdf",
+  "size": 102400,
+  "storage_key": "uploads/2026/consent.pdf"
+}
+```
+
+`file_name` 대신 `name`, `storage_key` 대신 `url`도 사용할 수 있다. `size`는 0보다 큰
+바이트 정수여야 한다. 현재 JSON MVP는 파일 바이너리를 직접 저장하지 않으므로 실제
+업로드 저장소가 발급한 `storage_key` 또는 `url`을 답안에 넣어야 한다.
+
+설문 생성 시에도 다음 잘못된 설정을 `422`로 차단한다.
+
+- 중복 선택지, 중복 그리드 행·열
+- 선택지 수보다 큰 `min_choices` 또는 `max_choices`
+- 체크박스가 아닌 문항의 선택 개수 제한
+- 컴파일할 수 없는 정규식
+- 중복되거나 `type/subtype` 형식이 아닌 MIME 유형
+
 ### 설문 생성
 
 `POST /surveys`

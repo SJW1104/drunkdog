@@ -33,6 +33,23 @@ const headers = {
 
 교환이 시작되어 `structure_locked_at`이 생기면 질문·선택지 구조 편집 UI를 잠근다.
 
+### 문항별 답안 매핑
+
+| 문항 유형 | 전송 필드 |
+|---|---|
+| 단답형·장문형 | `value_text` |
+| 객관식·드롭다운·체크박스 | `option_ids` |
+| 선형 척도 | `value_number` |
+| 객관식·체크박스 그리드 | `grid_answers: {rowId: [columnId]}` |
+| 날짜 | `value_date: "YYYY-MM-DD"` |
+| 시간 | `value_time: "HH:MM"` |
+| 파일 | `file_uploads` |
+
+선형 척도는 정수만 보내고, 한 답안에 서로 다른 유형의 필드를 섞지 않는다. 파일은
+먼저 실제 저장소에 업로드한 뒤 파일 이름, MIME, 바이트 크기, `storage_key` 또는
+`url`을 `file_uploads`에 넣는다. 현재 백엔드는 파일 바이너리 업로드 API를 제공하지
+않는다.
+
 ## 3. 직접 교환 화면
 
 1. 내 설문을 선택한다.
