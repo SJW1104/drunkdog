@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 const QUESTION_TYPES = [
@@ -192,6 +192,7 @@ function Icon({ name, size = 22 }) {
     share: <><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4" /></>,
     download: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M5 21h14" /></>,
     heart: <path d="M20.8 5.8a5.5 5.5 0 0 0-7.8 0L12 6.8l-1-1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z" />,
+    message: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" /><path d="M8 10h8M8 14h5" /></>,
     shield: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></>,
     filter: <path d="M4 6h16M7 12h10M10 18h4" />,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14" /></>,
@@ -293,6 +294,59 @@ function Toggle({ checked, onChange, label }) {
   )
 }
 
+function DesignSelect({ value, onChange, options, ariaLabel, compact = false }) {
+  const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, upward: false })
+  const buttonRef = useRef(null)
+  const normalized = options.map((option) => Array.isArray(option) ? { value: option[0], label: option[1] } : { value: option, label: String(option) })
+  const selected = normalized.find((option) => String(option.value) === String(value)) || normalized[0]
+
+  const toggle = () => {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      const estimatedHeight = Math.min(normalized.length * 43 + 16, 330)
+      const upward = window.innerHeight - rect.bottom < estimatedHeight + 12 && rect.top > estimatedHeight
+      setPosition({
+        top: upward ? rect.top - 8 : rect.bottom + 8,
+        left: rect.left,
+        width: Math.max(rect.width, compact ? 96 : 170),
+        upward,
+      })
+    }
+    setOpen((current) => !current)
+  }
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [open])
+
+  return (
+    <div className={`design-select ${compact ? 'is-compact' : ''} ${open ? 'is-open' : ''}`}>
+      <button ref={buttonRef} className="design-select-trigger" type="button" onClick={toggle} aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open}>
+        <span>{selected?.label}</span><Icon name="chevron" size={18} />
+      </button>
+      {open ? <>
+        <button className="design-select-backdrop" type="button" onClick={() => setOpen(false)} aria-label="선택 목록 닫기" />
+        <div
+          className={`design-select-menu ${position.upward ? 'opens-up' : ''}`}
+          role="listbox"
+          style={{ top: position.top, left: position.left, width: position.width }}
+        >
+          {normalized.map((option) => {
+            const active = String(option.value) === String(value)
+            return <button type="button" role="option" aria-selected={active} className={active ? 'is-selected' : ''} key={option.value} onClick={() => { onChange(option.value); setOpen(false) }}><span>{option.label}</span>{active ? <Icon name="check" size={16} /> : null}</button>
+          })}
+        </div>
+      </> : null}
+    </div>
+  )
+}
+
 function Modal({ children, onClose, className = '' }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -329,15 +383,64 @@ function SurveyCard({ survey, onOpen, completed = false, exchange = false, eligi
   )
 }
 
-function HomeScreen({ navigate, surveys, completed, profile, unread }) {
+function NotificationPopover({ notifications, setNotifications, navigate, onClose }) {
+  const unreadCount = notifications.filter((notice) => !notice.read).length
+  const readAll = () => setNotifications((current) => current.map((notice) => ({ ...notice, read: true })))
+  const openNotice = (noticeId) => {
+    setNotifications((current) => current.map((notice) => notice.id === noticeId ? { ...notice, read: true } : notice))
+    onClose()
+    navigate('exchange')
+  }
+
+  return (
+    <div className="notification-popover-layer" onMouseDown={onClose}>
+      <aside className="notification-popover" role="dialog" aria-modal="true" aria-labelledby="notification-popover-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="notification-popover-head">
+          <div>
+            <span><Icon name="bell" size={15} /> NEW MESSAGE</span>
+            <h2 id="notification-popover-title">알림</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="알림 닫기"><Icon name="close" size={20} /></button>
+        </header>
+        <div className="notification-popover-summary">
+          <p>{unreadCount ? `새로운 알림이 ${unreadCount}개 있어요` : '새로운 알림을 모두 확인했어요'}</p>
+          {unreadCount ? <button type="button" onClick={readAll}>모두 읽음</button> : null}
+        </div>
+        <div className="notification-popover-list">
+          {notifications.map((notice) => (
+            <button type="button" key={notice.id} className={notice.read ? 'is-read' : ''} onClick={() => openNotice(notice.id)}>
+              <i><Icon name={notice.type === 'complete' ? 'check' : notice.type === 'deadline' ? 'clock' : 'exchange'} size={19} /></i>
+              <span><b>{notice.title}</b><p>{notice.body}</p><small>{notice.time}</small></span>
+              {!notice.read ? <em /> : null}
+            </button>
+          ))}
+        </div>
+      </aside>
+    </div>
+  )
+}
+
+function HomeScreen({ navigate, surveys, completed, profile, unread, notifications, setNotifications }) {
   const [query, setQuery] = useState('')
+  const [notificationOpen, setNotificationOpen] = useState(false)
   const visible = surveys.filter((survey) => `${survey.title} ${survey.category}`.toLowerCase().includes(query.toLowerCase()))
+
+  useEffect(() => {
+    if (!notificationOpen) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setNotificationOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [notificationOpen])
+
   return (
     <div className="screen has-nav">
       <TopBar
         brand
-        right={<div className="top-actions"><button className="round-icon" type="button" onClick={() => navigate('notifications')} aria-label="알림"><Icon name="bell" />{unread ? <i className="dot" /> : null}</button><button className="avatar" type="button" onClick={() => navigate('profile')}>나</button></div>}
+        right={<div className="top-actions"><button className="round-icon" type="button" onClick={() => setNotificationOpen((open) => !open)} aria-label="알림" aria-expanded={notificationOpen}><Icon name="bell" />{unread ? <i className="dot" /> : null}</button><button className="avatar" type="button" onClick={() => navigate('profile')}>나</button></div>}
       />
+      {notificationOpen ? <NotificationPopover notifications={notifications} setNotifications={setNotifications} navigate={navigate} onClose={() => setNotificationOpen(false)} /> : null}
       <main className="page home-page">
         <section className="welcome">
           <span>안녕하세요, {profile.name} 👋</span>
@@ -620,17 +723,25 @@ function CreateSurveyScreen({ onBack, onPublish, profile }) {
   const [quizMode, setQuizMode] = useState(savedDraft?.quizMode || false)
   const [confirmationMessage, setConfirmationMessage] = useState(savedDraft?.confirmationMessage || '응답해 주셔서 감사합니다!')
   const [toast, setToast] = useState('')
+  const toastTimer = useRef(null)
   const [titleSuggestions, setTitleSuggestions] = useState(false)
   useEffect(() => {
     document.querySelector('.create-page')?.scrollTo({ top: 0, behavior: 'instant' })
     window.scrollTo(0, 0)
   }, [step])
 
+  useEffect(() => () => window.clearTimeout(toastTimer.current), [])
+
+  const showToast = (message) => {
+    window.clearTimeout(toastTimer.current)
+    setToast(message)
+    toastTimer.current = window.setTimeout(() => setToast(''), 1800)
+  }
+
   const updateQuestion = (id, patch) => setQuestions((current) => current.map((question) => question.id === id ? { ...question, ...patch } : question))
   const saveDraft = () => {
     localStorage.setItem('suniversity-new-draft', JSON.stringify({ step, title, description, category, deadline, basicFields, questions, teamSurvey, publicResult, collectEmail, oneResponse, allowEdit, quizMode, confirmationMessage }))
-    setToast('임시저장했어요')
-    window.setTimeout(() => setToast(''), 1400)
+    showToast('임시저장했어요')
   }
   const addQuestion = (type = 'single') => setQuestions((current) => [...current, { ...emptyQuestion(), type }])
   const publish = () => {
@@ -674,7 +785,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile }) {
           </div> : null}
           <label className="form-field"><span>설문 설명</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="설문의 목적과 응답자에게 전할 말을 적어주세요." /></label>
           <div className="form-grid">
-            <label className="form-field"><span>카테고리</span><select value={category} onChange={(event) => setCategory(event.target.value)}>{['대학생활', '진로·취업', '소비', '연애·관계', 'IT·서비스', '연구·논문'].map((item) => <option key={item}>{item}</option>)}</select></label>
+            <div className="form-field"><span>카테고리</span><DesignSelect value={category} onChange={setCategory} ariaLabel="카테고리 선택" options={['대학생활', '진로·취업', '소비', '연애·관계', 'IT·서비스', '연구·논문']} /></div>
             <label className="form-field"><span>마감 기한</span><input type="date" value={deadline} min="2026-07-31" onChange={(event) => setDeadline(event.target.value)} /></label>
           </div>
           <div className="deadline-note"><Icon name="clock" /><span><b>마감 24시간 전 교환 자동 종료</b><small>성사되지 않은 교환 신청은 자동 취소돼요.</small></span></div>
@@ -693,7 +804,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile }) {
           <div className="add-question-actions">
             <button type="button" onClick={() => addQuestion()}><Icon name="plus" /> 질문 추가</button>
             <button type="button" onClick={() => addQuestion('section')}><Icon name="file" /> 섹션 추가</button>
-            <button type="button" onClick={() => { addQuestion('single'); setToast('AI가 목적에 맞는 문항을 추가했어요') }}><Icon name="spark" /> AI 문항 생성</button>
+            <button type="button" onClick={() => { addQuestion('single'); showToast('AI가 목적에 맞는 문항을 추가했어요') }}><Icon name="spark" /> AI 문항 생성</button>
           </div>
         </section> : null}
 
@@ -722,13 +833,15 @@ function CreateSurveyScreen({ onBack, onPublish, profile }) {
         {step < 4 ? <button type="button" className="primary-button" disabled={nextDisabled} onClick={() => setStep(step + 1)}>다음 단계 <span>{step}/4</span></button> : <button type="button" className="primary-button" onClick={publish}>무료로 설문 게시하기</button>}
       </footer>
       {showGuide ? <Modal onClose={() => setShowGuide(false)} className="guide-modal">
+        <button type="button" className="modal-close guide-close" onClick={() => setShowGuide(false)} aria-label="가이드 닫기"><Icon name="close" size={18} /></button>
         <div className="guide-visual"><span>•ᴗ•</span><i><Icon name="edit" /></i></div>
-        <span className="modal-kicker">SURVEY GUIDE</span>
+        <span className="modal-kicker"><Icon name="spark" size={13} /> SURVEY GUIDE</span>
         <h2>좋은 설문은<br />답하기 쉬운 말로 시작해요.</h2>
+        <p className="guide-intro">세 가지만 기억하면 응답하기 편한 설문이 완성돼요.</p>
         <div className="guide-list"><span><b>1</b><p><strong>어려운 단어는 쉽게</strong><small>전문 용어보다 일상적인 표현을 사용해요.</small></p></span><span><b>2</b><p><strong>질문은 대화하듯 자연스럽게</strong><small>한 문장에는 하나의 내용만 물어봐요.</small></p></span><span><b>3</b><p><strong>필요한 기본 정보는 자동으로</strong><small>프로필 정보를 활용하면 질문 수를 줄일 수 있어요.</small></p></span></div>
-        <button type="button" className="primary-button" onClick={() => setShowGuide(false)}>설문 만들기 시작</button>
+        <button type="button" className="primary-button" onClick={() => setShowGuide(false)}>설문 만들기 시작 <Icon name="chevron" size={18} /></button>
       </Modal> : null}
-      {toast ? <div className="toast"><Icon name="check" size={17} />{toast}</div> : null}
+      {toast ? <div className="toast" role="status"><Icon name="check" size={17} /><span>{toast}</span><button type="button" onClick={() => { window.clearTimeout(toastTimer.current); setToast('') }} aria-label="알림 닫기"><Icon name="close" size={15} /></button></div> : null}
     </div>
   )
 }
@@ -781,12 +894,12 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
       {expanded ? <div className="question-editor-body">
         <div className="question-main-input">
           <textarea value={question.text} onChange={(event) => onChange({ text: event.target.value })} placeholder="질문을 입력해 주세요." />
-          <select value={question.type} onChange={(event) => onChange({ type: event.target.value })}>{QUESTION_TYPES.map(([type, label]) => <option value={type} key={type}>{label}</option>)}</select>
+          <DesignSelect value={question.type} onChange={(type) => onChange({ type })} ariaLabel="질문 유형 선택" options={QUESTION_TYPES} />
         </div>
         <input className="question-description" value={question.description} onChange={(event) => onChange({ description: event.target.value })} placeholder="질문 설명 추가 (선택)" />
         {CHOICE_TYPES.has(question.type) ? <OptionList values={question.options} onUpdate={(indexValue, value) => optionUpdate('options', indexValue, value)} onRemove={(indexValue) => optionRemove('options', indexValue)} onAdd={() => onChange({ options: [...question.options, `선택지 ${question.options.length + 1}`] })} /> : null}
         {GRID_TYPES.has(question.type) ? <div className="grid-editor"><OptionList label="행" values={question.rows} onUpdate={(indexValue, value) => optionUpdate('rows', indexValue, value)} onRemove={(indexValue) => optionRemove('rows', indexValue)} onAdd={() => onChange({ rows: [...question.rows, `행 ${question.rows.length + 1}`] })} /><OptionList label="열" values={question.columns} onUpdate={(indexValue, value) => optionUpdate('columns', indexValue, value)} onRemove={(indexValue) => optionRemove('columns', indexValue)} onAdd={() => onChange({ columns: [...question.columns, `열 ${question.columns.length + 1}`] })} /></div> : null}
-        {question.type === 'scale' ? <div className="scale-editor"><select value={question.min} onChange={(event) => onChange({ min: Number(event.target.value) })}>{[0, 1].map((number) => <option key={number}>{number}</option>)}</select><span>부터</span><select value={question.max} onChange={(event) => onChange({ max: Number(event.target.value) })}>{[2, 3, 4, 5, 7, 10].map((number) => <option key={number}>{number}</option>)}</select><span>까지</span></div> : null}
+        {question.type === 'scale' ? <div className="scale-editor"><DesignSelect compact value={question.min} onChange={(min) => onChange({ min: Number(min) })} ariaLabel="최소 배율" options={[0, 1]} /><span>부터</span><DesignSelect compact value={question.max} onChange={(max) => onChange({ max: Number(max) })} ariaLabel="최대 배율" options={[2, 3, 4, 5, 7, 10]} /><span>까지</span></div> : null}
         {question.type === 'file' ? <div className="file-setting"><Icon name="file" /><span><b>파일 업로드 문항</b><small>최대 파일 크기와 허용 형식은 게시 후 서버 정책에 따라 적용돼요.</small></span></div> : null}
         <div className="question-tools">
           <button type="button" onClick={() => onChange({ text: question.text ? `${question.text.replace(/[.?]$/, '')}에 대해 편하게 알려주세요.` : '평소 이 주제에 대해 어떻게 생각하시나요?' })}><Icon name="spark" size={16} /> AI로 말투 다듬기</button>
@@ -796,8 +909,8 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
         {settings ? <div className="question-settings">
           <Toggle label="필수 응답" checked={question.required} onChange={(value) => onChange({ required: value })} />
           {CHOICE_TYPES.has(question.type) ? <><Toggle label="답변 순서 섞기" checked={question.shuffle} onChange={(value) => onChange({ shuffle: value })} /><Toggle label="기타 직접 입력 허용" checked={question.other} onChange={(value) => onChange({ other: value })} /></> : null}
-          <label><span>답변 유효성 검사</span><select value={question.validation} onChange={(event) => onChange({ validation: event.target.value })}><option value="none">사용 안 함</option><option value="email">이메일 형식</option><option value="number">숫자 범위</option><option value="length">글자 수 제한</option><option value="regex">정규식 검사</option></select></label>
-          {question.type === 'single' || question.type === 'dropdown' ? <label><span>응답 후 이동</span><select value={question.branch} onChange={(event) => onChange({ branch: event.target.value })}><option value="next">다음 질문</option><option value="section2">섹션 2로 이동</option><option value="end">설문 종료</option></select></label> : null}
+          <div><span>답변 유효성 검사</span><DesignSelect value={question.validation} onChange={(validation) => onChange({ validation })} ariaLabel="답변 유효성 검사" options={[['none', '사용 안 함'], ['email', '이메일 형식'], ['number', '숫자 범위'], ['length', '글자 수 제한'], ['regex', '정규식 검사']]} /></div>
+          {question.type === 'single' || question.type === 'dropdown' ? <div><span>응답 후 이동</span><DesignSelect value={question.branch} onChange={(branch) => onChange({ branch })} ariaLabel="응답 후 이동" options={[['next', '다음 질문'], ['section2', '섹션 2로 이동'], ['end', '설문 종료']]} /></div> : null}
           <label><span>퀴즈 정답</span><input value={question.correctAnswer || ''} onChange={(event) => onChange({ correctAnswer: event.target.value })} placeholder="정답 또는 해설" /></label>
           <label><span>배점</span><input type="number" min="0" max="100" value={question.score || 0} onChange={(event) => onChange({ score: Number(event.target.value) })} /></label>
         </div> : null}
@@ -856,7 +969,7 @@ function QuestionResponse({ question, value, onChange }) {
     const selected = (value || []).includes(option)
     return <button type="button" className={selected ? 'is-selected' : ''} key={option} onClick={() => onChange(selected ? value.filter((item) => item !== option) : [...(value || []), option])}><i className="checkbox"><Icon name="check" size={14} /></i><span>{option}</span></button>
   })}</div>
-  if (question.type === 'dropdown') return <select className="response-select" value={value || ''} onChange={(event) => onChange(event.target.value)}><option value="">선택해 주세요</option>{question.options.map((option) => <option key={option}>{option}</option>)}</select>
+  if (question.type === 'dropdown') return <div className="response-design-select"><DesignSelect value={value || ''} onChange={onChange} ariaLabel="답변 선택" options={[['', '선택해 주세요'], ...question.options]} /></div>
   if (question.type === 'scale') return <div className="response-scale"><div>{Array.from({ length: (question.max || 5) - (question.min || 1) + 1 }, (_, index) => index + (question.min || 1)).map((number) => <button type="button" className={value === number ? 'is-selected' : ''} key={number} onClick={() => onChange(number)}>{number}</button>)}</div><span><small>{question.minLabel || '낮음'}</small><small>{question.maxLabel || '높음'}</small></span></div>
   if (question.type === 'date') return <input className="response-input" type="date" value={value || ''} onChange={(event) => onChange(event.target.value)} />
   if (question.type === 'time') return <input className="response-input" type="time" value={value || ''} onChange={(event) => onChange(event.target.value)} />
@@ -1024,7 +1137,7 @@ function ProfileScreen({ navigate, profile, surveys, favoriteIds, requests }) {
   const mySurvey = surveys.find((survey) => survey.mine) || { ...surveys[0], id: 'my-demo', title: '대학생의 AI 활용과 취업 준비', participants: 53, mine: true }
   return (
     <div className="screen has-nav">
-      <TopBar title="마이페이지" right={<button className="round-icon" type="button" onClick={() => navigate('profileEdit')}><Icon name="edit" /></button>} />
+      <TopBar title="마이페이지" />
       <main className="page profile-page">
         <section className="profile-head"><div className="profile-avatar">나</div><div><h1>{profile.name}</h1><p><Icon name="shield" size={14} /> {profile.university} · 인증 완료</p><span>{profile.major}</span></div></section>
         <section className="trust-card"><div><span>나의 신뢰도</span><strong>{profile.trust}<small>%</small></strong><em>★★★★★</em></div><Progress value={profile.trust} tone="purple" /><p>성실한 교환 12회 · 받은 후기 8개</p></section>
@@ -1183,9 +1296,31 @@ function DiscussionScreen({ survey, onBack }) {
     setComment('')
   }
   const toggleLike = (id) => setComments((current) => current.map((item) => item.id === id ? { ...item, liked: !item.liked, likes: item.likes + (item.liked ? -1 : 1) } : item))
+  const toggleReplyLike = (commentId, replyId) => setComments((current) => current.map((item) => item.id === commentId ? {
+    ...item,
+    replies: item.replies.map((nested) => nested.id === replyId ? {
+      ...nested,
+      liked: !nested.liked,
+      likes: (nested.likes || 0) + (nested.liked ? -1 : 1),
+    } : nested),
+  } : item))
+  const startReply = (commentId, targetId, author) => {
+    setReplyTo((current) => current?.commentId === commentId && current?.targetId === targetId ? null : { commentId, targetId, author })
+    setReply('')
+  }
   const addReply = (id) => {
     if (!reply.trim()) return
-    setComments((current) => current.map((item) => item.id === id ? { ...item, replies: [...item.replies, { id: `r-${Date.now()}`, author: identity === 'anonymous' ? '익명 퍼즐' : '나경 · 고려대', text: reply.trim() }] } : item))
+    setComments((current) => current.map((item) => item.id === id ? {
+      ...item,
+      replies: [...item.replies, {
+        id: `r-${Date.now()}`,
+        author: identity === 'anonymous' ? '익명 퍼즐' : '나경 · 고려대',
+        text: reply.trim(),
+        likes: 0,
+        liked: false,
+        replyTo: replyTo?.targetId === item.id ? '' : replyTo?.author,
+      }],
+    } : item))
     setReply('')
     setReplyTo(null)
   }
@@ -1200,9 +1335,16 @@ function DiscussionScreen({ survey, onBack }) {
         <div className="comment-list">{comments.map((item) => <article key={item.id} className={`team-${item.team}`}>
           <header><span className="comment-avatar">{item.author.slice(0, 1)}</span><div><b>{item.author}</b><small>방금 전</small></div><button type="button"><Icon name="more" size={17} /></button></header>
           <p>{item.text}</p>
-          <footer><button type="button" className={item.liked ? 'is-liked' : ''} onClick={() => toggleLike(item.id)}><Icon name="heart" size={15} /> 공감 {item.likes}</button><button type="button" onClick={() => setReplyTo(replyTo === item.id ? null : item.id)}>답글 {item.replies.length}</button></footer>
-          {item.replies.map((nested) => <div className="comment-reply" key={nested.id}><Icon name="chevron" size={14} /><span><b>{nested.author}</b><p>{nested.text}</p></span></div>)}
-          {replyTo === item.id ? <div className="reply-composer"><input value={reply} onChange={(event) => setReply(event.target.value)} placeholder="답글을 입력해 주세요." /><button type="button" disabled={!reply.trim()} onClick={() => addReply(item.id)}>등록</button></div> : null}
+          <footer><button type="button" className={item.liked ? 'is-liked' : ''} onClick={() => toggleLike(item.id)}><Icon name="heart" size={15} /> 공감 {item.likes}</button><button type="button" className={replyTo?.targetId === item.id ? 'is-replying' : ''} onClick={() => startReply(item.id, item.id, item.author)}><Icon name="message" size={15} /> 답글 {item.replies.length}</button></footer>
+          <div className="comment-replies">{item.replies.map((nested) => <div className="comment-reply" key={nested.id}>
+            <Icon name="chevron" size={14} />
+            <span>
+              <b>{nested.author}</b>
+              <p>{nested.replyTo ? <em>@{nested.replyTo}</em> : null}{nested.text}</p>
+              <footer><button type="button" className={nested.liked ? 'is-liked' : ''} onClick={() => toggleReplyLike(item.id, nested.id)}><Icon name="heart" size={13} /> 공감 {nested.likes || 0}</button><button type="button" className={replyTo?.targetId === nested.id ? 'is-replying' : ''} onClick={() => startReply(item.id, nested.id, nested.author)}><Icon name="message" size={13} /> 답글</button></footer>
+            </span>
+          </div>)}</div>
+          {replyTo?.commentId === item.id ? <div className="reply-composer"><span>{replyTo.targetId === item.id ? '댓글에 답글 쓰는 중' : `@${replyTo.author} 님에게 답글 쓰는 중`}</span><div><input value={reply} autoFocus onChange={(event) => setReply(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) addReply(item.id) }} placeholder="답글을 입력해 주세요." /><button type="button" disabled={!reply.trim()} onClick={() => addReply(item.id)}>등록</button></div></div> : null}
         </article>)}</div>
       </main>
     </div>
@@ -1298,7 +1440,7 @@ function App() {
     setRequests((current) => [request, ...current].slice(0, 10))
   }
 
-  const common = { navigate, surveys, requests, setRequests, profile, unread }
+  const common = { navigate, surveys, requests, setRequests, profile, unread, notifications, setNotifications }
   if (screen === 'home') return <HomeScreen {...common} completed={completed} />
   if (screen === 'exchange') return <ExchangeScreen {...common} />
   if (screen === 'surveyDetail') return <SurveyDetailScreen survey={selectedSurvey} onBack={back} navigate={navigate} profile={profile} onRequest={addRequest} completed={completed.includes(selectedSurvey.id)} favorite={favorites.includes(selectedSurvey.id)} onFavorite={(id) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} />
