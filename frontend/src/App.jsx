@@ -228,20 +228,50 @@ function TopBar({ title, onBack, right, brand = false }) {
   )
 }
 
-function BottomNav({ active, navigate, unread }) {
+function BottomNav({ active, navigate }) {
   const items = [
     ['home', '홈', 'home'],
-    ['exchange', '설문 교환', 'exchange'],
     ['create', '설문 만들기', 'plus'],
-    ['notifications', '알림', 'bell'],
-    ['profile', '마이', 'user'],
+    ['exchange', '설문 교환', 'exchange'],
   ]
+  const activeIndex = Math.max(0, items.findIndex(([id]) => id === active))
+  const [selectedIndex, setSelectedIndex] = useState(activeIndex)
+  const [isMoving, setIsMoving] = useState(false)
+
+  useEffect(() => {
+    setSelectedIndex(activeIndex)
+    setIsMoving(false)
+  }, [activeIndex])
+
+  const selectTab = (id, index) => {
+    if (id === active || isMoving) return
+    setSelectedIndex(index)
+    setIsMoving(true)
+    window.setTimeout(() => navigate(id), 260)
+  }
+
   return (
-    <nav className="bottom-nav" aria-label="주요 메뉴">
-      {items.map(([id, label, icon]) => (
-        <button key={id} type="button" className={`${active === id ? 'is-active' : ''} ${id === 'create' ? 'nav-create' : ''}`} onClick={() => navigate(id)}>
-          <span><Icon name={icon} size={id === 'create' ? 25 : 21} />{id === 'notifications' && unread ? <i>{unread}</i> : null}</span>
-          <small>{label}</small>
+    <nav
+      className={`bottom-nav${isMoving ? ' is-moving' : ''}`}
+      aria-label="주요 메뉴"
+      style={{ '--active-tab': selectedIndex }}
+    >
+      <span className="bottom-nav__indicator" aria-hidden="true">
+        <Icon
+          name={items[selectedIndex][2]}
+          size={items[selectedIndex][0] === 'create' ? 31 : 28}
+        />
+      </span>
+      {items.map(([id, label, icon], index) => (
+        <button
+          key={id}
+          type="button"
+          className={`${selectedIndex === index ? 'is-active' : ''} ${id === 'create' ? 'nav-create' : ''}`}
+          aria-current={active === id ? 'page' : undefined}
+          aria-label={label}
+          onClick={() => selectTab(id, index)}
+        >
+          <span><Icon name={icon} size={id === 'create' ? 31 : 28} /></span>
         </button>
       ))}
     </nav>

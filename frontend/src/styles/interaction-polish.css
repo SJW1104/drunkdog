@@ -1,4 +1,169 @@
 /* Selectively synced interaction polish from feat/mobile-app-ui. */
+.screen {
+  height: 100dvh;
+}
+
+.screen.has-nav .page {
+  padding-bottom: 118px;
+}
+
+.bottom-nav {
+  position: absolute;
+  z-index: 50;
+  right: 14px;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 14px;
+  display: grid;
+  height: 76px;
+  padding: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid rgba(255, 255, 255, .86);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .88);
+  box-shadow:
+    0 18px 44px rgba(43, 59, 86, .18),
+    0 5px 15px rgba(43, 59, 86, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .92);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  isolation: isolate;
+}
+
+.bottom-nav__indicator {
+  position: absolute;
+  z-index: 1;
+  top: -10px;
+  left: 8px;
+  display: grid;
+  width: calc((100% - 16px) / 3);
+  height: 64px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--white);
+  pointer-events: none;
+  transform: translateX(calc(var(--active-tab) * 100%));
+  transition:
+    transform 520ms cubic-bezier(.22, 1, .36, 1),
+    border-radius 360ms ease,
+    box-shadow 360ms ease;
+}
+
+.bottom-nav__indicator::before {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  border: 5px solid rgba(255, 255, 255, .95);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #7bc5fa, #529de5);
+  box-shadow:
+    0 11px 23px rgba(72, 152, 219, .34),
+    inset 0 1px 0 rgba(255, 255, 255, .42);
+  content: "";
+  transform: translateX(-50%);
+  transition: transform 360ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.bottom-nav__indicator > svg {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 2px 2px rgba(28, 88, 139, .14));
+}
+
+.bottom-nav.is-moving .bottom-nav__indicator::before {
+  transform: translateX(-50%) scale(1.06);
+}
+
+.bottom-nav button {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  min-width: 0;
+  border-radius: 999px;
+  justify-items: center;
+  align-content: center;
+  gap: 0;
+  color: #9aa3b3;
+  transition:
+    color 280ms ease,
+    transform 420ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.bottom-nav button > span {
+  position: relative;
+  display: grid;
+  height: 38px;
+  place-items: center;
+  transition:
+    opacity 180ms ease,
+    transform 420ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.bottom-nav button.is-active {
+  color: var(--white);
+  transform: none;
+}
+
+.bottom-nav button.is-active > span {
+  opacity: 0;
+  transform: scale(.82);
+}
+
+.bottom-nav button:active {
+  transform: scale(.94);
+}
+
+.bottom-nav button:focus-visible {
+  outline: 3px solid rgba(90, 174, 242, .35);
+  outline-offset: -3px;
+}
+
+.bottom-nav .nav-create > span {
+  width: auto;
+  height: 38px;
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+}
+
+.profile-head {
+  padding: 16px 0 24px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  text-align: center;
+}
+
+.profile-avatar {
+  width: 82px;
+  height: 82px;
+  border-radius: 29px;
+  font-size: 26px;
+  box-shadow: 0 12px 28px rgba(109, 130, 205, .18);
+}
+
+.profile-head > div:last-child {
+  justify-items: center;
+}
+
+.profile-head p {
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav__indicator,
+  .bottom-nav__indicator::before,
+  .bottom-nav button,
+  .bottom-nav button > span {
+    transition-duration: 1ms;
+  }
+}
+
 .design-select {
   position: relative;
   width: 100%;
