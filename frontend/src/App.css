@@ -706,40 +706,62 @@ button:disabled {
   display: grid;
   min-height: 236px;
   padding: 23px 19px;
-  overflow: hidden;
-  border: 1px solid rgba(116, 186, 237, .30);
-  border-radius: 26px;
-  background:
-    radial-gradient(circle at 86% 15%, rgba(255, 255, 255, .9), transparent 32%),
-    linear-gradient(145deg, rgba(189, 227, 255, .96), rgba(232, 217, 255, .72));
-  box-shadow: var(--shadow);
+  overflow: visible;
+  border: 0;
+  border-radius: 34px;
+  background: transparent;
+  box-shadow:
+    0 16px 30px -14px rgba(54, 82, 118, .28),
+    0 3px 9px rgba(54, 82, 118, .12);
 }
 
 .ai-hero::after {
+  content: none;
+}
+
+.ai-hero__background {
   position: absolute;
-  right: -50px;
-  bottom: -55px;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .34);
-  content: "";
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.ai-hero__outline {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: #CCCABD;
+  stroke-width: 3.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: scale(1.035, 1.045);
+  transform-origin: center;
+  pointer-events: none;
 }
 
 .ai-hero > div {
   position: relative;
   z-index: 2;
-  max-width: 65%;
+  max-width: 59%;
 }
 
 .ai-hero > div > span {
   display: flex;
   width: max-content;
-  padding: 6px 9px;
+  min-height: 31px;
+  padding: 6px 11px;
   align-items: center;
   gap: 5px;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, .65);
+  border-radius: 47px;
+  background: #D1E7FF;
   color: var(--navy);
   font-size: 10px;
   font-weight: 900;
@@ -748,8 +770,8 @@ button:disabled {
 .ai-hero h2 {
   margin: 13px 0 8px;
   color: var(--navy);
-  font-size: 20px;
-  line-height: 1.35;
+  font-size: 18px;
+  line-height: 1.38;
   letter-spacing: -.045em;
 }
 
@@ -758,37 +780,59 @@ button:disabled {
   color: #57708e;
   font-size: 10px;
   line-height: 1.55;
+  word-break: keep-all;
 }
 
 .ai-hero button {
+  position: relative;
   display: inline-flex;
-  margin-top: 17px;
-  padding: 11px 13px;
+  width: 136px;
+  height: 39px;
+  margin-top: 13px;
+  padding: 0 10px 0 12px;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  border-radius: 12px;
-  background: var(--white);
-  color: var(--navy);
-  font-size: 11px;
+  overflow: visible;
+  border-radius: 47px;
+  background: transparent;
+  color: #254169;
+  font-size: 10px;
   font-weight: 900;
-  box-shadow: 0 9px 20px rgba(55, 96, 134, .12);
+  box-shadow: none;
 }
 
-.ai-hero > .brand {
+.ai-hero button > img {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.ai-hero button > span,
+.ai-hero button > svg {
+  position: relative;
+  z-index: 1;
+}
+
+.ai-hero__puzzle {
   position: absolute;
   z-index: 1;
-  right: 3px;
-  bottom: 21px;
-  transform: scale(.92);
+  right: 29px;
+  bottom: 16px;
+  display: block;
+  width: 142px;
+  height: 144px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
-.ai-hero > .brand > strong {
-  display: none;
-}
-
-.ai-hero > .brand .brand-puzzle {
-  width: 118px;
-  height: 118px;
+.ai-hero h2 em {
+  color: #6F9FD8;
+  font-style: normal;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5949,7 +5993,13 @@ button:disabled {
   }
 
   .ai-hero > div {
-    max-width: 70%;
+    max-width: 62%;
+  }
+
+  .ai-hero__puzzle {
+    right: 24px;
+    width: 128px;
+    height: 130px;
   }
 
   .question-main-input {
