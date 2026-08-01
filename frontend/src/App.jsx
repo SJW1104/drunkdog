@@ -6,6 +6,9 @@ import Icon from './components/ui/Icon'
 import aiHeroBackground from './assets/ai-hero-background.svg'
 import aiHeroButton from './assets/ai-hero-button.svg'
 import aiHeroPuzzle from './assets/ai-hero-puzzle.svg'
+import autoMatchPuzzleBlue from './assets/auto-match-puzzle-blue.svg'
+import autoMatchPuzzlesCombined from './assets/auto-match-puzzles-combined.svg'
+import respondentSimilarPuzzles from './assets/respondent-similar-puzzles.svg'
 import miniPuzzleBlue from './assets/mini-puzzle-blue-flat.svg'
 import miniPuzzlePink from './assets/mini-puzzle-pink-flat.svg'
 import puzzleMainComplete from './assets/puzzle-main-complete.svg'
@@ -446,10 +449,7 @@ function ExchangeScreen({ navigate, surveys, requests, setRequests, profile }) {
           <section>
             <div className="section-title">
               <div><span>같은 문항 구간 우선</span><h2>교환하기 좋은 설문</h2></div>
-              <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="정렬">
-                <option value="score">매칭 점수순</option>
-                <option value="deadline">마감일순</option>
-              </select>
+              <DesignSelect value={sort} onChange={setSort} options={[["score", "매칭 점수순"], ["deadline", "마감일순"]]} ariaLabel="정렬" compact />
             </div>
             <div className="matching-rule"><Icon name="shield" size={18} /><p><b>내 설문: 11~15문항</b><span>같거나 더 높은 구간에만 직접 교환을 신청할 수 있어요.</span></p></div>
             <div className="survey-stack">
@@ -598,7 +598,7 @@ function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
   }
   return (
     <div className="screen">
-      <TopBar title="자동 매칭" onBack={onBack} right={<span className="top-step">{phase === 'setup' ? '설정' : phase === 'searching' ? '탐색' : '완료'}</span>} />
+      <TopBar title="자동 매칭" onBack={onBack} right={phase === 'setup' ? <button className="top-step top-step--button" type="button" onClick={() => navigate('team')}>설정</button> : <span className="top-step">{phase === 'searching' ? '탐색' : '완료'}</span>} />
       <main className="page auto-page">
         {phase === 'setup' ? <>
           <div className="auto-mascot"><span>•ᴗ•</span><i><Icon name="search" /></i></div>
@@ -623,9 +623,9 @@ function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
           {!match ? <div className="auto-empty"><Icon name="clock" /><span><b>매칭 가능한 설문이 없어요</b><small>마감되지 않은 설문을 먼저 등록해 주세요.</small></span></div> : null}
           <button type="button" className="primary-button bottom-cta" disabled={!match} onClick={start}>자동 매칭 시작</button>
         </> : null}
-        {phase === 'searching' ? <div className="matching-search"><div className="orbit"><span>•ᴗ•</span><i /><i /><i /></div><h1>가장 잘 맞는 팀을<br />찾고 있어요</h1><p>문항 수, 참여 인원, 신뢰도를 비교하고 있어요.</p><div className="search-steps"><span className="done"><Icon name="check" /> 문항 수 구간 확인</span><span className="done"><Icon name="check" /> 참여 인원 확인</span><span><i className="loader" /> 매칭 점수 계산</span></div></div> : null}
+        {phase === 'searching' ? <div className="matching-search"><div className="orbit orbit--puzzle"><img src={autoMatchPuzzleBlue} alt="" /><i /><i /><i /></div><h1>가장 잘 맞는 팀을<br />찾고 있어요</h1><p>문항 수, 참여 인원, 신뢰도를 비교하고 있어요.</p><div className="search-steps"><span className="done"><Icon name="check" /> 문항 수 구간 확인</span><span className="done"><Icon name="check" /> 참여 인원 확인</span><span><i className="loader" /> 매칭 점수 계산</span></div></div> : null}
         {phase === 'matched' && match ? <div className="match-result">
-          <div className="celebrate">✦ <span>•ᴗ•</span> <span>•ᴗ•</span> ✦</div>
+          <div className="celebrate celebrate--puzzles"><i>✦</i><img src={autoMatchPuzzlesCombined} alt="" /><i>✦</i></div>
           <span className="eyebrow">MATCH FOUND</span>
           <h1>딱 맞는 팀을 찾았어요!</h1>
           <p>매칭 점수와 교환 조건을 확인해 주세요.</p>
@@ -969,7 +969,7 @@ function RespondentResultScreen({ survey, onBack, navigate }) {
             <div className="section-title"><div><span>Q1 결과</span><h2>카페 이용 빈도</h2></div></div>
             <div className="donut-wrap"><div className="donut"><strong>85<small>명</small></strong></div><ul><li><i className="c1" />주 3~4회 <b>35%</b></li><li><i className="c2" />주 1~2회 <b>28%</b></li><li><i className="c3" />주 5회 이상 <b>21%</b></li><li><i className="c4" />기타 <b>16%</b></li></ul></div>
           </section>
-          <section className="similar-card"><div className="mini-mascots"><i>•ᴗ•</i><i>•ᴗ•</i></div><div><b>ENFP 응답자와 가장 비슷해요</b><p>전체 답변 패턴이 82% 일치했어요.</p></div></section>
+          <section className="similar-card"><img className="similar-card__puzzles" src={respondentSimilarPuzzles} alt="" /><div><b>ENFP 응답자와 가장 비슷해요</b><p>전체 답변 패턴이 82% 일치했어요.</p></div></section>
         </> : null}
         {tab === 'compare' ? <section className="compare-results">
           {Object.entries(groups).map(([key, values]) => <article key={key}><h3>{key === 'gender' ? '성별 비교' : key === 'mbti' ? 'MBTI 비교' : '학교별 비교'}</h3>{values.map(([label, value], index) => <span key={label}><small>{label}</small><Progress value={value} tone={index % 2 ? 'pink' : 'blue'} /><b>{value}%</b></span>)}</article>)}
@@ -1070,6 +1070,70 @@ function TeamScreen({ onBack }) {
   )
 }
 
+function EnhancedTeamScreen({ onBack }) {
+  const [copied, setCopied] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [teamName, setTeamName] = useState('')
+  const [permissionOpen, setPermissionOpen] = useState(null)
+  const [selectedMember, setSelectedMember] = useState(null)
+  const [teams, setTeams] = useState(['캡스톤 A팀', '서비스기획 B팀', '졸업작품 팀'])
+  const [activeTeam, setActiveTeam] = useState('캡스톤 A팀')
+  const [members, setMembers] = useState([
+    ['나경', '설문 관리자', 4, 4],
+    ['서빈', '공동 편집자', 3, 4],
+    ['지민', '응답 참여자', 4, 4],
+    ['도윤', '응답 참여자', 2, 4],
+  ])
+  const removeMember = (name) => {
+    setMembers((current) => current.filter(([memberName]) => memberName !== name))
+    setSelectedMember(null)
+  }
+  const createTeam = () => {
+    const name = teamName.trim()
+    if (!name || teams.includes(name)) return
+    setTeams((current) => [...current, name])
+    setActiveTeam(name)
+    setTeamName('')
+    setCreateOpen(false)
+    setMenuOpen(false)
+  }
+  const deleteTeam = () => {
+    if (teams.length === 1 || !window.confirm(`${activeTeam}을 삭제할까요?`)) return
+    const nextTeams = teams.filter((team) => team !== activeTeam)
+    setTeams(nextTeams)
+    setActiveTeam(nextTeams[0])
+    setMenuOpen(false)
+  }
+  return (
+    <div className="screen" onClick={() => setSelectedMember(null)}>
+      <TopBar title="팀 워크스페이스" onBack={onBack} right={<button className="round-icon" type="button" aria-label="팀 메뉴" aria-expanded={menuOpen} onClick={(event) => { event.stopPropagation(); setMenuOpen((open) => !open) }}><Icon name="more" /></button>} />
+      {menuOpen ? <><button className="team-menu-backdrop" type="button" aria-label="팀 메뉴 닫기" onClick={() => setMenuOpen(false)} /><aside className="team-switcher" onClick={(event) => event.stopPropagation()}>
+        <header><small>현재 팀</small><strong>{activeTeam}</strong></header>
+        <div className="team-switcher__list"><span>다른 팀으로 변경</span>{teams.filter((team) => team !== activeTeam).map((team) => <button type="button" key={team} onClick={() => { setActiveTeam(team); setMenuOpen(false) }}><i>{team.slice(0, 1)}</i><b>{team}</b><Icon name="chevron" size={16} /></button>)}</div>
+        <footer><button type="button" onClick={() => { setMenuOpen(false); setCreateOpen(true) }}><Icon name="plus" size={18} /> 팀 생성하기</button><button className="is-danger" type="button" disabled={teams.length === 1} onClick={deleteTeam}><Icon name="trash" size={18} /> 팀 삭제하기</button></footer>
+      </aside></> : null}
+      {createOpen ? <div className="team-create-layer" role="presentation" onClick={() => setCreateOpen(false)}><section className="team-create-dialog" role="dialog" aria-modal="true" aria-labelledby="team-create-title" onClick={(event) => event.stopPropagation()}>
+        <div className="team-create-icon"><Icon name="team" size={25} /></div>
+        <h2 id="team-create-title">새 팀 만들기</h2>
+        <p>함께 설문을 만들고 교환할 팀의 이름을 정해 주세요.</p>
+        <label><span>팀 이름</span><input autoFocus maxLength={20} value={teamName} placeholder="예: 캡스톤 디자인팀" onChange={(event) => setTeamName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') createTeam() }} /></label>
+        {teams.includes(teamName.trim()) ? <small>이미 사용 중인 팀 이름이에요.</small> : <small>{teamName.length}/20</small>}
+        <div><button type="button" onClick={() => { setTeamName(''); setCreateOpen(false) }}>취소</button><button type="button" disabled={!teamName.trim() || teams.includes(teamName.trim())} onClick={createTeam}>팀 만들기</button></div>
+      </section></div> : null}
+      <main className="page team-page">
+        <section className="team-hero"><span className="team-big-avatar">{activeTeam.slice(0, 1)}</span><div><span className="tag tag--purple">{members.length}명 참여 중</span><h1>{activeTeam}</h1><p>대학생 AI 사용 실태 조사</p></div></section>
+        <section className="team-progress-card"><div><span>팀 응답 진행률</span><strong>81<small>%</small></strong></div><Progress value={81} tone="purple" /><p>교환 중인 설문 2개 · 남은 응답 3개</p></section>
+        <section>
+          <div className="section-title"><div><span>MEMBERS</span><h2>팀원별 진행 현황</h2></div><button type="button" onClick={() => { navigator.clipboard?.writeText('SUNI-TEAM-4A2'); setCopied(true) }}>{copied ? '초대 코드 복사됨' : '팀원 초대'}</button></div>
+          <div className="member-list">{members.map(([name, role, done, total], index) => <article className={selectedMember === name ? 'is-selected' : ''} key={name} onClick={(event) => { event.stopPropagation(); if (index !== 0) setSelectedMember((current) => current === name ? null : name) }}><span className={`member-avatar m${index}`}>{name.slice(0, 1)}</span><div><b>{name}{index === 0 ? ' (나)' : ''}</b><small>{role}</small></div>{selectedMember === name && index !== 0 ? <button className="member-remove" type="button" onClick={(event) => { event.stopPropagation(); removeMember(name) }}><Icon name="trash" size={15} /> 삭제</button> : <em>{done}/{total} 완료</em>}<Progress value={done / total * 100} tone={index % 2 ? 'pink' : 'blue'} /></article>)}</div>
+        </section>
+        <section className="team-permissions"><h3>팀 권한</h3><button type="button" onClick={() => setPermissionOpen(permissionOpen === 'edit' ? null : 'edit')}><Icon name="edit" /><span><b>공동 설문 편집</b><small>관리자와 편집자 2명</small></span><Icon name="chevron" /></button>{permissionOpen === 'edit' ? <div className="permission-panel"><b>편집 권한</b>{members.map(([name, role], index) => <label key={name}><span>{name}<small>{role}</small></span><input type="checkbox" defaultChecked={index < 2} disabled={index === 0} /></label>)}</div> : null}<button type="button" onClick={() => setPermissionOpen(permissionOpen === 'exchange' ? null : 'exchange')}><Icon name="exchange" /><span><b>팀 교환 신청</b><small>관리자만 신청 가능</small></span><Icon name="chevron" /></button>{permissionOpen === 'exchange' ? <div className="permission-panel"><b>신청 가능 역할</b><label><span>관리자만</span><input type="radio" name="exchange-permission" defaultChecked /></label><label><span>관리자와 편집자</span><input type="radio" name="exchange-permission" /></label><label><span>모든 팀원</span><input type="radio" name="exchange-permission" /></label></div> : null}</section>
+      </main>
+    </div>
+  )
+}
+
 function NotificationsScreen({ navigate, notifications, setNotifications }) {
   const readAll = () => setNotifications((current) => current.map((notice) => ({ ...notice, read: true })))
   return (
@@ -1128,7 +1192,7 @@ function ProfileEditScreen({ profile, setProfile, onBack }) {
       <main className="page edit-profile-page">
         <section className="verified-profile"><Icon name="shield" /><div><b>학교 인증 정보</b><p>{profile.university}<br />{profile.major} · {profile.studentId}</p></div><span>인증 완료</span></section>
         <p className="privacy-copy">입력한 정보는 응답 대상 확인과 매칭 점수 계산에 사용돼요. 설문 작성자가 선택한 항목만 익명으로 전달됩니다.</p>
-        <div className="profile-form">{fields.map(([label, key, options]) => <label key={key}><span>{label}</span><select value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>)}<label><span>거주 지역</span><input value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></label></div>
+        <div className="profile-form">{fields.map(([label, key, options]) => <div className="profile-form-row" key={key}><span>{label}</span><DesignSelect value={draft[key]} onChange={(value) => setDraft({ ...draft, [key]: value })} options={options} ariaLabel={`${label} 선택`} /></div>)}<label><span>거주 지역</span><input value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></label></div>
         <section className="lifestyle-options"><h3>라이프스타일</h3>{[['흡연', 'smoking'], ['음주', 'drinking'], ['운동', 'exercise'], ['운전면허', 'license'], ['자동차', 'car']].map(([label, key]) => <label key={key}><span>{label}</span><input value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} /></label>)}</section>
       </main>
     </div>
@@ -1397,7 +1461,7 @@ function App() {
   const [profile, setProfile] = useStoredState('suniversity-new-profile', defaultProfile)
   const [favorites, setFavorites] = useStoredState('suniversity-new-favorites', [])
   const [, setAnswers] = useStoredState('suniversity-new-answers', {})
-  const [previousScreen, setPreviousScreen] = useState('home')
+  const navigationHistory = useRef([])
   const selectedSurvey = surveys.find((survey) => survey.id === selectedId) || surveys[0]
   const selectedRequest = requests.find((request) => request.id === selectedId)
   const unread = notifications.filter((notice) => !notice.read).length
@@ -1433,14 +1497,17 @@ function App() {
   }, [requests, setNotifications])
 
   const navigate = (next, id = null, meta = {}) => {
-    setPreviousScreen(screen)
+    navigationHistory.current.push({ screen, selectedId, screenMeta })
     setScreen(next)
     setSelectedId(id)
     setScreenMeta(meta)
     window.scrollTo(0, 0)
   }
   const back = () => {
-    setScreen(previousScreen || 'home')
+    const previous = navigationHistory.current.pop() || { screen: 'home', selectedId: null, screenMeta: {} }
+    setScreen(previous.screen)
+    setSelectedId(previous.selectedId)
+    setScreenMeta(previous.screenMeta)
     window.scrollTo(0, 0)
   }
   useEffect(() => {
@@ -1474,9 +1541,10 @@ function App() {
   if (screen === 'create') return <CreateSurveyScreen onBack={back} profile={profile} onPublish={publishSurvey} />
   if (screen === 'participate') return <ParticipateScreen survey={selectedSurvey} onBack={back} onComplete={completeSurvey} isExchange={Boolean(screenMeta.exchangeId)} />
   if (screen === 'respondentResult') return <RespondentResultScreen survey={selectedSurvey} onBack={() => navigate('home')} navigate={navigate} />
-  if (screen === 'creatorResults') return <CreatorResultsScreen survey={selectedSurvey} onBack={() => navigate('profile')} navigate={navigate} />
+  if (screen === 'creatorResults') return <CreatorResultsScreen survey={selectedSurvey} onBack={back} navigate={navigate} />
   if (screen === 'shareSurvey') return <ShareSurveyScreen survey={selectedSurvey} onBack={back} />
-  if (screen === 'team') return <TeamScreen onBack={back} />
+  if (screen === 'team') return <EnhancedTeamScreen onBack={back} />
+  if (screen === '__legacyTeam') return <TeamScreen onBack={back} />
   if (screen === 'notifications') return <NotificationsScreen navigate={navigate} notifications={notifications} setNotifications={setNotifications} />
   if (screen === 'profile') return <ProfileScreen {...common} favoriteIds={favorites} />
   if (screen === 'profileEdit') return <ProfileEditScreen profile={profile} setProfile={setProfile} onBack={back} />
