@@ -3,6 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import NotificationPopover from './components/notifications/NotificationPopover'
 import DesignSelect from './components/ui/DesignSelect'
 import Icon from './components/ui/Icon'
+import aiHeroBackground from './assets/ai-hero-background.svg'
+import aiHeroButton from './assets/ai-hero-button.svg'
+import aiHeroPuzzle from './assets/ai-hero-puzzle.svg'
+import miniPuzzleBlue from './assets/mini-puzzle-blue-flat.svg'
+import miniPuzzlePink from './assets/mini-puzzle-pink-flat.svg'
+import puzzleMainComplete from './assets/puzzle-main-complete.svg'
 import './App.css'
 import './styles/interaction-polish.css'
 
@@ -207,14 +213,20 @@ function useStoredState(key, initialValue) {
 function BrandMark({ compact = false }) {
   return (
     <div className={compact ? 'brand brand--compact' : 'brand'}>
-      <span className="brand-puzzle" aria-hidden="true">
-        <i className="puzzle puzzle--blue">•ᴗ•</i>
-        <i className="puzzle puzzle--pink">•ᴗ•</i>
-        <i className="puzzle puzzle--purple">•••</i>
-        <i className="puzzle puzzle--cream">•ᴗ•</i>
+      <span className="brand-puzzle brand-puzzle--layers" aria-hidden="true">
+        <img className="puzzle-layer puzzle-layer--complete" src={puzzleMainComplete} alt="" />
       </span>
       <strong><b>SUN</b>iVERSiTY</strong>
     </div>
+  )
+}
+
+function MiniPuzzlePair() {
+  return (
+    <span className="mini-mascots mini-mascots--svg" aria-hidden="true">
+      <img className="mini-puzzle-blue" src={miniPuzzleBlue} alt="" />
+      <img className="mini-puzzle-pink" src={miniPuzzlePink} alt="" />
+    </span>
   )
 }
 
@@ -247,7 +259,7 @@ function BottomNav({ active, navigate }) {
     if (id === active || isMoving) return
     setSelectedIndex(index)
     setIsMoving(true)
-    window.setTimeout(() => navigate(id), 260)
+    window.setTimeout(() => navigate(id), 440)
   }
 
   return (
@@ -360,13 +372,17 @@ function HomeScreen({ navigate, surveys, completed, profile, unread, notificatio
         </section>
 
         <section className="ai-hero">
+          <img className="ai-hero__background" src={aiHeroBackground} alt="" aria-hidden="true" />
+          <svg className="ai-hero__outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <path vectorEffect="non-scaling-stroke" d="M8 1.8C26 1.1 39 2.5 55 1.7C70 1 86 1.3 92 2.4C96.4 3.4 98.3 7.1 98.1 13C97.7 31 98.8 47 98 64C97.3 80 98.1 89 95.1 94C92.4 98.2 87 98.4 80 98C61 97.2 45 98.8 28 98C16 97.5 8.2 98.7 4.3 94.4C1.1 90.8 1.8 84 1.9 76C2.2 58 1.1 42 2 25C2.4 14 1.2 7.5 4.7 4.2C5.6 3.3 6.7 2.5 8 1.8Z" />
+          </svg>
           <div>
             <span><Icon name="spark" size={16} /> AI 설문 제작</span>
-            <h2>아이디어만 알려주세요.<br />문항은 AI가 다듬어드릴게요.</h2>
-            <p>제목 추천부터 쉬운 대화체 문항, 예상 응답 시간까지 한 번에.</p>
-            <button type="button" onClick={() => navigate('create')}>AI와 설문 만들기 <Icon name="chevron" size={16} /></button>
+            <h2>아이디어만 알려주세요.<br />문항은 <em>AI</em>가<br />다듬어드릴게요.</h2>
+            <p>제목 추천부터 쉬운 대화체 문항,<br />예상 응답 시간까지 한 번에.</p>
+            <button type="button" onClick={() => navigate('create')}><img src={aiHeroButton} alt="" aria-hidden="true" /><span>AI와 설문 만들기</span><Icon name="chevron" size={16} /></button>
           </div>
-          <BrandMark />
+          <img className="ai-hero__puzzle" src={aiHeroPuzzle} alt="" aria-hidden="true" />
         </section>
 
         <section className="exchange-snapshot">
@@ -375,7 +391,7 @@ function HomeScreen({ navigate, surveys, completed, profile, unread, notificatio
             <button type="button" onClick={() => navigate('exchange')}>전체보기</button>
           </div>
           <button type="button" className="snapshot-card" onClick={() => navigate('exchange')}>
-            <span className="mini-mascots"><i>•ᴗ•</i><i>•ᴗ•</i></span>
+            <MiniPuzzlePair />
             <div><small>디자인씽킹 3팀과 교환</small><b>우리 팀 응답 1명이 남았어요</b><Progress value={75} /><em>3/4명 완료</em></div>
             <Icon name="chevron" />
           </button>
