@@ -18,8 +18,47 @@ def build_client(tmp_path: Path) -> TestClient:
         token_secret="test-token-secret",
         webhook_secret="test-webhook-secret",
         ai_mode="mock",
+        legacy_gamification_enabled=True,
     )
     return TestClient(create_app(settings))
+
+
+def test_legacy_gamification_is_disabled_and_hidden_by_default(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        environment="development",
+        data_path=tmp_path / "legacy-disabled.json",
+        seed_path=Path(__file__).parents[1] / "data" / "seed.json",
+        token_secret="test-token-secret",
+        webhook_secret="test-webhook-secret",
+        ai_mode="mock",
+    )
+    with TestClient(create_app(settings)) as client:
+        disabled = client.get("/api/v1/wallet")
+        assert disabled.status_code == 410
+        assert disabled.json()["code"] == "LEGACY_GAMIFICATION_DISABLED"
+
+        paths = client.get("/openapi.json").json()["paths"]
+        assert "/api/v1/wallet" not in paths
+        assert "/api/v1/balance-games" not in paths
+        assert "/api/v1/attendance/today" not in paths
+        assert "/api/v1/surveys/{survey_id}/reward-boost/quote" not in paths
+        assert "/api/v1/surveys" in paths
+
+        schemas = client.get("/openapi.json").json()["components"]["schemas"]
+        create_properties = schemas["SurveyCreate"]["properties"]
+        receipt_properties = schemas["ResponseReceipt"]["properties"]
+        assert "reward_points" not in create_properties
+        assert "result_price_points" not in create_properties
+        assert "points_earned" not in receipt_properties
+        assert "balance" not in receipt_properties
+
+        rejected = client.post(
+            "/api/v1/surveys",
+            json={"title": "구형 보상 입력", "reward_points": 10},
+        )
+        assert rejected.status_code in {401, 422}
 
 
 def signup_and_verify(client: TestClient, phone: str, email: str) -> tuple[str, dict]:
@@ -113,9 +152,7 @@ def test_full_survey_flow(tmp_path: Path) -> None:
         },
     )
     assert response.status_code == 201, response.text
-    assert response.json()["points_earned"] == 5
-    assert response.json()["base_points"] == 5
-    assert response.json()["author_boost_points"] == 0
+    assert response.json()["result_status"] == "included"
 
     duplicate = client.post(
         f"/api/v1/surveys/{survey_id}/responses",
@@ -181,6 +218,34 @@ def test_ai_draft_and_ad_reward_idempotency(tmp_path: Path) -> None:
     assert second.json()["balance"] == 2510
 
 
+def test_ai_question_rewrite_contract_and_revision_history(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    headers = dev_headers(client, "demo-author")
+
+    response = client.post(
+        "/api/v1/ai/questions/rewrite",
+        headers=headers,
+        json={
+            "prompt": "귀하는 이번 수업을 어떻게 생각하십니까",
+            "description": "수업 만족도 측정",
+            "question_type": "short_text",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["original"] == "귀하는 이번 수업을 어떻게 생각하십니까"
+    assert body["revised"] == "이번 수업을 어떻게 생각하시나요?"
+    assert body["rationale"]
+    assert "편하게 알려주세요" not in body["revised"]
+
+    snapshot = client.app.state.store.snapshot()
+    revision = snapshot["ai_revisions"][-1]
+    assert revision["original"] == body["original"]
+    assert revision["revised"] == body["revised"]
+    assert revision["selected"] is None
+
+
 def test_seed_data_dev_login_draft_update_and_reset(tmp_path: Path) -> None:
     client = build_client(tmp_path)
 
@@ -232,28 +297,20 @@ def test_frontend_survey_card_contract_and_viewer_state(tmp_path: Path) -> None:
     ai_survey = items["survey-ai-campus"]
     assert ai_survey["author_nickname"] == "설문요정"
     assert ai_survey["university_name"] == "고려대학교 세종캠퍼스"
-    assert ai_survey["reward_points"] == 5
-    assert ai_survey["base_reward_points"] == 5
-    assert ai_survey["reward_boost_points"] == 0
+    assert "reward_points" not in ai_survey
     assert ai_survey["estimated_minutes"] == 2
     assert ai_survey["is_completed"] is True
     assert ai_survey["is_liked"] is True
     assert ai_survey["viewer_can_view_results"] is True
 
     paid = items["survey-cafe-paid"]
-    assert paid["result_price_points"] == 200
+    assert "result_price_points" not in paid
     assert paid["is_bookmarked"] is True
     assert paid["viewer_can_view_results"] is False
 
     shuttle = items["survey-campus-shuttle"]
     assert shuttle["deadline_imminent"] is True
-    assert shuttle["base_reward_points"] == 5
-    assert shuttle["reward_boost_points"] == 20
-    assert shuttle["boosted_reward_points"] == 25
-    assert shuttle["reward_boost_price_krw"] == 2000
-    assert shuttle["reward_boost_payment_status"] == "paid"
-    assert shuttle["reward_multiplier"] == 1.5
-    assert shuttle["reward_points"] == 27
+    assert "reward_boost_points" not in shuttle
 
     detail = client.get(
         "/api/v1/surveys/survey-ai-campus", headers=headers
@@ -491,6 +548,7 @@ def test_participation_reward_policy(
     assert participation_reward(question_count) == expected
 
 
+@pytest.mark.skip(reason="최신 기획에서 제거된 레거시 포인트 보상 기능")
 def test_reward_boost_quote_payment_and_publish(tmp_path: Path) -> None:
     client = build_client(tmp_path)
     author_headers = dev_headers(client, "demo-author")

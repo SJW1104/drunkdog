@@ -628,10 +628,10 @@ def _cancel_impossible_team_exchanges(data: dict[str, Any]) -> None:
 
 
 def reconcile_exchanges(data: dict[str, Any]) -> dict[str, int]:
-    """Lazily apply deadline, feasibility, and auto-repeat rules.
+    """Apply deadline, feasibility, and auto-repeat rules idempotently.
 
-    The JSON MVP has no background worker, so exchange endpoints call this
-    function before reading or mutating exchange state.
+    Exchange endpoints call this defensively, and the application lifespan
+    worker also runs it periodically when no user request is received.
     """
 
     before_terminal = sum(

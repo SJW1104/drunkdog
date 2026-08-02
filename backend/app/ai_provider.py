@@ -73,9 +73,9 @@ QUESTION_REWRITE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
-        "original": {"type": "string"},
-        "revised": {"type": "string"},
-        "rationale": {"type": "string"},
+        "original": {"type": "string", "minLength": 1, "maxLength": 500},
+        "revised": {"type": "string", "minLength": 1, "maxLength": 500},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 500},
     },
     "required": ["original", "revised", "rationale"],
 }
@@ -140,30 +140,50 @@ class AIProvider:
         description: str,
         question_type: str,
     ) -> dict[str, str]:
+        original = " ".join(prompt.strip().split())
+        if not original:
+            raise AIProviderError("다듬을 질문이 비어 있습니다.")
         if self.settings.ai_mode != "openai":
-            revised = self._mock_question_rewrite(prompt)
+            revised = self._mock_question_rewrite(original, question_type)
             return {
-                "original": prompt,
+                "original": original,
                 "revised": revised,
                 "rationale": (
-                    "질문의 의미는 유지하면서 어려운 표현과 불필요한 수식어를 "
-                    "줄이고, 응답자가 한 번에 이해할 수 있는 문장으로 다듬었습니다."
+                    "연구 의도와 응답 범위는 유지하면서 문장을 간결하게 정리하고 "
+                    "응답자가 한 번에 이해할 수 있는 중립적인 표현으로 다듬었습니다."
                 ),
             }
-        return self._request_json(
+        result = self._request_json(
             developer=(
-                "당신은 대학 연구 설문 문항 교정자다. 질문의 연구 의도와 측정 "
-                "대상을 바꾸지 말고, 유도 질문·이중 질문·모호한 표현을 줄여라. "
-                "원문과 수정 이유를 반드시 함께 반환하라."
+                "당신은 대학 연구용 설문 문항을 교정하는 전문가다. "
+                "연구 의도, 측정 개념, 응답 대상과 기간을 새로 만들거나 바꾸지 않는다. "
+                "한 문항에는 한 가지 개념만 남기고, 유도·가정·가치판단·이중부정·전문용어·"
+                "모호한 빈도 표현을 줄인다. 응답자가 쉽게 이해할 수 있는 중립적인 존댓말을 "
+                "사용하되 친근한 문구를 기계적으로 덧붙이지 않는다. 이미 적절한 문항은 억지로 "
+                "바꾸지 않는다. 선택지나 척도는 제공되지 않았으므로 새로 만들지 않는다. "
+                "original에는 입력 질문을 그대로, revised에는 최종 문항 하나만, rationale에는 "
+                "핵심 수정 이유를 한국어 한두 문장으로 반환한다."
             ),
             user=(
                 f"질문 유형: {question_type}\n"
-                f"질문 설명: {description or '(없음)'}\n"
-                f"원문: {prompt}"
+                f"연구자가 작성한 설명: {description.strip() or '(없음)'}\n"
+                f"입력 질문: {original}"
             ),
             schema_name="question_rewrite",
             schema=QUESTION_REWRITE_SCHEMA,
+            reasoning_effort="low",
+            verbosity="low",
         )
+        result["original"] = original
+        revised = " ".join(str(result.get("revised", "")).strip().split())
+        rationale = " ".join(str(result.get("rationale", "")).strip().split())
+        if not revised or len(revised) > 500:
+            raise AIProviderError("AI 수정 문장이 비어 있거나 너무 깁니다.")
+        if not rationale or len(rationale) > 500:
+            raise AIProviderError("AI 수정 이유가 비어 있거나 너무 깁니다.")
+        result["revised"] = revised
+        result["rationale"] = rationale
+        return result
 
     def _request_json(
         self,
@@ -172,17 +192,22 @@ class AIProvider:
         user: str,
         schema_name: str,
         schema: dict[str, Any],
+        reasoning_effort: str = "low",
+        verbosity: str = "medium",
     ) -> dict[str, Any]:
         if not self.settings.openai_api_key:
             raise AIProviderError("OPENAI_API_KEY가 설정되지 않았습니다.")
 
         payload = {
             "model": self.settings.openai_model,
+            "store": False,
+            "reasoning": {"effort": reasoning_effort},
             "input": [
                 {"role": "developer", "content": developer},
                 {"role": "user", "content": user},
             ],
             "text": {
+                "verbosity": verbosity,
                 "format": {
                     "type": "json_schema",
                     "name": schema_name,
@@ -203,8 +228,21 @@ class AIProvider:
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            try:
+                error_body = json.loads(exc.read().decode("utf-8"))
+                message = error_body.get("error", {}).get("message")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                message = None
+            raise AIProviderError(
+                f"AI 공급자 요청 실패({exc.code}): {message or exc.reason}"
+            ) from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise AIProviderError(f"AI 공급자 호출 실패: {exc}") from exc
+
+        if body.get("status") == "incomplete":
+            reason = body.get("incomplete_details", {}).get("reason", "unknown")
+            raise AIProviderError(f"AI 응답이 완료되지 않았습니다: {reason}")
 
         for output in body.get("output", []):
             if output.get("type") != "message":
@@ -264,17 +302,23 @@ class AIProvider:
         }
 
     @staticmethod
-    def _mock_question_rewrite(prompt: str) -> str:
+    def _mock_question_rewrite(prompt: str, question_type: str) -> str:
         revised = prompt.strip()
         replacements = {
-            "귀하께서는": "본인은",
+            "귀하께서는": "",
+            "귀하는": "",
             "어떠하다고 생각하십니까": "어떻게 생각하나요",
+            "어떻게 생각하십니까": "어떻게 생각하시나요",
             "응답하여 주시기 바랍니다": "응답해 주세요",
+            "응답해주시기 바랍니다": "응답해 주세요",
             "이용한 경험이 있으십니까": "이용해 본 적이 있나요",
             "해당되는 바를": "해당하는 항목을",
         }
         for source, target in replacements.items():
             revised = revised.replace(source, target)
+        revised = " ".join(revised.split())
+        if question_type in {"short_text", "long_text", "text"}:
+            revised = revised.replace("자유롭게 편하게", "자유롭게")
         if not revised.endswith(("?", "요.", "다.")):
             revised = f"{revised}?"
         return revised

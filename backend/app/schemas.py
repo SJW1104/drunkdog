@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class PhoneRequest(BaseModel):
@@ -224,20 +224,15 @@ class RespondentCondition(BaseModel):
 
 
 class SurveyCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(min_length=2, max_length=150)
     description: str = Field(default="", max_length=3000)
     category: str = Field(default="기타", max_length=30)
     subcategory: str | None = Field(default=None, max_length=30)
-    survey_type: Literal["standard", "balance"] = "standard"
-    results_visibility: Literal["public", "after_participation", "private", "paid"] = (
+    survey_type: Literal["standard"] = "standard"
+    results_visibility: Literal["public", "after_participation", "private"] = (
         "after_participation"
-    )
-    result_price_points: int = Field(default=0, ge=0, le=100_000)
-    reward_points: int | None = Field(
-        default=None,
-        ge=1,
-        le=1_000,
-        json_schema_extra={"deprecated": True},
     )
     target_responses: int | None = Field(default=None, ge=1, le=1_000_000)
     deadline: datetime | None = None
@@ -259,19 +254,7 @@ class SurveyCreate(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_paid_results(self) -> "SurveyCreate":
-        if self.results_visibility == "paid" and self.result_price_points <= 0:
-            raise ValueError("유료 결과에는 열람 포인트를 설정해야 합니다.")
-        if self.reward_points is not None:
-            raise ValueError(
-                "참여 보상은 서버가 계산합니다. 추가 보상은 설문 생성 후 "
-                "reward-boost 결제 API를 사용하세요."
-            )
-        if self.survey_type == "balance":
-            if len(self.questions) != 1 or self.questions[0].question_type != "balance":
-                raise ValueError(
-                    "밸런스게임은 선택지 2개의 balance 문항 하나로 구성해야 합니다."
-                )
+    def validate_exchange_settings(self) -> "SurveyCreate":
         if self.exchange_enabled:
             if not self.exchange_methods:
                 raise ValueError("교환 기능을 켜면 직접 또는 자동 방식을 선택해야 합니다.")
@@ -288,21 +271,16 @@ class SurveyCreate(BaseModel):
 
 
 class SurveyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str | None = Field(default=None, min_length=2, max_length=150)
     description: str | None = Field(default=None, max_length=3000)
     category: str | None = Field(default=None, max_length=30)
     subcategory: str | None = Field(default=None, max_length=30)
-    survey_type: Literal["standard", "balance"] | None = None
+    survey_type: Literal["standard"] | None = None
     results_visibility: (
-        Literal["public", "after_participation", "private", "paid"] | None
+        Literal["public", "after_participation", "private"] | None
     ) = None
-    result_price_points: int | None = Field(default=None, ge=0, le=100_000)
-    reward_points: int | None = Field(
-        default=None,
-        ge=1,
-        le=1_000,
-        json_schema_extra={"deprecated": True},
-    )
     target_responses: int | None = Field(default=None, ge=1, le=1_000_000)
     deadline: datetime | None = None
     questions: list[QuestionCreate] | None = Field(
@@ -342,8 +320,6 @@ class SurveySummary(BaseModel):
     created_at: str
     published_at: str | None
     subcategory: str | None = None
-    result_price_points: int = 0
-    reward_points: int = 0
     estimated_minutes: int = 1
     author_nickname: str | None = None
     university_name: str | None = None
@@ -353,13 +329,6 @@ class SurveySummary(BaseModel):
     comment_count: int = 0
     progress_percentage: float | None = None
     deadline_imminent: bool = False
-    base_reward_points: int = 0
-    reward_boost_points: int = 0
-    boosted_reward_points: int = 0
-    reward_boost_price_krw: int = 0
-    reward_boost_payment_status: str = "not_required"
-    reward_multiplier: float = 1.0
-    claimable_reward_points: int | None = None
     viewer_is_author: bool = False
     viewer_can_respond: bool = False
     viewer_can_view_results: bool = False
@@ -407,7 +376,6 @@ class QuestionView(BaseModel):
 
 
 class SurveyDetail(SurveySummary):
-    result_price_points: int
     questions: list[QuestionView]
 
 
@@ -454,16 +422,7 @@ class SurveyResponseSubmit(BaseModel):
 
 class ResponseReceipt(BaseModel):
     response_id: str
-    points_earned: int
-    balance: int
-    base_points: int = 0
-    author_boost_points: int = 0
-    deadline_bonus_points: int = 0
-    quoted_reward_points: int = 0
-    daily_cap_applied: bool = False
-    badge: dict[str, Any] | None = None
     result_access: dict[str, Any] | None = None
-    balance_result: dict[str, Any] | None = None
     result_status: str = "included"
     result_token: str | None = None
 

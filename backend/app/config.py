@@ -17,6 +17,8 @@ class Settings:
     ai_mode: str = "mock"
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-luna"
+    legacy_gamification_enabled: bool = False
+    exchange_reconcile_interval_seconds: float = 60.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -33,5 +35,13 @@ class Settings:
             ai_mode=os.getenv("AI_MODE", "mock").lower(),
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
+            legacy_gamification_enabled=os.getenv(
+                "ENABLE_LEGACY_GAMIFICATION", "false"
+            ).lower()
+            in {"1", "true", "yes", "on"},
+            exchange_reconcile_interval_seconds=max(
+                0.0,
+                float(os.getenv("EXCHANGE_RECONCILE_INTERVAL_SECONDS", "60")),
+            ),
         )
 

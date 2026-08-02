@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import time
 
 from fastapi.testclient import TestClient
 
@@ -9,7 +10,11 @@ from app.config import Settings
 from app.main import create_app
 
 
-def build_client(tmp_path: Path) -> TestClient:
+def build_client(
+    tmp_path: Path,
+    *,
+    reconcile_interval_seconds: float = 60.0,
+) -> TestClient:
     settings = Settings(
         environment="development",
         data_path=tmp_path / "research-test.json",
@@ -17,6 +22,7 @@ def build_client(tmp_path: Path) -> TestClient:
         token_secret="research-test-secret",
         webhook_secret="research-webhook-secret",
         ai_mode="mock",
+        exchange_reconcile_interval_seconds=reconcile_interval_seconds,
     )
     return TestClient(create_app(settings))
 
@@ -480,6 +486,68 @@ def test_reconcile_expires_overdue_exchange_and_keeps_results_out(
     assert client.get(
         f"/api/v1/surveys/{target['id']}/results", headers=counterpart
     ).json()["response_count"] == 0
+
+
+def test_background_worker_expires_exchange_without_api_request(
+    tmp_path: Path,
+) -> None:
+    with build_client(
+        tmp_path, reconcile_interval_seconds=0.02
+    ) as client:
+        author = dev_headers(client, "demo-author")
+        counterpart = dev_headers(client, "demo-balance")
+        source = create_published_exchange_survey(
+            client, author, title="Background expiry source", methods=["direct"]
+        )
+        target = create_published_exchange_survey(
+            client,
+            counterpart,
+            title="Background expiry target",
+            methods=["direct"],
+        )
+        requested = client.post(
+            "/api/v1/exchanges/direct",
+            headers=author,
+            json={
+                "source_survey_id": source["id"],
+                "target_survey_id": target["id"],
+                "answers": answer_for(target),
+            },
+        )
+        assert requested.status_code == 201, requested.text
+        exchange_id = requested.json()["id"]
+
+        with client.app.state.store.transaction() as data:
+            exchange = next(
+                item for item in data["exchanges"] if item["id"] == exchange_id
+            )
+            exchange["cutoff_at"] = (
+                datetime.now(UTC) - timedelta(minutes=1)
+            ).isoformat()
+
+        deadline = time.monotonic() + 2.0
+        state = "awaiting_acceptance"
+        while time.monotonic() < deadline:
+            snapshot = client.app.state.store.snapshot()
+            exchange = next(
+                item for item in snapshot["exchanges"] if item["id"] == exchange_id
+            )
+            state = exchange["state"]
+            if state == "expired":
+                break
+            time.sleep(0.02)
+
+        assert state == "expired"
+        held_responses = [
+            response
+            for response in snapshot["responses"]
+            if response.get("exchange_id") == exchange_id
+        ]
+        assert held_responses
+        assert all(
+            response["result_status"] == "excluded"
+            for response in held_responses
+        )
 
 
 def test_auto_repeat_does_not_rematch_the_same_terminal_pair(tmp_path: Path) -> None:

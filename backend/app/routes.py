@@ -1049,7 +1049,7 @@ def create_survey(
         "survey_type": payload.survey_type,
         "status": "draft",
         "results_visibility": payload.results_visibility,
-        "result_price_points": payload.result_price_points,
+        "result_price_points": 0,
         "reward_boost_points": 0,
         "reward_boost_price_krw": 0,
         "reward_boost_payment_ids": [],
@@ -1247,15 +1247,6 @@ def update_survey(
             raise HTTPException(
                 status_code=404, detail="수정할 임시저장 설문을 찾을 수 없습니다."
             )
-        if payload.reward_points is not None:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "참여 보상은 직접 수정할 수 없습니다. "
-                    "reward-boost 결제 API를 사용하세요."
-                ),
-            )
-        updates.pop("reward_points", None)
         if "questions" in updates and payload.questions is not None:
             survey["questions"] = build_questions(payload.questions)
             updates.pop("questions", None)
@@ -1772,27 +1763,34 @@ def submit_response(
                     status_code=422, detail="필수 숫자 응답이 비어 있습니다."
                 )
 
-        quote = reward_quote(survey, now=now)
-        nominal_reward = int(quote["reward_points"])
-        reward = max(
-            0,
-            min(
-                nominal_reward,
-                1000
-                - get_daily_reward_total_from_data(data, user["id"]),
-            ),
+        legacy_gamification = (
+            request.app.state.settings.legacy_gamification_enabled
+        )
+        quote = reward_quote(survey, now=now) if legacy_gamification else {}
+        nominal_reward = int(quote.get("reward_points", 0))
+        reward = (
+            max(
+                0,
+                min(
+                    nominal_reward,
+                    1000
+                    - get_daily_reward_total_from_data(data, user["id"]),
+                ),
+            )
+            if legacy_gamification
+            else 0
         )
         remaining_reward = reward
         awarded_base = min(
-            int(quote["base_reward_points"]), remaining_reward
+            int(quote.get("base_reward_points", 0)), remaining_reward
         )
         remaining_reward -= awarded_base
         awarded_boost = min(
-            int(quote["reward_boost_points"]), remaining_reward
+            int(quote.get("reward_boost_points", 0)), remaining_reward
         )
         remaining_reward -= awarded_boost
         awarded_deadline_bonus = min(
-            int(quote["deadline_bonus_points"]), remaining_reward
+            int(quote.get("deadline_bonus_points", 0)), remaining_reward
         )
         response_id = str(uuid.uuid4())
         data["responses"].append(
@@ -1815,11 +1813,17 @@ def submit_response(
                         user.get("profile_categories", [])
                     ),
                 },
-                "points_earned": reward,
-                "base_points_earned": awarded_base,
-                "author_boost_points_earned": awarded_boost,
-                "deadline_bonus_points_earned": awarded_deadline_bonus,
-                "quoted_reward_points": nominal_reward,
+                **(
+                    {
+                        "points_earned": reward,
+                        "base_points_earned": awarded_base,
+                        "author_boost_points_earned": awarded_boost,
+                        "deadline_bonus_points_earned": awarded_deadline_bonus,
+                        "quoted_reward_points": nominal_reward,
+                    }
+                    if legacy_gamification
+                    else {}
+                ),
                 "submitted_at": now.isoformat(),
             }
         )
@@ -1841,8 +1845,10 @@ def submit_response(
             balance = ledger.balance
         else:
             balance = get_balance_from_data(data, user["id"])
-        badge = assign_survey_badge(
-            data, user_id=user["id"], survey=survey
+        badge = (
+            assign_survey_badge(data, user_id=user["id"], survey=survey)
+            if legacy_gamification
+            else None
         )
         if survey["author_id"] != user["id"]:
             add_notification(
@@ -1862,12 +1868,17 @@ def submit_response(
         )
         result_access = {
             "allowed": visibility in {"public", "after_participation"},
-            "requires_purchase": visibility == "paid",
-            "price_points": int(survey.get("result_price_points", 0)),
         }
+        if legacy_gamification:
+            result_access.update(
+                {
+                    "requires_purchase": visibility == "paid",
+                    "price_points": int(survey.get("result_price_points", 0)),
+                }
+            )
         balance_result = (
             calculate_results(data, survey_id, include_text=False)
-            if survey.get("survey_type") == "balance"
+            if legacy_gamification and survey.get("survey_type") == "balance"
             else None
         )
     return ResponseReceipt(
