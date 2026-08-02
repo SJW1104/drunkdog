@@ -31,6 +31,14 @@ const QUESTION_TYPES = [
 
 const CHOICE_TYPES = new Set(['single', 'multiple', 'dropdown'])
 const GRID_TYPES = new Set(['singleGrid', 'multipleGrid'])
+const BASIC_INFO_GROUPS = [
+  ['학적 정보', ['학년', '성별', '연령', '재학 여부']],
+  ['생활 환경', ['거주 지역', '주거 형태', '통학 여부']],
+  ['경제 활동', ['월 용돈', '아르바이트 여부', '경제활동 여부']],
+  ['디지털 환경', ['스마트폰 OS']],
+  ['라이프스타일', ['MBTI', '흡연 여부', '음주 여부', '운동 여부', '운전면허', '자동차 보유']],
+]
+const BASIC_INFO_OPTIONS = BASIC_INFO_GROUPS.flatMap(([, items]) => items)
 const DAY_MS = 86400000
 const HOUR_MS = 3600000
 const TERMINAL_REQUEST_STATUSES = new Set(['completed', 'rejected', 'cancelled', 'expired'])
@@ -233,7 +241,7 @@ function BrandMark({ compact = false }) {
       <span className="brand-puzzle brand-puzzle--layers" aria-hidden="true">
         <img className="puzzle-layer puzzle-layer--complete" src={puzzleMainComplete} alt="" />
       </span>
-      <strong><b>SUN</b>iVERSiTY</strong>
+      <strong><b>SUNi</b>VERSiTY</strong>
     </div>
   )
 }
@@ -268,7 +276,7 @@ function TopBar({ title, onBack, right, brand = false }) {
 function BottomNav({ active, navigate }) {
   const items = [
     ['home', '홈', 'home'],
-    ['community', '커뮤니티', 'users'],
+    ['community', '커뮤니티 설문', 'clipboard'],
     ['createHub', '설문 만들기', 'plus'],
     ['exchange', '설문 교환', 'exchange'],
   ]
@@ -799,6 +807,17 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
   const [purpose, setPurpose] = useState('')
   const [audience, setAudience] = useState('')
   const [questionCount, setQuestionCount] = useState(5)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [category, setCategory] = useState('대학생활')
+  const [deadline, setDeadline] = useState(DEFAULT_DEADLINE)
+  const [basicFields, setBasicFields] = useState(['학년', '성별', '재학 여부'])
+  const [teamSurvey, setTeamSurvey] = useState(false)
+  const [publicResult, setPublicResult] = useState(true)
+  const [collectEmail, setCollectEmail] = useState(false)
+  const [oneResponse, setOneResponse] = useState(true)
+  const [allowEdit, setAllowEdit] = useState(false)
+  const [quizMode, setQuizMode] = useState(false)
+  const [confirmationMessage, setConfirmationMessage] = useState('응답해 주셔서 감사합니다!')
   const chatEnd = useRef(null)
   const replyTimer = useRef(null)
 
@@ -823,6 +842,11 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
     setInput('')
     if (stage === 'purpose') {
       setPurpose(value)
+      if (/취업|진로|커리어/u.test(value)) setCategory('진로·취업')
+      else if (/소비|구매|용돈|가격/u.test(value)) setCategory('소비')
+      else if (/연애|관계|친구/u.test(value)) setCategory('연애·관계')
+      else if (/IT|앱|서비스|디지털/u.test(value)) setCategory('IT·서비스')
+      else if (/연구|논문|학술/u.test(value)) setCategory('연구·논문')
       addAiReply(`좋아요. “${value}”에 맞춰볼게요. 이 설문은 누구의 답변이 가장 필요한가요?`, 'audience')
       return
     }
@@ -878,21 +902,25 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
   }))
 
   const useGeneratedSurvey = () => onGenerate({
-    step: 3,
+    step: 1,
     title: generatedTitle,
-    description: `${audience || '대학생'}의 ${subject} 경험과 생각을 알아보기 위한 설문입니다. 편하게 답해주세요.`,
-    category: subject.includes('취업') ? '진로·취업' : subject.includes('소비') ? '소비' : '대학생활',
-    deadline: DEFAULT_DEADLINE,
-    basicFields: ['학년', '성별', '재학 여부'],
+    description: `${audience || '대학생'}의 ${subject}에 대한 경험과 생각을 알아보기 위한 설문입니다. 편하게 답해주세요.`,
+    category,
+    deadline,
+    basicFields,
     questions: generatedQuestions,
-    teamSurvey: false,
-    publicResult: true,
-    collectEmail: false,
-    oneResponse: true,
-    allowEdit: false,
-    quizMode: false,
-    confirmationMessage: '응답해 주셔서 감사합니다!',
+    teamSurvey,
+    publicResult,
+    collectEmail,
+    oneResponse,
+    allowEdit,
+    quizMode,
+    confirmationMessage,
   })
+
+  const toggleBasicField = (field) => setBasicFields((current) => current.includes(field)
+    ? current.filter((item) => item !== field)
+    : [...current, field])
 
   const quickReplies = stage === 'purpose'
     ? ['대학생 소비 습관 조사', '취업 준비 경험', '학교생활 만족도']
@@ -911,6 +939,34 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
         <section className="ai-chat-intro">
           <div className="ai-orb"><img src={miniPuzzleBlue} alt="" /><Icon name="message" size={18} /></div>
           <div><span>AI SURVEY MATE</span><h1>대화하면서<br />설문을 완성해요.</h1><p>목적과 대상만 알려주면 제목부터 문항까지 자동으로 구성해 드려요.</p></div>
+        </section>
+
+        <section className={`ai-direct-settings ${settingsOpen ? 'is-open' : ''}`}>
+          <button type="button" className="ai-settings-summary" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}>
+            <i><Icon name="filter" size={18} /></i>
+            <span><b>설문 세부 설정</b><small>{category} · 기본정보 {basicFields.length}개 · {formatDeadline(deadline)} 마감</small></span>
+            <Icon name="chevron" size={16} />
+          </button>
+          {settingsOpen ? <div className="ai-settings-body">
+            <div className="ai-settings-grid">
+              <div className="form-field"><span>카테고리</span><DesignSelect value={category} onChange={setCategory} ariaLabel="AI 설문 카테고리 선택" options={['대학생활', '진로·취업', '소비', '연애·관계', 'IT·서비스', '연구·논문']} /></div>
+              <label className="form-field"><span>마감 기한</span><input type="date" value={deadline} min={TODAY} onChange={(event) => setDeadline(event.target.value)} /></label>
+            </div>
+            <section className="ai-basic-fields">
+              <header><span><b>기본정보 활용</b><small>프로필에서 안전하게 가져와 질문 수를 줄여요.</small></span><em>{basicFields.length}개 선택</em></header>
+              <div>{BASIC_INFO_OPTIONS.map((field) => <button type="button" key={field} className={basicFields.includes(field) ? 'is-selected' : ''} aria-pressed={basicFields.includes(field)} onClick={() => toggleBasicField(field)}>{field}{basicFields.includes(field) ? <Icon name="check" size={12} /> : null}</button>)}</div>
+            </section>
+            <section className="ai-response-settings">
+              <h3>게시 및 응답 설정</h3>
+              <Toggle label="팀과 함께 관리하기" checked={teamSurvey} onChange={setTeamSurvey} />
+              <Toggle label="응답자에게 결과 공개" checked={publicResult} onChange={setPublicResult} />
+              <Toggle label="응답 1회만 허용" checked={oneResponse} onChange={setOneResponse} />
+              <Toggle label="이메일 주소 수집" checked={collectEmail} onChange={setCollectEmail} />
+              <Toggle label="제출 후 응답 수정 허용" checked={allowEdit} onChange={setAllowEdit} />
+              <Toggle label="퀴즈 모드 · 정답 및 배점 사용" checked={quizMode} onChange={setQuizMode} />
+              <label><span>제출 확인 메시지</span><input value={confirmationMessage} onChange={(event) => setConfirmationMessage(event.target.value)} /></label>
+            </section>
+          </div> : null}
         </section>
 
         <section className="ai-conversation" aria-live="polite">
@@ -1096,13 +1152,6 @@ function getBand(count) {
 }
 
 function BasicInfoStep({ selected, setSelected }) {
-  const groups = [
-    ['학적 정보', ['학년', '성별', '연령', '재학 여부']],
-    ['생활 환경', ['거주 지역', '주거 형태', '통학 여부']],
-    ['경제 활동', ['월 용돈', '아르바이트 여부', '경제활동 여부']],
-    ['디지털 환경', ['스마트폰 OS']],
-    ['라이프스타일', ['MBTI', '흡연 여부', '음주 여부', '운동 여부', '운전면허', '자동차 보유']],
-  ]
   const toggle = (item) => setSelected((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])
   return (
     <section className="create-step basic-info-step">
@@ -1111,7 +1160,7 @@ function BasicInfoStep({ selected, setSelected }) {
       <p>선택한 정보는 응답자의 인증된 프로필에서 안전하게 가져와요.</p>
       <div className="verified-note"><Icon name="shield" /><span><b>학교·학과·학번은 학교 인증 정보 사용</b><small>응답자에게 다시 묻지 않아도 돼요.</small></span></div>
       <div className="basic-groups">
-        {groups.map(([group, items]) => <section key={group}><h3>{group}</h3><div>{items.map((item) => <button type="button" key={item} className={selected.includes(item) ? 'is-selected' : ''} onClick={() => toggle(item)}>{item}{selected.includes(item) ? <Icon name="check" size={15} /> : <Icon name="plus" size={15} />}</button>)}</div></section>)}
+        {BASIC_INFO_GROUPS.map(([group, items]) => <section key={group}><h3>{group}</h3><div>{items.map((item) => <button type="button" key={item} className={selected.includes(item) ? 'is-selected' : ''} onClick={() => toggle(item)}>{item}{selected.includes(item) ? <Icon name="check" size={15} /> : <Icon name="plus" size={15} />}</button>)}</div></section>)}
       </div>
       <div className="auto-score-note"><Icon name="spark" /><p><b>{selected.length}개 정보를 매칭 점수에 활용해요</b><span>문항 수와 응답 대상 적합도를 바탕으로 교환할 설문을 추천합니다.</span></p></div>
     </section>
