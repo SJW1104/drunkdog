@@ -3,6 +3,8 @@ frontend/node_modules/
 frontend/.vite/
 frontend/dist/
 frontend/.env
+*.log
+.DS_Store
 
 # Backend
 backend/__pycache__/
