@@ -1047,6 +1047,12 @@
   color: #8168c5;
 }
 
+.bottom-nav .nav-create > span > svg {
+  width: 25px;
+  height: 25px;
+  transform: translateX(-1.5px);
+}
+
 /* Community */
 .community-page {
   padding-top: 14px;
