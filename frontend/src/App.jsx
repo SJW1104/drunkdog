@@ -11,6 +11,18 @@ import respondentSimilarPuzzles from './assets/respondent-similar-puzzles.svg'
 import miniPuzzleBlue from './assets/mini-puzzle-blue-flat.svg'
 import miniPuzzlePink from './assets/mini-puzzle-pink-flat.svg'
 import suniversityLogo from './assets/suniversity-logo.png'
+import { getApiErrorMessage } from './services/api'
+import suniversityApi from './services/suniversityApi'
+import {
+  fromApiAutoQueue,
+  fromApiExchange,
+  fromApiNotification,
+  fromApiRecommendation,
+  fromApiSurvey,
+  toApiAnswers,
+  toApiQuestion,
+  toApiSurveyDraft,
+} from './services/surveyAdapters'
 import './App.css'
 import './styles/interaction-polish.css'
 
@@ -364,7 +376,7 @@ function SurveyCard({ survey, onOpen, completed = false, exchange = false, eligi
   )
 }
 
-function HomeScreen({ navigate, surveys, completed, profile, unread, notifications, setNotifications }) {
+function HomeScreen({ navigate, surveys, completed, profile, unread, notifications, setNotifications, apiStatus, apiError, onReadNotification, onReadAllNotifications }) {
   const [query, setQuery] = useState('')
   const [notificationOpen, setNotificationOpen] = useState(false)
   const visible = surveys
@@ -386,8 +398,9 @@ function HomeScreen({ navigate, surveys, completed, profile, unread, notificatio
         brand
         right={<div className="top-actions"><button className="round-icon" type="button" onClick={() => setNotificationOpen((open) => !open)} aria-label="알림" aria-expanded={notificationOpen}><Icon name="bell" />{unread ? <i className="dot" /> : null}</button><button className="avatar" type="button" onClick={() => navigate('profile')}>나</button></div>}
       />
-      {notificationOpen ? <NotificationPopover notifications={notifications} setNotifications={setNotifications} navigate={navigate} onClose={() => setNotificationOpen(false)} /> : null}
+      {notificationOpen ? <NotificationPopover notifications={notifications} setNotifications={setNotifications} navigate={navigate} onClose={() => setNotificationOpen(false)} onRead={onReadNotification} onReadAll={onReadAllNotifications} /> : null}
       <main className="page home-page">
+        {apiStatus !== 'online' ? <section className={`api-status api-status--${apiStatus}`} role="status"><Icon name={apiStatus === 'connecting' ? 'clock' : 'shield'} size={16} /><span><b>{apiStatus === 'connecting' ? '서버 데이터를 불러오는 중이에요' : '오프라인 미리보기로 보고 있어요'}</b>{apiError ? <small>{apiError}</small> : null}</span></section> : null}
         <section className="welcome">
           <span>안녕하세요, {profile.name} 👋</span>
           <h1>오늘도 설문으로<br /><em>함께 성장해요!</em></h1>
@@ -551,10 +564,28 @@ function CreateHubScreen({ navigate }) {
   )
 }
 
-function ExchangeScreen({ navigate, surveys, requests, setRequests, profile }) {
+function ExchangeScreen({ navigate, surveys, requests, setRequests, profile, apiStatus }) {
   const [tab, setTab] = useState('recommend')
   const [sort, setSort] = useState('score')
-  const recommended = surveys
+  const [apiRecommended, setApiRecommended] = useState(null)
+  const [recommendError, setRecommendError] = useState('')
+  const sourceSurvey = surveys.find((survey) => survey.mine && survey.api && survey.status === 'published' && survey.exchangeEnabled && !isSurveyClosed(survey))
+  useEffect(() => {
+    if (apiStatus !== 'online' || !sourceSurvey) return undefined
+    let active = true
+    suniversityApi.recommendations(sourceSurvey.id)
+      .then((rows) => {
+        if (!active) return
+        setApiRecommended(rows.map(fromApiRecommendation))
+        setRecommendError('')
+      })
+      .catch((error) => {
+        if (!active) return
+        setRecommendError(getApiErrorMessage(error))
+      })
+    return () => { active = false }
+  }, [apiStatus, sourceSurvey])
+  const recommended = (apiRecommended || surveys)
     .filter((survey) => !isSurveyClosed(survey) && !getDeadlineState(survey.deadline).within24Hours)
     .sort((a, b) => sort === 'score' ? b.matchScore - a.matchScore : new Date(a.deadline) - new Date(b.deadline))
   return (
@@ -581,7 +612,8 @@ function ExchangeScreen({ navigate, surveys, requests, setRequests, profile }) {
               <div><span>같은 문항 구간 우선</span><h2>교환하기 좋은 설문</h2></div>
               <DesignSelect value={sort} onChange={setSort} options={[["score", "매칭 점수순"], ["deadline", "마감일순"]]} ariaLabel="정렬" compact />
             </div>
-            <div className="matching-rule"><Icon name="shield" size={18} /><p><b>내 설문: 11~15문항</b><span>같거나 더 높은 구간에만 직접 교환을 신청할 수 있어요.</span></p></div>
+            <div className="matching-rule"><Icon name="shield" size={18} /><p><b>내 설문: {sourceSurvey?.band || '게시 설문 필요'}</b><span>같거나 더 높은 구간에만 직접 교환을 신청할 수 있어요.</span></p></div>
+            {recommendError ? <div className="inline-error" role="alert">{recommendError}</div> : null}
             <div className="survey-stack">
               {recommended.map((survey) => <SurveyCard key={survey.id} survey={survey} exchange eligible={survey.questionCount >= 11} onOpen={() => navigate('surveyDetail', survey.id)} />)}
               {!recommended.length ? <div className="empty-surveys"><Icon name="clock" /><b>지금 교환 가능한 설문이 없어요</b><p>마감까지 24시간 이상 남은 설문이 등록되면 여기에 보여드릴게요.</p></div> : null}
@@ -597,6 +629,7 @@ function ExchangeScreen({ navigate, surveys, requests, setRequests, profile }) {
 }
 
 function ExchangeQueue({ requests, setRequests, navigate, compact = false }) {
+  const [actionError, setActionError] = useState('')
   const labels = {
     incoming: ['새 교환 신청', 'pink'],
     'waiting-me': ['내 응답 대기', 'pink'],
@@ -606,13 +639,29 @@ function ExchangeQueue({ requests, setRequests, navigate, compact = false }) {
     rejected: ['교환 거절', 'gray'],
     cancelled: ['자동 취소', 'gray'],
     expired: ['기한 만료', 'gray'],
+    'auto-waiting': ['자동 매칭 대기', 'blue'],
   }
-  const decideRequest = (requestId, accepted) => {
+  const decideRequest = async (requestId, accepted) => {
+    const target = requests.find((request) => request.id === requestId)
+    if (target?.api) {
+      try {
+        if (accepted) await suniversityApi.acceptExchange(requestId)
+        else await suniversityApi.rejectExchange(requestId)
+        const fresh = await suniversityApi.exchanges()
+        setRequests(fresh.map(fromApiExchange))
+        setActionError('')
+        return
+      } catch (error) {
+        setActionError(getApiErrorMessage(error))
+        return
+      }
+    }
     setRequests((current) => current.map((request) => request.id === requestId ? { ...request, status: accepted ? 'waiting-me' : 'rejected' } : request))
   }
   return (
     <section className={compact ? 'queue queue--compact' : 'queue'}>
       {!compact ? <div className="queue-guide"><Icon name="clock" /><p><b>마감 24시간 전 자동 취소</b><span>성사되지 않은 신청은 자동으로 정리돼요. 미완료 신청은 설문당 최대 10개예요.</span></p></div> : null}
+      {actionError ? <div className="inline-error" role="alert">{actionError}</div> : null}
       <div className="queue-list">
         {requests.map((request) => {
           const [defaultLabel, tone] = labels[request.status] || labels.requested
@@ -626,8 +675,8 @@ function ExchangeQueue({ requests, setRequests, navigate, compact = false }) {
                 <span><small>우리 팀</small><b>{request.ours}/{request.people}명</b><Progress value={request.ours / request.people * 100} /></span>
                 <span><small>상대 팀</small><b>{request.theirs}/{request.people}명</b><Progress value={request.theirs / request.people * 100} tone="purple" /></span>
               </div>
-              {request.status === 'incoming' ? <div className="request-actions"><button type="button" onClick={() => decideRequest(request.id, false)}>거절</button><button type="button" onClick={() => decideRequest(request.id, true)}>수락</button></div> : <button type="button" disabled={['rejected', 'cancelled', 'expired'].includes(request.status)} onClick={() => request.status === 'waiting-me' ? navigate('participate', request.surveyId, { exchangeId: request.id }) : navigate('exchangeStatus', request.id)}>
-                {request.status === 'waiting-me' ? '상대 설문 참여하기' : request.status === 'rejected' ? '거절한 신청' : request.status === 'cancelled' ? request.cancelReason === 'owner-closed' ? '작성자가 설문을 마감했어요' : '마감 24시간 전 자동 취소' : request.status === 'expired' ? '설문 마감으로 교환 종료' : '진행 상황 보기'} <Icon name="chevron" size={16} />
+              {request.status === 'incoming' ? <div className="request-actions"><button type="button" onClick={() => decideRequest(request.id, false)}>거절</button><button type="button" onClick={() => decideRequest(request.id, true)}>수락</button></div> : <button type="button" disabled={['rejected', 'cancelled', 'expired', 'auto-waiting'].includes(request.status)} onClick={() => request.status === 'waiting-me' ? navigate('participate', request.surveyId, { exchangeId: request.id }) : navigate('exchangeStatus', request.id)}>
+                {request.status === 'waiting-me' ? '상대 설문 참여하기' : request.status === 'auto-waiting' ? '조건에 맞는 상대를 찾는 중' : request.status === 'rejected' ? '거절한 신청' : request.status === 'cancelled' ? request.cancelReason === 'owner-closed' ? '작성자가 설문을 마감했어요' : '마감 24시간 전 자동 취소' : request.status === 'expired' ? '설문 마감으로 교환 종료' : '진행 상황 보기'} {request.status !== 'auto-waiting' ? <Icon name="chevron" size={16} /> : null}
               </button>}
             </article>
           )
@@ -647,11 +696,12 @@ function SurveyDetailScreen({ survey, onBack, navigate, profile, onRequest, comp
   const [reportReason, setReportReason] = useState('')
   const [reported, setReported] = useState(false)
   const [requestError, setRequestError] = useState('')
+  const [reportError, setReportError] = useState('')
   if (!survey) return null
   const deadlineState = getDeadlineState(survey.deadline)
   const closed = isSurveyClosed(survey)
   const exchangeClosing = deadlineState.within24Hours && !closed
-  const canExchange = survey.questionCount >= 11 && !closed && !exchangeClosing && !completed && !survey.mine
+  const canExchange = (survey.api ? survey.exchangeEnabled : survey.questionCount >= 11) && !closed && !exchangeClosing && !completed && !survey.mine
   const exchangeLabel = closed
     ? '교환 마감'
     : exchangeClosing
@@ -671,7 +721,25 @@ function SurveyDetailScreen({ survey, onBack, navigate, profile, onRequest, comp
       return
     }
     setRequestError('')
+    if (result?.navigateToParticipate) {
+      setExchangeModal(false)
+      navigate('participate', survey.id, { exchangeDraft: result.exchangeDraft })
+      return
+    }
     setSent(true)
+  }
+  const submitReport = async () => {
+    if (!survey.api) {
+      setReported(true)
+      return
+    }
+    try {
+      await suniversityApi.reportSurvey(survey.id, reportReason)
+      setReported(true)
+      setReportError('')
+    } catch (error) {
+      setReportError(getApiErrorMessage(error))
+    }
   }
   return (
     <div className="screen">
@@ -730,23 +798,36 @@ function SurveyDetailScreen({ survey, onBack, navigate, profile, onRequest, comp
           <p>신고 내용은 운영 검토에만 사용되고 신고자 정보는 공개되지 않아요.</p>
           <div className="report-reasons">{['부적절한 내용', '개인정보 노출', '중복·광고성 설문', '응답 조작 의심'].map((reason) => <button type="button" className={reportReason === reason ? 'is-selected' : ''} onClick={() => setReportReason(reason)} key={reason}>{reason}<Icon name="check" size={15} /></button>)}</div>
           <div className="report-policy"><Icon name="shield" /><span><b>신고 8회 누적 시 신뢰도 0% 처리</b><small>동일 조치가 2회 누적되면 계정 이용이 정지돼요.</small></span></div>
-          <button type="button" className="primary-button" disabled={!reportReason} onClick={() => setReported(true)}>신고 접수하기</button>
+          {reportError ? <div className="inline-error" role="alert">{reportError}</div> : null}
+          <button type="button" className="primary-button" disabled={!reportReason} onClick={submitReport}>신고 접수하기</button>
         </> : <div className="success-state"><i><Icon name="check" size={32} /></i><h2>신고를 접수했어요</h2><p>운영 정책에 따라 확인한 뒤 필요한 조치를 진행할게요.</p><button type="button" className="primary-button" onClick={() => setReportOpen(false)}>확인</button></div>}
       </Modal> : null}
     </div>
   )
 }
 
-function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
-  const [mode, setMode] = useState('team')
+function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate, apiStatus, onAutoMatch }) {
+  const [mode, setMode] = useState('personal')
   const [people, setPeople] = useState(Math.min(3, profile.teamSize))
   const [phase, setPhase] = useState('setup')
   const [matchError, setMatchError] = useState('')
   const match = surveys.find((survey) => !survey.mine && !isSurveyClosed(survey) && !getDeadlineState(survey.deadline).within24Hours)
-  const start = () => {
-    if (!match) return
+  const autoSource = surveys.find((survey) => survey.mine && survey.api && survey.status === 'published' && survey.exchangeEnabled && survey.exchangeUnit === (mode === 'team' ? 'team' : 'individual') && !isSurveyClosed(survey))
+  const start = async () => {
+    if (apiStatus !== 'online' && !match) return
     setPhase('searching')
-    window.setTimeout(() => setPhase('matched'), 1300)
+    setMatchError('')
+    if (apiStatus === 'online') {
+      const result = await onAutoMatch(mode)
+      if (!result.ok) {
+        setMatchError(result.message)
+        setPhase('setup')
+        return
+      }
+      setPhase(result.status === 'matched' ? 'matched' : 'waiting')
+      return
+    }
+    window.setTimeout(() => setPhase('matched'), 700)
   }
   return (
     <div className="screen">
@@ -768,15 +849,17 @@ function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
           </section> : null}
           <section className="matching-conditions">
             <h3>자동으로 적용되는 조건</h3>
-            <span><i><Icon name="clipboard" /></i><b>문항 수 구간</b><em>11~15문항끼리</em></span>
+            <span><i><Icon name="clipboard" /></i><b>문항 수 구간</b><em>{autoSource?.band ? `${autoSource.band}끼리` : '게시 설문 기준'}</em></span>
             <span><i><Icon name="shield" /></i><b>신뢰도</b><em>80% 이상 우선</em></span>
             <span><i><Icon name="users" /></i><b>기본 정보</b><em>응답 대상 적합도 반영</em></span>
           </section>
-          {!match ? <div className="auto-empty"><Icon name="clock" /><span><b>매칭 가능한 설문이 없어요</b><small>교환 마감까지 24시간 이상 남은 설문이 필요해요.</small></span></div> : null}
+          {apiStatus === 'online' && !autoSource ? <div className="auto-empty"><Icon name="clock" /><span><b>사용할 수 있는 내 설문이 없어요</b><small>{mode === 'team' ? '교환을 켠 게시 상태의 팀 설문이 필요해요.' : '교환을 켠 게시 상태의 개인 설문이 필요해요.'}</small></span></div> : null}
+          {apiStatus !== 'online' && !match ? <div className="auto-empty"><Icon name="clock" /><span><b>매칭 가능한 설문이 없어요</b><small>교환 마감까지 24시간 이상 남은 설문이 필요해요.</small></span></div> : null}
           {matchError ? <div className="inline-error" role="alert"><Icon name="clock" size={15} />{matchError}</div> : null}
-          <button type="button" className="primary-button bottom-cta" disabled={!match} onClick={start}>자동 매칭 시작</button>
+          <button type="button" className="primary-button bottom-cta" disabled={apiStatus === 'online' ? !autoSource : !match} onClick={start}>자동 매칭 시작</button>
         </> : null}
         {phase === 'searching' ? <div className="matching-search"><div className="orbit orbit--puzzle"><img src={autoMatchPuzzleBlue} alt="" /><i /><i /><i /></div><h1>가장 잘 맞는 팀을<br />찾고 있어요</h1><p>문항 수, 참여 인원, 신뢰도를 비교하고 있어요.</p><div className="search-steps"><span className="done"><Icon name="check" /> 문항 수 구간 확인</span><span className="done"><Icon name="check" /> 참여 인원 확인</span><span><i className="loader" /> 매칭 점수 계산</span></div></div> : null}
+        {phase === 'waiting' ? <div className="matching-search"><div className="orbit orbit--puzzle"><img src={autoMatchPuzzleBlue} alt="" /></div><span className="eyebrow">MATCHING QUEUE</span><h1>자동 매칭 대기함에<br />등록했어요</h1><p>같은 문항 구간과 조건을 가진 설문이 들어오면 자동으로 연결하고 알림으로 알려드릴게요.</p><button type="button" className="primary-button" onClick={() => navigate('exchange')}>교환 대기함 보기</button></div> : null}
         {phase === 'matched' && match ? <div className="match-result">
           <div className="celebrate celebrate--puzzles"><i>✦</i><img src={autoMatchPuzzlesCombined} alt="" /><i>✦</i></div>
           <span className="eyebrow">MATCH FOUND</span>
@@ -814,6 +897,8 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
   const [allowEdit, setAllowEdit] = useState(false)
   const [quizMode, setQuizMode] = useState(false)
   const [confirmationMessage, setConfirmationMessage] = useState('응답해 주셔서 감사합니다!')
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState('')
   const chatEnd = useRef(null)
   const replyTimer = useRef(null)
 
@@ -897,22 +982,56 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
     branch: 'next',
   }))
 
-  const useGeneratedSurvey = () => onGenerate({
-    step: 1,
-    title: generatedTitle,
-    description: `${audience || '대학생'}의 ${subject}에 대한 경험과 생각을 알아보기 위한 설문입니다. 편하게 답해주세요.`,
-    category,
-    deadline,
-    basicFields,
-    questions: generatedQuestions,
-    teamSurvey,
-    publicResult,
-    collectEmail,
-    oneResponse,
-    allowEdit,
-    quizMode,
-    confirmationMessage,
-  })
+  const useGeneratedSurvey = async () => {
+    setGenerating(true)
+    setGenerateError('')
+    let draft = null
+    try {
+      draft = await suniversityApi.aiDraft({
+        topic: purpose,
+        audience: audience || '대학생',
+        tone: 'friendly',
+        question_count: questionCount,
+      })
+    } catch (error) {
+      setGenerateError(getApiErrorMessage(error, 'AI 설문을 생성하지 못했어요.'))
+      setGenerating(false)
+      return
+    }
+    const apiQuestions = draft.questions.map((question, index) => ({
+      id: `ai-api-${Date.now()}-${index}`,
+      type: ({ short_text: 'short', long_text: 'long', single_choice: 'single', checkboxes: 'multiple', dropdown: 'dropdown', file_upload: 'file', linear_scale: 'scale', multiple_choice_grid: 'singleGrid', checkbox_grid: 'multipleGrid', date: 'date', time: 'time' })[question.question_type] || 'single',
+      text: question.prompt,
+      description: question.description || '',
+      options: question.options?.map((option) => option.label) || ['선택지 1', '선택지 2'],
+      rows: question.rows?.map((row) => row.label) || ['행 1', '행 2'],
+      columns: question.columns?.map((column) => column.label) || ['열 1', '열 2'],
+      required: question.required !== false,
+      shuffle: false,
+      other: false,
+      validation: 'none',
+      min: question.scale_min ?? 1,
+      max: question.scale_max ?? 5,
+      branch: 'next',
+    }))
+    onGenerate({
+      step: 1,
+      title: draft.title,
+      description: draft.description,
+      category,
+      deadline,
+      basicFields,
+      questions: apiQuestions,
+      teamSurvey,
+      publicResult,
+      collectEmail,
+      oneResponse,
+      allowEdit,
+      quizMode,
+      confirmationMessage,
+    })
+    setGenerating(false)
+  }
 
   const toggleBasicField = (field) => setBasicFields((current) => current.includes(field)
     ? current.filter((item) => item !== field)
@@ -977,7 +1096,8 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
             <p>{audience || '대학생'}을 대상으로 쉬운 대화체 문항을 구성했어요.</p>
             <ol>{generatedQuestions.slice(0, 3).map((question) => <li key={question.id}>{question.text}</li>)}</ol>
             {generatedQuestions.length > 3 ? <small>외 {generatedQuestions.length - 3}개 문항이 더 있어요.</small> : null}
-            <button type="button" className="primary-button" onClick={useGeneratedSurvey}><Icon name="spark" size={17} /> 자동 생성 설문 편집하기</button>
+            {generateError ? <div className="inline-error" role="alert">{generateError}</div> : null}
+            <button type="button" className="primary-button" disabled={generating} onClick={useGeneratedSurvey}><Icon name="spark" size={17} /> {generating ? 'AI가 설문을 만드는 중…' : '자동 생성 설문 편집하기'}</button>
           </article> : null}
           <div ref={chatEnd} />
         </section>
@@ -1018,6 +1138,8 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
   const [toast, setToast] = useState('')
   const toastTimer = useRef(null)
   const [titleSuggestions, setTitleSuggestions] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishError, setPublishError] = useState('')
   const draftDeadlineState = getDeadlineState(deadline)
   useEffect(() => {
     document.querySelector('.create-page')?.scrollTo({ top: 0, behavior: 'instant' })
@@ -1038,7 +1160,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
     showToast('임시저장했어요')
   }
   const addQuestion = (type = 'single') => setQuestions((current) => [...current, { ...emptyQuestion(), type }])
-  const publish = () => {
+  const publish = async () => {
     const survey = {
       id: `mine-${Date.now()}`,
       owner: profile.name,
@@ -1058,10 +1180,18 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
       targetTags: basicFields.length ? basicFields : ['대학생'],
       questions,
       mine: true,
+      teamSurvey,
       settings: { collectEmail, oneResponse, allowEdit, quizMode, confirmationMessage, publicResult },
     }
+    setPublishing(true)
+    setPublishError('')
+    const result = await onPublish(survey)
+    setPublishing(false)
+    if (result?.ok === false) {
+      setPublishError(result.message)
+      return
+    }
     localStorage.removeItem('suniversity-new-draft')
-    onPublish(survey)
   }
   const nextDisabled = step === 1 && !title.trim()
   return (
@@ -1125,7 +1255,8 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
         </section> : null}
       </main>
       <footer className="create-footer">
-        {step < 4 ? <button type="button" className="primary-button" disabled={nextDisabled} onClick={() => setStep(step + 1)}>다음 단계 <span>{step}/4</span></button> : <button type="button" className="primary-button" onClick={publish}>무료로 설문 게시하기</button>}
+        {publishError ? <div className="inline-error create-publish-error" role="alert">{publishError}</div> : null}
+        {step < 4 ? <button type="button" className="primary-button" disabled={nextDisabled} onClick={() => setStep(step + 1)}>다음 단계 <span>{step}/4</span></button> : <button type="button" className="primary-button" disabled={publishing} onClick={publish}>{publishing ? '서버에 게시하는 중…' : '무료로 설문 게시하기'}</button>}
       </footer>
       {showGuide ? <Modal onClose={() => setShowGuide(false)} className="guide-modal">
         <button type="button" className="modal-close guide-close" onClick={() => setShowGuide(false)} aria-label="가이드 닫기"><Icon name="close" size={18} /></button>
@@ -1166,9 +1297,33 @@ function BasicInfoStep({ selected, setSelected }) {
 function QuestionEditor({ question, index, onChange, onRemove }) {
   const [expanded, setExpanded] = useState(index === 0)
   const [settings, setSettings] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
   const typeLabel = QUESTION_TYPES.find(([type]) => type === question.type)?.[1] || (question.type === 'section' ? '섹션' : '객관식')
   const optionUpdate = (key, optionIndex, value) => onChange({ [key]: question[key].map((item, indexValue) => indexValue === optionIndex ? value : item) })
   const optionRemove = (key, optionIndex) => onChange({ [key]: question[key].filter((_, indexValue) => indexValue !== optionIndex) })
+  const rewriteQuestion = async () => {
+    if (question.text.trim().length < 2) {
+      setAiError('질문을 두 글자 이상 작성해 주세요.')
+      return
+    }
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const apiQuestion = toApiQuestion(question)
+      const result = await suniversityApi.rewriteQuestion({
+        prompt: question.text,
+        description: question.description || '',
+        question_type: apiQuestion?.question_type || 'short_text',
+      })
+      setAiSuggestion(result)
+    } catch (error) {
+      setAiError(getApiErrorMessage(error))
+    } finally {
+      setAiLoading(false)
+    }
+  }
   if (question.type === 'section') {
     return <article className="question-editor section-editor"><header><span>SECTION</span><button type="button" onClick={onRemove}><Icon name="trash" size={17} /></button></header><input value={question.text} onChange={(event) => onChange({ text: event.target.value })} placeholder="새 섹션 제목" /><textarea value={question.description} onChange={(event) => onChange({ description: event.target.value })} placeholder="섹션 설명을 입력하세요." /></article>
   }
@@ -1190,10 +1345,16 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
         {question.type === 'scale' ? <div className="scale-editor"><DesignSelect compact value={question.min} onChange={(min) => onChange({ min: Number(min) })} ariaLabel="최소 배율" options={[0, 1]} /><span>부터</span><DesignSelect compact value={question.max} onChange={(max) => onChange({ max: Number(max) })} ariaLabel="최대 배율" options={[2, 3, 4, 5, 7, 10]} /><span>까지</span></div> : null}
         {question.type === 'file' ? <div className="file-setting"><Icon name="file" /><span><b>파일 업로드 문항</b><small>최대 파일 크기와 허용 형식은 게시 후 서버 정책에 따라 적용돼요.</small></span></div> : null}
         <div className="question-tools">
-          <button type="button" onClick={() => onChange({ text: question.text ? `${question.text.replace(/[.?]$/, '')}에 대해 편하게 알려주세요.` : '평소 이 주제에 대해 어떻게 생각하시나요?' })}><Icon name="spark" size={16} /> AI로 말투 다듬기</button>
+          <button type="button" disabled={aiLoading} onClick={rewriteQuestion}><Icon name="spark" size={16} /> {aiLoading ? 'AI가 다듬는 중…' : 'AI로 말투 다듬기'}</button>
           <button type="button" onClick={() => setSettings(!settings)}><Icon name="filter" size={16} /> 세부 설정</button>
           <button type="button" onClick={onRemove}><Icon name="trash" size={16} /></button>
         </div>
+        {aiError ? <div className="inline-error" role="alert">{aiError}</div> : null}
+        {aiSuggestion ? <section className="ai-rewrite-compare">
+          <span><small>원문</small><b>{aiSuggestion.original}</b></span>
+          <span className="is-revised"><small>AI 수정안</small><b>{aiSuggestion.revised}</b><em>{aiSuggestion.rationale}</em></span>
+          <div><button type="button" onClick={() => setAiSuggestion(null)}>원문 유지</button><button type="button" onClick={() => { onChange({ text: aiSuggestion.revised }); setAiSuggestion(null) }}>수정안 적용</button></div>
+        </section> : null}
         {settings ? <div className="question-settings">
           <Toggle label="필수 응답" checked={question.required} onChange={(value) => onChange({ required: value })} />
           {CHOICE_TYPES.has(question.type) ? <><Toggle label="답변 순서 섞기" checked={question.shuffle} onChange={(value) => onChange({ shuffle: value })} /><Toggle label="기타 직접 입력 허용" checked={question.other} onChange={(value) => onChange({ other: value })} /></> : null}
@@ -1217,6 +1378,8 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const question = questions[index]
   const currentAnswer = answers[question?.id]
   const answered = question && (!question.required || (Array.isArray(currentAnswer) ? currentAnswer.length > 0 : currentAnswer !== undefined && currentAnswer !== ''))
@@ -1224,11 +1387,18 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
   useEffect(() => {
     document.querySelector('.question-page')?.scrollTo({ top: 0, behavior: 'instant' })
   }, [index])
-  const next = () => {
+  const next = async () => {
     if (index < questions.length - 1) setIndex(index + 1)
     else {
+      setSubmitting(true)
+      setSubmitError('')
+      const result = await onComplete(survey.id, answers, isExchange)
+      setSubmitting(false)
+      if (result?.ok === false) {
+        setSubmitError(result.message)
+        return
+      }
       setSubmitted(true)
-      onComplete(survey.id, answers, isExchange)
     }
   }
   if (closed) return (
@@ -1254,10 +1424,11 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
         {question.description ? <p>{question.description}</p> : <p>솔직한 생각을 편하게 골라주세요.</p>}
         <QuestionResponse question={question} value={currentAnswer} onChange={update} />
         {question.required && !answered ? <small className="required-hint">필수 질문이에요.</small> : null}
+        {submitError ? <div className="inline-error" role="alert">{submitError}</div> : null}
       </main>
       <footer className="participate-footer">
         <button type="button" className="secondary-button" disabled={index === 0} onClick={() => setIndex(index - 1)}>이전</button>
-        <button type="button" className="primary-button" disabled={!answered} onClick={next}>{index === questions.length - 1 ? '응답 제출하기' : '다음'}</button>
+        <button type="button" className="primary-button" disabled={!answered || submitting} onClick={next}>{submitting ? '응답을 저장하는 중…' : index === questions.length - 1 ? '응답 제출하기' : '다음'}</button>
       </footer>
     </div>
   )
@@ -1301,33 +1472,55 @@ function RespondentResultScreen({ survey, onBack, navigate }) {
   const [tab, setTab] = useState('summary')
   const [deepOpen, setDeepOpen] = useState(false)
   const [toast, setToast] = useState('')
+  const [resultData, setResultData] = useState(null)
+  const [resultError, setResultError] = useState('')
   const toastTimer = useRef(null)
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
+  useEffect(() => {
+    if (!survey?.api) return undefined
+    let active = true
+    suniversityApi.results(survey.id)
+      .then((result) => { if (active) setResultData(result) })
+      .catch((error) => { if (active) setResultError(getApiErrorMessage(error)) })
+    return () => { active = false }
+  }, [survey?.api, survey?.id])
   const copyResultLink = () => {
     navigator.clipboard?.writeText(`https://suniversity.kr/result/${survey.id}`)
     window.clearTimeout(toastTimer.current)
     setToast('결과 링크를 복사했어요')
     toastTimer.current = window.setTimeout(() => setToast(''), 1800)
   }
-  const groups = {
+  const fallbackGroups = {
     gender: [['여성', 58], ['남성', 42]],
     mbti: [['ENFP', 31], ['INFP', 26], ['ENTJ', 18], ['기타', 25]],
     school: [['고려대', 37], ['홍익대', 24], ['연세대', 18], ['기타', 21]],
   }
+  const groupValues = (key) => {
+    const groups = resultData?.group_statistics?.[key]?.groups
+    if (!groups?.length) return fallbackGroups[key === 'university' ? 'school' : key] || []
+    return groups.map((group) => [group.label, Math.round(group.count * 100 / Math.max(1, resultData.response_count))])
+  }
+  const groups = { gender: groupValues('gender'), mbti: groupValues('mbti'), school: groupValues('university') }
+  const firstQuestion = resultData?.questions?.[0]
+  const firstOptions = firstQuestion?.options?.slice(0, 4) || [
+    { label: '주 3~4회', percentage: 35 }, { label: '주 1~2회', percentage: 28 }, { label: '주 5회 이상', percentage: 21 }, { label: '기타', percentage: 16 },
+  ]
+  const matchingPercentage = Math.round(Math.max(...firstOptions.map((option) => option.percentage || 0), 0))
   return (
     <div className="screen">
       <TopBar title="설문 결과" onBack={onBack} right={<button className="round-icon" type="button" onClick={copyResultLink} aria-label="결과 링크 복사"><Icon name="share" /></button>} />
       <main className="page result-page">
         <span className="tag tag--blue">{survey.category}</span>
         <h1>{survey.title}</h1>
-        <p>{survey.participants + 1}명의 답변을 바탕으로 분석했어요.</p>
+        <p>{resultData?.response_count ?? survey.participants}명의 답변을 바탕으로 분석했어요.</p>
+        {resultError ? <div className="inline-error" role="alert">{resultError}</div> : null}
         <div className="respondent-ai-note"><Icon name="spark" size={15} /><span><b>AI 비교 분석 준비 완료</b><small>나와 비슷한 응답자와 그룹별 차이를 찾았어요.</small></span></div>
         <div className="result-tabs"><button className={tab === 'summary' ? 'is-active' : ''} onClick={() => setTab('summary')}>요약</button><button className={tab === 'compare' ? 'is-active' : ''} onClick={() => setTab('compare')}>비교</button><button className={tab === 'insight' ? 'is-active' : ''} onClick={() => setTab('insight')}><Icon name="spark" size={12} /> AI 인사이트</button></div>
         {tab === 'summary' ? <>
-          <section className="answer-highlight"><span>나와 같은 답을 고른 사람</span><strong>35<small>%</small></strong><p>응답자 3명 중 1명은 나와 비슷하게 생각해요.</p></section>
+          <section className="answer-highlight"><span>가장 많이 선택한 답변</span><strong>{matchingPercentage}<small>%</small></strong><p>현재까지 집계된 응답을 서버 통계로 보여드려요.</p></section>
           <section className="chart-card">
-            <div className="section-title"><div><span>Q1 결과</span><h2>카페 이용 빈도</h2></div></div>
-            <div className="donut-wrap"><div className="donut"><strong>85<small>명</small></strong></div><ul><li><i className="c1" />주 3~4회 <b>35%</b></li><li><i className="c2" />주 1~2회 <b>28%</b></li><li><i className="c3" />주 5회 이상 <b>21%</b></li><li><i className="c4" />기타 <b>16%</b></li></ul></div>
+            <div className="section-title"><div><span>Q1 결과</span><h2>{firstQuestion?.prompt || '카페 이용 빈도'}</h2></div></div>
+            <div className="donut-wrap"><div className="donut"><strong>{firstQuestion?.answer_count ?? resultData?.response_count ?? 0}<small>명</small></strong></div><ul>{firstOptions.map((option, index) => <li key={option.option_id || option.label}><i className={`c${index + 1}`} />{option.label} <b>{option.percentage || 0}%</b></li>)}</ul></div>
           </section>
           <section className="similar-card"><img className="similar-card__puzzles" src={respondentSimilarPuzzles} alt="" /><div><b>ENFP 응답자와 가장 비슷해요</b><p>전체 답변 패턴이 82% 일치했어요.</p></div></section>
         </> : null}
@@ -1347,14 +1540,52 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
   const [aiTool, setAiTool] = useState('deep')
   const [responseIndex, setResponseIndex] = useState(0)
   const [aiRun, setAiRun] = useState({ key: '', status: 'idle' })
+  const [resultData, setResultData] = useState(null)
+  const [responseTable, setResponseTable] = useState(null)
+  const [resultError, setResultError] = useState('')
   const aiTimer = useRef(null)
   useEffect(() => () => window.clearTimeout(aiTimer.current), [])
-  const responses = [
+  useEffect(() => {
+    if (!survey?.api) return undefined
+    let active = true
+    Promise.all([suniversityApi.results(survey.id), suniversityApi.responseTable(survey.id)])
+      .then(([results, table]) => {
+        if (!active) return
+        setResultData(results)
+        setResponseTable(table)
+      })
+      .catch((error) => { if (active) setResultError(getApiErrorMessage(error)) })
+    return () => { active = false }
+  }, [survey?.api, survey?.id])
+  const sampleResponses = [
     ['2026-07-30 14:32', '주 3~4회', '좌석과 분위기', '4', '1~2시간'],
     ['2026-07-30 14:29', '주 1~2회', '가격', '3', '30분~1시간'],
     ['2026-07-30 14:21', '주 5회 이상', '콘센트·와이파이', '5', '2~3시간'],
   ]
-  const downloadCsv = () => {
+  const responseValue = (answer) => {
+    const question = survey.questions?.find((item) => item.id === answer.question_id)
+    const optionLabelById = Object.fromEntries(Object.entries(question?.optionIds || {}).map(([label, id]) => [id, label]))
+    return answer.value_text ?? answer.value_number ?? answer.value_date ?? answer.value_time ?? answer.option_ids?.map((id) => optionLabelById[id] || id).join(', ') ?? (answer.grid_answers ? JSON.stringify(answer.grid_answers) : '')
+  }
+  const apiResponses = responseTable?.rows?.map((row) => [new Date(row.submitted_at).toLocaleString('ko-KR'), ...row.answers.map(responseValue)])
+  const responses = apiResponses || sampleResponses
+  const tableHeaders = survey.api ? ['응답 시간', ...(survey.questions || []).filter((question) => question.type !== 'section').map((question) => question.text)] : ['응답 시간', '카페 빈도', '선택 기준', '선호도', '체류 시간']
+  const downloadCsv = async () => {
+    if (survey.api) {
+      try {
+        const blob = await suniversityApi.resultCsv(survey.id)
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `suniversity-${survey.id}-responses.csv`
+        anchor.click()
+        URL.revokeObjectURL(url)
+        return
+      } catch (error) {
+        setResultError(getApiErrorMessage(error))
+        return
+      }
+    }
     const rows = [['응답 시간', '카페 빈도', '선택 기준', '선호도', '체류 시간'], ...responses]
     const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n')}`
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
@@ -1370,7 +1601,13 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
     ppt: { label: 'PPT 자동 생성', icon: 'file', title: '분석 결과를 발표 자료로 완성해요', body: '표지·조사 개요·핵심 차트·결론으로 구성된 발표용 PPT 초안을 자동 생성합니다.', action: 'PPT 8장 만들기 · 4,000원' },
   }
   const selectedAiTool = aiTools[aiTool]
-  const selectedResponse = responses[responseIndex]
+  const selectedResponse = responses[responseIndex] || []
+  const firstQuestion = resultData?.questions?.[0]
+  const firstOptions = firstQuestion?.options?.slice(0, 4) || [
+    { label: '주 3~4회', percentage: 35 }, { label: '주 1~2회', percentage: 28 }, { label: '주 5회 이상', percentage: 21 }, { label: '기타', percentage: 16 },
+  ]
+  const goalPercentage = Math.round((resultData?.response_count ?? survey.participants ?? 0) * 100 / Math.max(1, survey.target || 100))
+  const questionBars = resultData?.questions?.slice(0, 5).map((question) => Math.max(8, question.answer_count * 100 / Math.max(1, resultData.response_count))) || [44, 68, 83, 61, 72]
   const runAiTool = () => {
     window.clearTimeout(aiTimer.current)
     setAiRun({ key: aiTool, status: 'loading' })
@@ -1382,17 +1619,20 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
       <main className="page result-page">
         <div className="result-tier-head result-tier-head--free"><span><Icon name="check" size={13} /> FREE RESULT</span><small>작성자 기본 결과 · 무료</small></div>
         <h1>{survey.title}</h1>
-        <div className="creator-summary"><span><b>{survey.participants || 53}</b><small>전체 응답</small></span><span><b>72%</b><small>목표 달성</small></span><span><b>{survey.minutes}:12</b><small>평균 시간</small></span></div>
+        {resultError ? <div className="inline-error" role="alert">{resultError}</div> : null}
+        {responseTable?.pending ? <div className="pending-result-note"><Icon name="clock" size={15} /> 교환 완료 대기 중인 응답이 있어요. 완료 후 통계에 반영됩니다.</div> : null}
+        <div className="creator-summary"><span><b>{resultData?.total_response_count ?? survey.participants ?? 0}</b><small>전체 응답</small></span><span><b>{goalPercentage}%</b><small>목표 달성</small></span><span><b>{survey.minutes}:12</b><small>평균 시간</small></span></div>
         <div className="result-tabs"><button className={tab === 'summary' ? 'is-active' : ''} onClick={() => setTab('summary')}>요약</button><button className={tab === 'individual' ? 'is-active' : ''} onClick={() => setTab('individual')}>개별 응답</button><button className={tab === 'table' ? 'is-active' : ''} onClick={() => setTab('table')}>데이터 표</button></div>
         {tab === 'summary' ? <>
-          <section className="chart-card"><div className="section-title"><div><span>질문 1</span><h2>카페 이용 빈도</h2></div></div><div className="donut-wrap"><div className="donut"><strong>53<small>명</small></strong></div><ul><li><i className="c1" />주 3~4회 <b>35%</b></li><li><i className="c2" />주 1~2회 <b>28%</b></li><li><i className="c3" />주 5회 이상 <b>21%</b></li><li><i className="c4" />기타 <b>16%</b></li></ul></div></section>
-          <section className="bar-chart-card"><h3>질문별 응답 분포</h3><div className="vertical-bars">{[44, 68, 83, 61, 72].map((height, index) => <span key={height}><i style={{ height: `${height}%` }} /><small>Q{index + 1}</small></span>)}</div></section>
+          <section className="chart-card"><div className="section-title"><div><span>질문 1</span><h2>{firstQuestion?.prompt || '카페 이용 빈도'}</h2></div></div><div className="donut-wrap"><div className="donut"><strong>{firstQuestion?.answer_count ?? resultData?.response_count ?? 0}<small>명</small></strong></div><ul>{firstOptions.map((option, index) => <li key={option.option_id || option.label}><i className={`c${index + 1}`} />{option.label} <b>{option.percentage || 0}%</b></li>)}</ul></div></section>
+          <section className="bar-chart-card"><h3>질문별 응답 분포</h3><div className="vertical-bars">{questionBars.map((height, index) => <span key={`bar-${index}`}><i style={{ height: `${height}%` }} /><small>Q{index + 1}</small></span>)}</div></section>
         </> : null}
-        {tab === 'individual' ? <section className="individual-response"><header><button type="button" disabled={responseIndex === 0} onClick={() => setResponseIndex((index) => Math.max(0, index - 1))} aria-label="이전 응답"><Icon name="back" size={17} /></button><b>응답 {responseIndex + 1} / {responses.length}</b><button type="button" disabled={responseIndex === responses.length - 1} onClick={() => setResponseIndex((index) => Math.min(responses.length - 1, index + 1))} aria-label="다음 응답"><Icon name="chevron" size={17} /></button></header><small className="response-submitted-at">제출 {selectedResponse[0]}</small>{selectedResponse.slice(1).map((value, index) => <div key={`${responseIndex}-${index}`}><small>Q{index + 1}</small><b>{value}</b></div>)}</section> : null}
-        {tab === 'table' ? <section className="data-table-wrap"><table><thead><tr>{['응답 시간', '카페 빈도', '선택 기준', '선호도', '체류 시간'].map((head) => <th key={head}>{head}</th>)}</tr></thead><tbody>{responses.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell) => <td key={cell}>{cell}</td>)}</tr>)}</tbody></table><button type="button" className="download-button" onClick={downloadCsv}><Icon name="download" /> CSV로 다운로드</button></section> : null}
+        {tab === 'individual' ? responses.length ? <section className="individual-response"><header><button type="button" disabled={responseIndex === 0} onClick={() => setResponseIndex((index) => Math.max(0, index - 1))} aria-label="이전 응답"><Icon name="back" size={17} /></button><b>응답 {responseIndex + 1} / {responses.length}</b><button type="button" disabled={responseIndex === responses.length - 1} onClick={() => setResponseIndex((index) => Math.min(responses.length - 1, index + 1))} aria-label="다음 응답"><Icon name="chevron" size={17} /></button></header><small className="response-submitted-at">제출 {selectedResponse[0]}</small>{selectedResponse.slice(1).map((value, index) => <div key={`${responseIndex}-${index}`}><small>{survey.questions?.[index]?.text || `Q${index + 1}`}</small><b>{value}</b></div>)}</section> : <div className="empty-surveys"><Icon name="clipboard" /><b>아직 포함된 응답이 없어요</b><p>교환 응답은 양쪽 모두 완료된 뒤 여기에 표시돼요.</p></div> : null}
+        {tab === 'table' ? <section className="data-table-wrap">{responses.length ? <table><thead><tr>{tableHeaders.map((head) => <th key={head}>{head}</th>)}</tr></thead><tbody>{responses.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`}>{cell}</td>)}</tr>)}</tbody></table> : <div className="empty-surveys"><Icon name="clipboard" /><b>표시할 응답 데이터가 없어요</b></div>}<button type="button" className="download-button" disabled={!responses.length} onClick={downloadCsv}><Icon name="download" /> CSV로 다운로드</button></section> : null}
         <button type="button" className="share-result-card" onClick={() => navigate('shareSurvey', survey.id, { survey })}><i><Icon name="share" /></i><span><b>설문 배포 및 공유</b><small>링크·QR 코드·외부 커뮤니티 공유</small></span><Icon name="chevron" /></button>
         <section className="ai-result-suite">
           <header className="result-tier-head result-tier-head--ai"><span><Icon name="spark" size={13} /> AI RESULT</span><small>AI가 응답을 더 깊게 해석해요</small></header>
+          {survey.api ? <div className="pending-result-note"><Icon name="clock" size={15} /> AI 심층 분석과 PPT 생성은 현재 API 명세에 없어 화면 미리보기만 제공해요.</div> : null}
           <div className="ai-result-intro"><i><Icon name="spark" size={24} /></i><div><b>결과를 이해하는 데서 끝내지 마세요</b><p>AI가 인사이트를 찾고, 발표 자료까지 이어서 완성해 드려요.</p></div></div>
           <div className="ai-tool-tabs">
             {Object.entries(aiTools).map(([key, tool]) => <button type="button" key={key} className={aiTool === key ? 'is-active' : ''} onClick={() => setAiTool(key)}><Icon name={tool.icon} size={17} /><span>{tool.label}</span></button>)}
@@ -1402,9 +1642,9 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
             <h2>{selectedAiTool.title}</h2>
             <p>{selectedAiTool.body}</p>
             <div><em><Icon name="check" size={12} /> 응답 데이터 자동 반영</em><em><Icon name="check" size={12} /> 수정 가능한 초안 제공</em></div>
-            <button type="button" disabled={aiRun.status === 'loading'} onClick={runAiTool}>{aiRun.status === 'loading' && aiRun.key === aiTool ? 'AI가 분석 중이에요…' : selectedAiTool.action}<Icon name="chevron" size={15} /></button>
+            <button type="button" disabled={survey.api || aiRun.status === 'loading'} onClick={runAiTool}>{survey.api ? '분석 API 준비 중' : aiRun.status === 'loading' && aiRun.key === aiTool ? 'AI가 분석 중이에요…' : selectedAiTool.action}<Icon name="chevron" size={15} /></button>
           </article>
-          {aiRun.status === 'done' ? <section className="ai-run-result" aria-live="polite"><span><Icon name="check" size={14} /> {aiTools[aiRun.key].label} 초안 생성 완료</span><h3>{aiRun.key === 'ppt' ? '8장 발표 자료 구성을 만들었어요' : aiRun.key === 'insight' ? '발표에 쓸 핵심 인사이트 3개를 찾았어요' : '응답 차이의 원인과 다음 조사 방향을 정리했어요'}</h3><p>백엔드 연결 전에는 샘플 데이터로 미리 보여드려요. 실제 연결 후 응답 데이터에 맞춰 자동 생성됩니다.</p><button type="button" onClick={() => setAiRun({ key: '', status: 'idle' })}>확인</button></section> : null}
+          {aiRun.status === 'done' ? <section className="ai-run-result" aria-live="polite"><span><Icon name="check" size={14} /> {aiTools[aiRun.key].label} 초안 생성 완료</span><h3>{aiRun.key === 'ppt' ? '8장 발표 자료 구성을 만들었어요' : aiRun.key === 'insight' ? '발표에 쓸 핵심 인사이트 3개를 찾았어요' : '응답 차이의 원인과 다음 조사 방향을 정리했어요'}</h3><p>오프라인 미리보기용 샘플이에요. 분석 API가 추가되면 실제 응답 데이터로 생성할 수 있어요.</p><button type="button" onClick={() => setAiRun({ key: '', status: 'idle' })}>확인</button></section> : null}
         </section>
       </main>
     </div>
@@ -1413,7 +1653,18 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
 
 function ShareSurveyScreen({ survey, onBack }) {
   const [copied, setCopied] = useState('')
-  const link = `https://suniversity.kr/s/${survey.id}`
+  const [link, setLink] = useState(`https://suniversity.kr/s/${survey.id}`)
+  const [shareError, setShareError] = useState('')
+  useEffect(() => {
+    if (!survey?.api) return undefined
+    let active = true
+    suniversityApi.shareLink(survey.id).then((result) => {
+      if (!active) return
+      const backendOrigin = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:4000/api/v1').replace(/\/api\/v1\/?$/, '')
+      setLink(`${backendOrigin}/api/v1${result.path}`)
+    }).catch((error) => { if (active) setShareError(getApiErrorMessage(error)) })
+    return () => { active = false }
+  }, [survey?.api, survey?.id])
   const copy = (value, label) => {
     navigator.clipboard?.writeText(value)
     setCopied(label)
@@ -1444,6 +1695,7 @@ function ShareSurveyScreen({ survey, onBack }) {
         <span className="eyebrow">SHARE SURVEY</span>
         <h1>더 많은 대학생에게<br />설문을 알려보세요.</h1>
         <p>링크와 QR 코드는 모바일과 PC에서 모두 열려요.</p>
+        {shareError ? <div className="inline-error" role="alert">{shareError}</div> : null}
         <section className="share-survey-preview"><span className="tag tag--blue">{survey.category}</span><h2>{survey.title}</h2><small>{survey.questionCount}문항 · 약 {survey.minutes}분 · {formatDeadline(survey.deadline)} 마감</small></section>
         <section className="link-copy"><label>공유 링크</label><div><input readOnly value={link} /><button type="button" onClick={() => copy(link, '링크')}>{copied === '링크' ? <Icon name="check" /> : <Icon name="copy" />}</button></div></section>
         <section className="qr-card"><div className="qr-code">{qrCells.map((filled, index) => <i className={filled ? 'filled' : ''} key={index} />)}</div><div><b>QR 코드로 바로 참여</b><p>이미지로 저장해 포스터나 발표 자료에 넣어보세요.</p><button type="button" onClick={downloadQr}>QR 이미지 저장</button></div></section>
@@ -1519,14 +1771,22 @@ function EnhancedTeamScreen({ onBack }) {
   )
 }
 
-function NotificationsScreen({ navigate, notifications, setNotifications }) {
-  const readAll = () => setNotifications((current) => current.map((notice) => ({ ...notice, read: true })))
+function NotificationsScreen({ navigate, notifications, setNotifications, onReadNotification, onReadAllNotifications }) {
+  const readAll = async () => {
+    setNotifications((current) => current.map((notice) => ({ ...notice, read: true })))
+    await onReadAllNotifications?.()
+  }
+  const openNotice = async (notice) => {
+    setNotifications((current) => current.map((item) => item.id === notice.id ? { ...item, read: true } : item))
+    await onReadNotification?.(notice.id)
+    navigate('exchange')
+  }
   return (
     <div className="screen has-nav">
       <TopBar title="알림" right={<button className="text-button" type="button" onClick={readAll}>모두 읽음</button>} />
       <main className="page notifications-page">
         <div className="notification-day">오늘</div>
-        <div className="notification-list">{notifications.map((notice) => <button type="button" key={notice.id} className={notice.read ? 'is-read' : ''} onClick={() => { setNotifications((current) => current.map((item) => item.id === notice.id ? { ...item, read: true } : item)); navigate('exchange') }}><i><Icon name={notice.type === 'complete' ? 'check' : notice.type === 'deadline' ? 'clock' : 'exchange'} /></i><span><b>{notice.title}</b><p>{notice.body}</p><small>{notice.time}</small></span>{!notice.read ? <em /> : null}</button>)}</div>
+        <div className="notification-list">{notifications.map((notice) => <button type="button" key={notice.id} className={notice.read ? 'is-read' : ''} onClick={() => openNotice(notice)}><i><Icon name={notice.type === 'complete' ? 'check' : notice.type === 'deadline' ? 'clock' : 'exchange'} /></i><span><b>{notice.title}</b><p>{notice.body}</p><small>{notice.time}</small></span>{!notice.read ? <em /> : null}</button>)}</div>
         <section className="notification-setting"><Icon name="bell" /><span><b>알림 설정</b><small>교환 요청과 마감 알림을 관리해요.</small></span><Icon name="chevron" /></section>
       </main>
       <BottomNav active="notifications" navigate={navigate} unread={0} />
@@ -1561,8 +1821,10 @@ function ProfileScreen({ navigate, profile, surveys, favoriteIds, requests }) {
   )
 }
 
-function ProfileEditScreen({ profile, setProfile, onBack }) {
+function ProfileEditScreen({ profile, setProfile, onBack, apiStatus }) {
   const [draft, setDraft] = useState(profile)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const fields = [
     ['학년', 'grade', ['1학년', '2학년', '3학년', '4학년', '대학원생']],
     ['성별', 'gender', ['여성', '남성', '응답하지 않음']],
@@ -1572,12 +1834,31 @@ function ProfileEditScreen({ profile, setProfile, onBack }) {
     ['스마트폰 OS', 'os', ['iPhone', 'Android']],
     ['MBTI', 'mbti', ['ENFP', 'INFP', 'ENTJ', 'INTJ', 'ESTJ', '기타']],
   ]
+  const saveProfile = async () => {
+    setSaving(true)
+    try {
+      if (apiStatus === 'online') {
+        await suniversityApi.updateProfile({
+          year: draft.grade?.replace('학년', '') || null,
+          department: draft.major || null,
+          profile_categories: [draft.gender, draft.status, draft.housing, draft.allowance, draft.os, draft.mbti, draft.smoking, draft.drinking, draft.exercise, draft.license, draft.car].filter(Boolean),
+        })
+      }
+      setProfile(draft)
+      onBack()
+    } catch (error) {
+      setSaveError(getApiErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
   return (
     <div className="screen">
-      <TopBar title="기본 정보 관리" onBack={onBack} right={<button className="text-button" type="button" onClick={() => { setProfile(draft); onBack() }}>저장</button>} />
+      <TopBar title="기본 정보 관리" onBack={onBack} right={<button className="text-button" type="button" disabled={saving} onClick={saveProfile}>{saving ? '저장 중…' : '저장'}</button>} />
       <main className="page edit-profile-page">
         <section className="verified-profile"><Icon name="shield" /><div><b>학교 인증 정보</b><p>{profile.university}<br />{profile.major} · {profile.studentId}</p></div><span>인증 완료</span></section>
         <p className="privacy-copy">입력한 정보는 응답 대상 확인과 매칭 점수 계산에 사용돼요. 설문 작성자가 선택한 항목만 익명으로 전달됩니다.</p>
+        {saveError ? <div className="inline-error" role="alert">{saveError}</div> : null}
         <div className="profile-form">{fields.map(([label, key, options]) => <div className="profile-form-row" key={key}><span>{label}</span><DesignSelect value={draft[key]} onChange={(value) => setDraft({ ...draft, [key]: value })} options={options} ariaLabel={`${label} 선택`} /></div>)}<label><span>거주 지역</span><input value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></label></div>
         <section className="lifestyle-options"><h3>라이프스타일</h3>{[['흡연', 'smoking'], ['음주', 'drinking'], ['운동', 'exercise'], ['운전면허', 'license'], ['자동차', 'car']].map(([label, key]) => <label key={key}><span>{label}</span><input value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} /></label>)}</section>
       </main>
@@ -1591,6 +1872,8 @@ function MySurveysScreen({ surveys, setSurveys, requests, setRequests, selectedS
   const [closedIds, setClosedIds] = useStoredState('suniversity-closed-surveys', [])
   const [pendingClose, setPendingClose] = useState(null)
   const [toast, setToast] = useState('')
+  const [closeError, setCloseError] = useState('')
+  const [closing, setClosing] = useState(false)
   const toastTimer = useRef(null)
   const hasDraft = Boolean(localStorage.getItem('suniversity-new-draft'))
   const belongsToSurvey = (request, surveyId) => request.sourceSurveyId === surveyId || (!request.sourceSurveyId && list.length === 1)
@@ -1607,9 +1890,26 @@ function MySurveysScreen({ surveys, setSurveys, requests, setRequests, selectedS
     setSurveys((current) => current.map((survey) => survey.id === id ? { ...survey, closed: false } : survey))
     showToast('새로운 응답을 다시 받을 수 있어요')
   }
-  const closeSurvey = () => {
+  const closeSurvey = async () => {
     if (!pendingClose) return
     const surveyId = pendingClose.id
+    if (pendingClose.api) {
+      setClosing(true)
+      try {
+        const closed = fromApiSurvey(await suniversityApi.closeSurvey(surveyId))
+        setSurveys((current) => mergeSurveyLists(current.filter((survey) => survey.id !== surveyId), [{ ...closed, closed: true }]))
+        const fresh = await suniversityApi.exchanges()
+        setRequests(fresh.map(fromApiExchange))
+        setPendingClose(null)
+        setCloseError('')
+        showToast('응답을 마감하고 미완료 교환을 정리했어요')
+      } catch (error) {
+        setCloseError(getApiErrorMessage(error))
+      } finally {
+        setClosing(false)
+      }
+      return
+    }
     setClosedIds((current) => current.includes(surveyId) ? current : [...current, surveyId])
     setSurveys((current) => current.map((survey) => survey.id === surveyId ? { ...survey, closed: true } : survey))
     setRequests((current) => current.map((request) => (
@@ -1644,7 +1944,7 @@ function MySurveysScreen({ surveys, setSurveys, requests, setRequests, selectedS
                 <small>{deadlineState.within24Hours ? '새 교환 신청은 종료됐고, 성사된 교환은 마감 전까지 완료해야 해요.' : '수동 마감하면 완료되지 않은 교환도 함께 종료돼요.'}</small>
               </span>
             </div> : null}
-            <div className="manage-actions"><button type="button" onClick={() => navigate('creatorResults', survey.id, { survey })}><Icon name="chart" /> 결과</button><button type="button" onClick={() => navigate('shareSurvey', survey.id, { survey })}><Icon name="share" /> 공유</button><button type="button" disabled={timedOut || closed} onClick={() => navigate('create')}><Icon name="edit" /> 수정</button><button type="button" disabled={timedOut} className={closed ? '' : 'danger'} onClick={() => closed ? reopenSurvey(survey.id) : setPendingClose(survey)}>{timedOut ? '기한 만료' : closed ? '다시 받기' : '응답 마감'}</button></div>
+            <div className="manage-actions"><button type="button" onClick={() => navigate('creatorResults', survey.id, { survey })}><Icon name="chart" /> 결과</button><button type="button" onClick={() => navigate('shareSurvey', survey.id, { survey })}><Icon name="share" /> 공유</button><button type="button" disabled={timedOut || closed} onClick={() => navigate('create')}><Icon name="edit" /> 수정</button><button type="button" disabled={timedOut || (closed && survey.api)} className={closed ? '' : 'danger'} onClick={() => closed ? reopenSurvey(survey.id) : setPendingClose(survey)}>{timedOut ? '기한 만료' : closed ? survey.api ? '마감 완료' : '다시 받기' : '응답 마감'}</button></div>
           </article>
         })}</div>
       </main>
@@ -1653,12 +1953,13 @@ function MySurveysScreen({ surveys, setSurveys, requests, setRequests, selectedS
         <span className="modal-kicker">CLOSE SURVEY</span>
         <h2>이 설문의 응답을<br />마감할까요?</h2>
         <p><b>{pendingClose.title}</b> 설문은 더 이상 새로운 응답과 교환 신청을 받지 않아요.</p>
+        {closeError ? <div className="inline-error" role="alert">{closeError}</div> : null}
         <div className="close-impact-list">
           <span><Icon name="close" size={16} /><em>새로운 응답과 교환 신청 차단</em></span>
           <span><Icon name="exchange" size={16} /><em>미완료 교환 {activeExchanges(pendingClose.id).length}건 자동 종료</em></span>
           <span><Icon name="chart" size={16} /><em>기존 응답과 결과 데이터는 그대로 유지</em></span>
         </div>
-        <div className="close-modal-actions"><button type="button" className="secondary-button" onClick={() => setPendingClose(null)}>계속 받기</button><button type="button" className="danger-button" onClick={closeSurvey}>응답 마감</button></div>
+        <div className="close-modal-actions"><button type="button" className="secondary-button" disabled={closing} onClick={() => setPendingClose(null)}>계속 받기</button><button type="button" className="danger-button" disabled={closing} onClick={closeSurvey}>{closing ? '마감 처리 중…' : '응답 마감'}</button></div>
       </Modal> : null}
       {toast ? <div className="toast"><Icon name="check" size={17} />{toast}</div> : null}
     </div>
@@ -1741,12 +2042,41 @@ function DiscussionScreen({ survey, onBack }) {
   const [comment, setComment] = useState('')
   const [replyTo, setReplyTo] = useState(null)
   const [reply, setReply] = useState('')
-  const [comments, setComments] = useStoredState(`suniversity-comments-${survey.id}`, [
+  const [comments, setComments] = useState([
     { id: 'c1', author: '익명 퍼즐 12', school: '', text: '저는 콘센트랑 좌석 간격이 제일 중요했어요. 과제할 때 오래 머무르게 되더라고요.', likes: 14, liked: false, team: 'blue', replies: [{ id: 'r1', author: '나경 · 고려대', text: '맞아요! 저도 비슷하게 답했어요.' }] },
     { id: 'c2', author: '민지 · 홍익대', school: '홍익대학교', text: '가격도 중요하지만 요즘은 조용한 분위기를 더 먼저 보게 되는 것 같아요.', likes: 9, liked: false, team: 'pink', replies: [] },
   ])
-  const addComment = () => {
+  const [commentError, setCommentError] = useState('')
+  const shapeApiComments = (rows) => {
+    const roots = rows.filter((row) => !row.parent_id).map((row, index) => ({ id: row.id, author: row.display_name, school: row.university_name || '', text: row.body, likes: 0, liked: false, team: ['blue', 'pink', 'purple'][index % 3], replies: [] }))
+    rows.filter((row) => row.parent_id).forEach((row) => {
+      const parent = roots.find((item) => item.id === row.parent_id)
+      if (parent) parent.replies.push({ id: row.id, author: row.display_name, text: row.body, likes: 0, liked: false })
+    })
+    return roots
+  }
+  useEffect(() => {
+    if (!survey?.api) return undefined
+    let active = true
+    suniversityApi.comments(survey.id)
+      .then((rows) => { if (active) setComments(shapeApiComments(rows)) })
+      .catch((error) => { if (active) setCommentError(getApiErrorMessage(error)) })
+    return () => { active = false }
+  }, [survey?.api, survey?.id])
+  const reloadComments = async () => setComments(shapeApiComments(await suniversityApi.comments(survey.id)))
+  const addComment = async () => {
     if (!comment.trim()) return
+    if (survey.api) {
+      try {
+        await suniversityApi.addComment(survey.id, { body: comment.trim(), display_mode: identity })
+        setComment('')
+        await reloadComments()
+        setCommentError('')
+      } catch (error) {
+        setCommentError(getApiErrorMessage(error))
+      }
+      return
+    }
     setComments((current) => [{ id: `c-${Date.now()}`, author: identity === 'anonymous' ? `익명 퍼즐 ${Math.floor(Math.random() * 90 + 10)}` : '나경 · 고려대', text: comment.trim(), likes: 0, liked: false, team: 'purple', replies: [] }, ...current])
     setComment('')
   }
@@ -1763,8 +2093,20 @@ function DiscussionScreen({ survey, onBack }) {
     setReplyTo((current) => current?.commentId === commentId && current?.targetId === targetId ? null : { commentId, targetId, author })
     setReply('')
   }
-  const addReply = (id) => {
+  const addReply = async (id) => {
     if (!reply.trim()) return
+    if (survey.api) {
+      try {
+        await suniversityApi.addComment(survey.id, { body: reply.trim(), parent_id: id, display_mode: identity })
+        setReply('')
+        setReplyTo(null)
+        await reloadComments()
+        setCommentError('')
+      } catch (error) {
+        setCommentError(getApiErrorMessage(error))
+      }
+      return
+    }
     setComments((current) => current.map((item) => item.id === id ? {
       ...item,
       replies: [...item.replies, {
@@ -1786,6 +2128,7 @@ function DiscussionScreen({ survey, onBack }) {
         <section className="discussion-topic"><span className="tag tag--blue">{survey.category}</span><h1>{survey.title}</h1><p>서로 다른 답을 존중하며 자유롭게 이야기해 보세요.</p></section>
         <div className="identity-selector"><span>댓글 작성 이름</span><button type="button" className={identity === 'anonymous' ? 'is-active' : ''} onClick={() => setIdentity('anonymous')}>익명 퍼즐</button><button type="button" className={identity === 'nickname' ? 'is-active' : ''} onClick={() => setIdentity('nickname')}>나경 · 고려대</button></div>
         <section className="comment-composer"><textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="이 설문에 대한 생각을 남겨보세요." /><button type="button" disabled={!comment.trim()} onClick={addComment}>등록</button></section>
+        {commentError ? <div className="inline-error" role="alert">{commentError}</div> : null}
         <div className="discussion-head"><b>댓글 {comments.length + comments.reduce((sum, item) => sum + item.replies.length, 0)}개</b><span>공감순</span></div>
         <div className="comment-list">{comments.map((item) => <article key={item.id} className={`team-${item.team}`}>
           <header><span className="comment-avatar">{item.author.slice(0, 1)}</span><div><b>{item.author}</b><small>방금 전</small></div></header>
@@ -1878,6 +2221,38 @@ function PolicyScreen({ onBack }) {
   )
 }
 
+function mergeSurveyLists(...lists) {
+  const byId = new Map()
+  lists.flat().filter(Boolean).forEach((survey) => byId.set(survey.id, survey))
+  return [...byId.values()].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+}
+
+async function loadApiSnapshot() {
+  await suniversityApi.ensureDevelopmentSession()
+  const [feed, created, participated, exchanges, autoQueue, notificationPage, profileData, reliability] = await Promise.all([
+    suniversityApi.surveys({ limit: 100 }),
+    suniversityApi.mySurveys('created'),
+    suniversityApi.mySurveys('participated'),
+    suniversityApi.exchanges(),
+    suniversityApi.autoQueueList(),
+    suniversityApi.notifications(),
+    suniversityApi.profile(),
+    suniversityApi.reliability(),
+  ])
+  const surveys = mergeSurveyLists(feed, created, participated).map(fromApiSurvey)
+  return {
+    surveys,
+    completed: surveys.filter((survey) => survey.completed).map((survey) => survey.id),
+    requests: [...exchanges.map(fromApiExchange), ...autoQueue.filter((entry) => entry.status === 'waiting').map((entry) => fromApiAutoQueue(entry, surveys))],
+    notifications: notificationPage.items.map(fromApiNotification),
+    profile: {
+      name: profileData.user.nickname,
+      university: profileData.university_name || '학교 인증 완료',
+      trust: Math.round(reliability.score),
+    },
+  }
+}
+
 function App() {
   const [screen, setScreen] = useState('home')
   const [selectedId, setSelectedId] = useState(null)
@@ -1890,9 +2265,34 @@ function App() {
   const [favorites, setFavorites] = useStoredState('suniversity-new-favorites', [])
   const [, setAnswers] = useStoredState('suniversity-new-answers', {})
   const navigationHistory = useRef([])
+  const surveyLoadSequence = useRef(0)
+  const [apiStatus, setApiStatus] = useState('connecting')
+  const [apiError, setApiError] = useState('')
   const selectedSurvey = screenMeta.survey || surveys.find((survey) => survey.id === selectedId) || surveys[0]
   const selectedRequest = requests.find((request) => request.id === selectedId)
   const unread = notifications.filter((notice) => !notice.read).length
+  useEffect(() => {
+    let active = true
+    const boot = async () => {
+      try {
+        const snapshot = await loadApiSnapshot()
+        if (!active) return
+        setSurveys(snapshot.surveys)
+        setCompleted(snapshot.completed)
+        setRequests(snapshot.requests)
+        setNotifications(snapshot.notifications)
+        setProfile((current) => ({ ...current, ...snapshot.profile }))
+        setApiStatus('online')
+        setApiError('')
+      } catch (error) {
+        if (!active) return
+        setApiStatus('offline')
+        setApiError(getApiErrorMessage(error, '백엔드를 실행하면 실제 데이터로 전환돼요.'))
+      }
+    }
+    boot()
+    return () => { active = false }
+  }, [setCompleted, setNotifications, setProfile, setRequests, setSurveys])
   useEffect(() => {
     const syncDeadlines = () => setRequests((current) => current.map((request) => {
       if (!request.deadlineISO || TERMINAL_REQUEST_STATUSES.has(request.status)) return request
@@ -1926,13 +2326,23 @@ function App() {
   }, [requests, setNotifications])
 
   const navigate = (next, id = null, meta = {}) => {
+    const loadSequence = ++surveyLoadSequence.current
     navigationHistory.current.push({ screen, selectedId, screenMeta })
     setScreen(next)
     setSelectedId(id)
     setScreenMeta(meta)
     window.scrollTo(0, 0)
+    if (apiStatus === 'online' && id && ['surveyDetail', 'participate', 'respondentResult', 'creatorResults', 'shareSurvey', 'discussion'].includes(next)) {
+      suniversityApi.survey(id).then((detail) => {
+        if (surveyLoadSequence.current !== loadSequence) return
+        const mapped = fromApiSurvey(detail)
+        setSurveys((current) => mergeSurveyLists(current, [mapped]))
+        setScreenMeta((current) => ({ ...current, survey: mapped }))
+      }).catch((error) => setApiError(getApiErrorMessage(error)))
+    }
   }
   const back = () => {
+    surveyLoadSequence.current += 1
     const previous = navigationHistory.current.pop() || { screen: 'home', selectedId: null, screenMeta: {} }
     setScreen(previous.screen)
     setSelectedId(previous.selectedId)
@@ -1944,19 +2354,58 @@ function App() {
     window.addEventListener('suniversity-navigate', handler)
     return () => window.removeEventListener('suniversity-navigate', handler)
   })
-  const publishSurvey = (survey) => {
-    setSurveys((current) => [survey, ...current.filter((item) => item.id !== survey.id)])
-    navigate('creatorResults', survey.id)
+  const publishSurvey = async (survey) => {
+    if (apiStatus !== 'online') {
+      setSurveys((current) => [survey, ...current.filter((item) => item.id !== survey.id)])
+      navigate('creatorResults', survey.id)
+      return { ok: true, offline: true }
+    }
+    try {
+      const draft = await suniversityApi.createSurvey(toApiSurveyDraft(survey))
+      const published = await suniversityApi.publishSurvey(draft.id)
+      const mapped = fromApiSurvey(published)
+      setSurveys((current) => mergeSurveyLists([mapped], current))
+      navigate('creatorResults', mapped.id, { survey: mapped })
+      return { ok: true, survey: mapped }
+    } catch (error) {
+      return { ok: false, message: getApiErrorMessage(error) }
+    }
   }
   const openGeneratedSurvey = (draft) => {
     localStorage.setItem('suniversity-new-draft', JSON.stringify(draft))
     navigate('create')
   }
-  const completeSurvey = (surveyId, response, isExchange) => {
-    setCompleted((current) => [...new Set([...current, surveyId])])
-    setAnswers((current) => ({ ...current, [surveyId]: response }))
-    if (isExchange && screenMeta.exchangeId) {
-      setRequests((current) => current.map((request) => request.id === screenMeta.exchangeId ? { ...request, ours: request.people, status: 'waiting-partner' } : request))
+  const completeSurvey = async (surveyId, response, isExchange) => {
+    const survey = surveys.find((item) => item.id === surveyId) || selectedSurvey
+    if (apiStatus !== 'online' || !survey?.api) {
+      setCompleted((current) => [...new Set([...current, surveyId])])
+      setAnswers((current) => ({ ...current, [surveyId]: response }))
+      if (isExchange && screenMeta.exchangeId) {
+        setRequests((current) => current.map((request) => request.id === screenMeta.exchangeId ? { ...request, ours: request.people, status: 'waiting-partner' } : request))
+      }
+      return { ok: true, offline: true }
+    }
+    try {
+      const answers = toApiAnswers(survey, response)
+      if (screenMeta.exchangeDraft) {
+        const exchange = await suniversityApi.directExchange({
+          source_survey_id: screenMeta.exchangeDraft.sourceSurveyId,
+          target_survey_id: surveyId,
+          answers,
+        })
+        setRequests((current) => [fromApiExchange(exchange), ...current.filter((item) => item.id !== exchange.id)])
+      } else if (isExchange && screenMeta.exchangeId) {
+        await suniversityApi.respondExchange(screenMeta.exchangeId, answers)
+        const fresh = await suniversityApi.exchanges()
+        setRequests(fresh.map(fromApiExchange))
+      } else {
+        await suniversityApi.submitResponse(surveyId, answers)
+        setCompleted((current) => [...new Set([...current, surveyId])])
+      }
+      setAnswers((current) => ({ ...current, [surveyId]: response }))
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, message: getApiErrorMessage(error) }
     }
   }
   const addRequest = (survey, mode, people) => {
@@ -1966,29 +2415,66 @@ function App() {
     const activeRequests = requests.filter((request) => !TERMINAL_REQUEST_STATUSES.has(request.status))
     if (activeRequests.filter((request) => request.surveyId === survey.id).length >= 10) return { ok: false, message: '이 설문은 미완료 교환 신청 10개가 모두 찼어요.' }
     if (activeRequests.some((request) => request.surveyId === survey.id && request.status !== 'incoming')) return { ok: false, message: '이미 진행 중인 교환 신청이 있어요.' }
-    const sourceSurvey = surveys.find((item) => item.mine && !isSurveyClosed(item))
+    const sourceSurvey = surveys.find((item) => item.mine && item.status === 'published' && item.exchangeEnabled && !isSurveyClosed(item))
+    if (apiStatus === 'online' && survey.api) {
+      if (!sourceSurvey?.api) return { ok: false, message: '먼저 교환에 사용할 내 설문을 게시해 주세요.' }
+      return { ok: true, navigateToParticipate: true, exchangeDraft: { sourceSurveyId: sourceSurvey.id, mode, people } }
+    }
     const request = { id: `exchange-${Date.now()}`, type: mode === 'team' ? '팀 교환' : '개인 교환', status: 'requested', sourceSurveyId: sourceSurvey?.id || 'my-demo', surveyId: survey.id, title: survey.title, partner: survey.owner, people: mode === 'team' ? people : 1, ours: 0, theirs: 0, deadline: formatDeadline(survey.deadline), deadlineISO: survey.deadline }
     setRequests((current) => [request, ...current])
     return { ok: true }
   }
 
-  const common = { navigate, surveys, requests, setRequests, profile, unread, notifications, setNotifications }
+  const startAutoMatch = async (mode) => {
+    const unit = mode === 'team' ? 'team' : 'individual'
+    const sourceSurvey = surveys.find((survey) => survey.mine && survey.api && survey.status === 'published' && survey.exchangeEnabled && survey.exchangeUnit === unit && !isSurveyClosed(survey))
+    if (!sourceSurvey) return { ok: false, message: mode === 'team' ? '자동 매칭에 사용할 게시된 팀 설문이 필요해요.' : '자동 매칭에 사용할 게시된 개인 설문이 필요해요.' }
+    try {
+      const queued = await suniversityApi.autoQueue(sourceSurvey.id)
+      const [fresh, activeQueue] = await Promise.all([suniversityApi.exchanges(), suniversityApi.autoQueueList()])
+      setRequests([...fresh.map(fromApiExchange), ...activeQueue.filter((entry) => entry.status === 'waiting').map((entry) => fromApiAutoQueue(entry, surveys))])
+      return { ok: true, status: queued.status || (queued.exchange ? 'matched' : 'waiting') }
+    } catch (error) {
+      return { ok: false, message: getApiErrorMessage(error) }
+    }
+  }
+
+  const readNotification = async (noticeId) => {
+    if (apiStatus === 'online') await suniversityApi.readNotification(noticeId).catch(() => null)
+  }
+  const readAllNotifications = async () => {
+    if (apiStatus === 'online') await suniversityApi.readAllNotifications().catch(() => null)
+  }
+  const toggleFavorite = async (surveyId) => {
+    const survey = surveys.find((item) => item.id === surveyId)
+    if (apiStatus === 'online' && survey?.api) {
+      try {
+        const result = await suniversityApi.toggleBookmark(surveyId)
+        setFavorites((current) => result.bookmarked ? [...new Set([...current, surveyId])] : current.filter((item) => item !== surveyId))
+        return
+      } catch (error) {
+        setApiError(getApiErrorMessage(error))
+      }
+    }
+    setFavorites((current) => current.includes(surveyId) ? current.filter((item) => item !== surveyId) : [...current, surveyId])
+  }
+  const common = { navigate, surveys, requests, setRequests, profile, unread, notifications, setNotifications, apiStatus, apiError, onReadNotification: readNotification, onReadAllNotifications: readAllNotifications }
   if (screen === 'home') return <HomeScreen {...common} completed={completed} />
   if (screen === 'community') return <CommunityScreen navigate={navigate} surveys={surveys} completed={completed} />
   if (screen === 'exchange') return <ExchangeScreen {...common} />
-  if (screen === 'surveyDetail') return <SurveyDetailScreen survey={selectedSurvey} onBack={back} navigate={navigate} profile={profile} onRequest={addRequest} completed={completed.includes(selectedSurvey.id)} favorite={favorites.includes(selectedSurvey.id)} onFavorite={(id) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} />
-  if (screen === 'autoMatch') return <AutoMatchScreen onBack={back} profile={profile} surveys={surveys} navigate={navigate} onMatched={addRequest} />
+  if (screen === 'surveyDetail') return <SurveyDetailScreen survey={selectedSurvey} onBack={back} navigate={navigate} profile={profile} onRequest={addRequest} completed={completed.includes(selectedSurvey.id)} favorite={favorites.includes(selectedSurvey.id) || selectedSurvey.favorite} onFavorite={toggleFavorite} />
+  if (screen === 'autoMatch') return <AutoMatchScreen onBack={back} profile={profile} surveys={surveys} navigate={navigate} onMatched={addRequest} apiStatus={apiStatus} onAutoMatch={startAutoMatch} />
   if (screen === 'createHub') return <CreateHubScreen navigate={navigate} />
   if (screen === 'aiCreate') return <AISurveyChatScreen onBack={back} navigate={navigate} onGenerate={openGeneratedSurvey} />
   if (screen === 'create') return <CreateSurveyScreen onBack={back} profile={profile} onPublish={publishSurvey} resumeDraft={!screenMeta.fresh} />
-  if (screen === 'participate') return <ParticipateScreen survey={selectedSurvey} onBack={back} onComplete={completeSurvey} isExchange={Boolean(screenMeta.exchangeId)} />
+  if (screen === 'participate') return <ParticipateScreen survey={selectedSurvey} onBack={back} onComplete={completeSurvey} isExchange={Boolean(screenMeta.exchangeId || screenMeta.exchangeDraft)} />
   if (screen === 'respondentResult') return <RespondentResultScreen survey={selectedSurvey} onBack={() => navigate('home')} navigate={navigate} />
   if (screen === 'creatorResults') return <CreatorResultsScreen survey={selectedSurvey} onBack={back} navigate={navigate} />
   if (screen === 'shareSurvey') return <ShareSurveyScreen survey={selectedSurvey} onBack={back} />
   if (screen === 'team') return <EnhancedTeamScreen onBack={back} />
-  if (screen === 'notifications') return <NotificationsScreen navigate={navigate} notifications={notifications} setNotifications={setNotifications} />
+  if (screen === 'notifications') return <NotificationsScreen navigate={navigate} notifications={notifications} setNotifications={setNotifications} onReadNotification={readNotification} onReadAllNotifications={readAllNotifications} />
   if (screen === 'profile') return <ProfileScreen {...common} favoriteIds={favorites} />
-  if (screen === 'profileEdit') return <ProfileEditScreen profile={profile} setProfile={setProfile} onBack={back} />
+  if (screen === 'profileEdit') return <ProfileEditScreen profile={profile} setProfile={setProfile} onBack={back} apiStatus={apiStatus} />
   if (screen === 'mySurveys') return <MySurveysScreen surveys={surveys} setSurveys={setSurveys} requests={requests} setRequests={setRequests} selectedSurvey={selectedSurvey} navigate={navigate} onBack={back} />
   if (screen === 'favorites') return <FavoritesScreen onBack={back} navigate={navigate} />
   if (screen === 'exchangeHistory') return <ExchangeHistoryScreen requests={requests} onBack={back} navigate={navigate} />

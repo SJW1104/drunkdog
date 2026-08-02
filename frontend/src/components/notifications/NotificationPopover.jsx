@@ -6,19 +6,28 @@ export default function NotificationPopover({
   setNotifications,
   navigate,
   onClose,
+  onRead,
+  onReadAll,
 }) {
   const unreadCount = notifications.filter((notice) => !notice.read).length
 
-  const readAll = () => {
+  const readAll = async () => {
     setNotifications((current) => current.map((notice) => ({ ...notice, read: true })))
+    await onReadAll?.()
   }
 
-  const openNotice = (noticeId) => {
-    setNotifications((current) => current.map((notice) => (
-      notice.id === noticeId ? { ...notice, read: true } : notice
+  const openNotice = async (notice) => {
+    setNotifications((current) => current.map((item) => (
+      item.id === notice.id ? { ...item, read: true } : item
     )))
+    await onRead?.(notice.id)
     onClose()
-    navigate('exchange')
+    const screen = notice.target?.screen
+    const targetId = notice.target?.resource_id
+    if (screen === 'survey_results') navigate('creatorResults', targetId)
+    else if (screen === 'survey_detail') navigate('surveyDetail', targetId)
+    else if (screen === 'exchange') navigate('exchangeStatus', targetId)
+    else navigate('exchange')
   }
 
   return (
@@ -55,7 +64,7 @@ export default function NotificationPopover({
               type="button"
               key={notice.id}
               className={notice.read ? 'is-read' : ''}
-              onClick={() => openNotice(notice.id)}
+              onClick={() => openNotice(notice)}
             >
               <i>
                 <Icon
