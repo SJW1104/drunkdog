@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const ACCESS_TOKEN_KEY = 'suniversity-access-token'
+export const API_TOKEN_KEY = 'suniversity-api-token'
+export const API_USER_KEY = 'suniversity-api-user'
+const ACCESS_TOKEN_KEY = API_TOKEN_KEY
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
@@ -23,6 +25,10 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 401) {
+      clearApiSession()
+      window.dispatchEvent(new CustomEvent('suniversity-auth-expired'))
+    }
     const apiError = new Error(
       error.response?.data?.detail || '서버와 통신하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     )
@@ -39,6 +45,21 @@ export const saveAccessToken = (token) => {
 
 export const clearAccessToken = () => {
   window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+}
+
+export function saveApiSession(session) {
+  if (!session?.access_token) return
+  saveAccessToken(session.access_token)
+  window.localStorage.setItem(API_USER_KEY, JSON.stringify(session.user || null))
+}
+
+export function clearApiSession() {
+  clearAccessToken()
+  window.localStorage.removeItem(API_USER_KEY)
+}
+
+export function getApiErrorMessage(error, fallback = '요청을 처리하지 못했어요.') {
+  return error?.userMessage || error?.response?.data?.detail || error?.message || fallback
 }
 
 export const healthApi = {

@@ -25,7 +25,6 @@ import {
 } from './services/surveyAdapters'
 import './App.css'
 import './styles/interaction-polish.css'
-import { createSurveyOnBackend, loadBackendState, startAutoMatchOnBackend, submitSurveyOnBackend } from './services/backend.js'
 
 const QUESTION_TYPES = [
   ['short', '단답형'],
@@ -95,8 +94,6 @@ function isSurveyClosed(survey) {
   return Boolean(survey?.closed) || getDeadlineState(survey?.deadline).expired
 }
 
-// Kept as visual fixture documentation while runtime data comes from the backend.
-// eslint-disable-next-line no-unused-vars
 const initialSurveys = [
   {
     id: 'coffee',
@@ -154,7 +151,6 @@ const initialSurveys = [
   },
 ]
 
-// eslint-disable-next-line no-unused-vars
 const initialRequests = [
   {
     id: 'exchange-incoming',
@@ -197,7 +193,6 @@ const initialRequests = [
   },
 ]
 
-// eslint-disable-next-line no-unused-vars
 const initialNotifications = [
   { id: 1, type: 'exchange', title: '새로운 교환 신청이 도착했어요', body: 'UX리서치팀이 팀 교환을 신청했어요.', time: '방금 전', read: false },
   { id: 2, type: 'complete', title: '상대 팀이 응답을 완료했어요', body: '이제 우리 팀 응답만 완료하면 결과에 반영돼요.', time: '18분 전', read: false },
@@ -1144,8 +1139,6 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
   const [publishing, setPublishing] = useState(false)
   const toastTimer = useRef(null)
   const [titleSuggestions, setTitleSuggestions] = useState(false)
-  const [publishing, setPublishing] = useState(false)
-  const [publishError, setPublishError] = useState('')
   const draftDeadlineState = getDeadlineState(deadline)
   useEffect(() => {
     document.querySelector('.create-page')?.scrollTo({ top: 0, behavior: 'instant' })
@@ -2263,10 +2256,10 @@ function App() {
   const [screen, setScreen] = useState('home')
   const [selectedId, setSelectedId] = useState(null)
   const [screenMeta, setScreenMeta] = useState({})
-  const [surveys, setSurveys] = useState([])
+  const [surveys, setSurveys] = useStoredState('suniversity-new-surveys', initialSurveys)
   const [completed, setCompleted] = useStoredState('suniversity-new-completed', [])
-  const [requests, setRequests] = useState([])
-  const [notifications, setNotifications] = useState([])
+  const [requests, setRequests] = useStoredState('suniversity-new-requests', initialRequests)
+  const [notifications, setNotifications] = useStoredState('suniversity-new-notifications', initialNotifications)
   const [profile, setProfile] = useStoredState('suniversity-new-profile', defaultProfile)
   const [favorites, setFavorites] = useStoredState('suniversity-new-favorites', [])
   const [, setAnswers] = useStoredState('suniversity-new-answers', {})
@@ -2279,18 +2272,26 @@ function App() {
   const unread = notifications.filter((notice) => !notice.read).length
   useEffect(() => {
     let active = true
-    loadBackendState()
-      .then((state) => {
+    const boot = async () => {
+      try {
+        const snapshot = await loadApiSnapshot()
         if (!active) return
-        setSurveys(state.surveys)
-        setRequests(state.exchanges)
-        setNotifications(state.notifications)
-      })
-      .catch((error) => {
-        if (active) setNotifications([{ id: 'backend-error', type: 'deadline', title: '백엔드 연결 실패', body: error.message, time: '방금 전', read: false }])
-      })
+        setSurveys(snapshot.surveys)
+        setCompleted(snapshot.completed)
+        setRequests(snapshot.requests)
+        setNotifications(snapshot.notifications)
+        setProfile((current) => ({ ...current, ...snapshot.profile }))
+        setApiStatus('online')
+        setApiError('')
+      } catch (error) {
+        if (!active) return
+        setApiStatus('offline')
+        setApiError(getApiErrorMessage(error, '백엔드를 실행하면 실제 데이터로 전환돼요.'))
+      }
+    }
+    boot()
     return () => { active = false }
-  }, [])
+  }, [setCompleted, setNotifications, setProfile, setRequests, setSurveys])
   useEffect(() => {
     const syncDeadlines = () => setRequests((current) => current.map((request) => {
       if (!request.deadlineISO || TERMINAL_REQUEST_STATUSES.has(request.status)) return request
@@ -2353,36 +2354,73 @@ function App() {
     return () => window.removeEventListener('suniversity-navigate', handler)
   })
   const publishSurvey = async (survey) => {
-    const published = await createSurveyOnBackend(survey)
-    setSurveys((current) => [published, ...current.filter((item) => item.id !== published.id)])
-    navigate('creatorResults', published.id)
+    if (apiStatus !== 'online') {
+      setSurveys((current) => [survey, ...current.filter((item) => item.id !== survey.id)])
+      navigate('creatorResults', survey.id)
+      return { ok: true, offline: true }
+    }
+    try {
+      const draft = await suniversityApi.createSurvey(toApiSurveyDraft(survey))
+      const published = await suniversityApi.publishSurvey(draft.id)
+      const mapped = fromApiSurvey(published)
+      setSurveys((current) => mergeSurveyLists([mapped], current))
+      navigate('creatorResults', mapped.id, { survey: mapped })
+      return { ok: true, survey: mapped }
+    } catch (error) {
+      return { ok: false, message: getApiErrorMessage(error) }
+    }
   }
   const openGeneratedSurvey = (draft) => {
     localStorage.setItem('suniversity-new-draft', JSON.stringify(draft))
     navigate('create')
   }
   const completeSurvey = async (surveyId, response, isExchange) => {
-    const survey = surveys.find((item) => item.id === surveyId)
-    await submitSurveyOnBackend(survey, response, isExchange ? screenMeta.exchangeId : null)
-    setCompleted((current) => [...new Set([...current, surveyId])])
-    setAnswers((current) => ({ ...current, [surveyId]: response }))
-    if (isExchange && screenMeta.exchangeId) {
-      setRequests((current) => current.map((request) => request.id === screenMeta.exchangeId ? { ...request, ours: request.people, status: 'waiting-partner' } : request))
+    const survey = surveys.find((item) => item.id === surveyId) || selectedSurvey
+    if (apiStatus !== 'online' || !survey?.api) {
+      setCompleted((current) => [...new Set([...current, surveyId])])
+      setAnswers((current) => ({ ...current, [surveyId]: response }))
+      if (isExchange && screenMeta.exchangeId) {
+        setRequests((current) => current.map((request) => request.id === screenMeta.exchangeId ? { ...request, ours: request.people, status: 'waiting-partner' } : request))
+      }
+      return { ok: true, offline: true }
+    }
+    try {
+      const answers = toApiAnswers(survey, response)
+      if (screenMeta.exchangeDraft) {
+        const exchange = await suniversityApi.directExchange({
+          source_survey_id: screenMeta.exchangeDraft.sourceSurveyId,
+          target_survey_id: surveyId,
+          answers,
+        })
+        setRequests((current) => [fromApiExchange(exchange), ...current.filter((item) => item.id !== exchange.id)])
+      } else if (isExchange && screenMeta.exchangeId) {
+        await suniversityApi.respondExchange(screenMeta.exchangeId, answers)
+        const fresh = await suniversityApi.exchanges()
+        setRequests(fresh.map(fromApiExchange))
+      } else {
+        await suniversityApi.submitResponse(surveyId, answers)
+        setCompleted((current) => [...new Set([...current, surveyId])])
+      }
+      setAnswers((current) => ({ ...current, [surveyId]: response }))
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, message: getApiErrorMessage(error) }
     }
   }
-  const addRequest = async (survey, mode, people) => {
-    void mode
-    void people
+  const addRequest = (survey, mode, people) => {
     if (isSurveyClosed(survey)) return { ok: false, message: '이미 응답이 마감된 설문이에요.' }
     const deadlineState = getDeadlineState(survey.deadline)
     if (deadlineState.within24Hours) return { ok: false, message: `마감까지 ${deadlineState.hours}시간 남아 새 교환을 신청할 수 없어요.` }
     const activeRequests = requests.filter((request) => !TERMINAL_REQUEST_STATUSES.has(request.status))
     if (activeRequests.filter((request) => request.surveyId === survey.id).length >= 10) return { ok: false, message: '이 설문은 미완료 교환 신청 10개가 모두 찼어요.' }
     if (activeRequests.some((request) => request.surveyId === survey.id && request.status !== 'incoming')) return { ok: false, message: '이미 진행 중인 교환 신청이 있어요.' }
-    const sourceSurvey = surveys.find((item) => item.mine && !isSurveyClosed(item))
-    if (!sourceSurvey) return { ok: false, message: '먼저 교환에 사용할 내 설문을 게시해 주세요.' }
-    const request = await startAutoMatchOnBackend(sourceSurvey.id)
-    setRequests((current) => [request, ...current.filter((item) => item.id !== request.id)])
+    const sourceSurvey = surveys.find((item) => item.mine && item.status === 'published' && item.exchangeEnabled && !isSurveyClosed(item))
+    if (apiStatus === 'online' && survey.api) {
+      if (!sourceSurvey?.api) return { ok: false, message: '먼저 교환에 사용할 내 설문을 게시해 주세요.' }
+      return { ok: true, navigateToParticipate: true, exchangeDraft: { sourceSurveyId: sourceSurvey.id, mode, people } }
+    }
+    const request = { id: `exchange-${Date.now()}`, type: mode === 'team' ? '팀 교환' : '개인 교환', status: 'requested', sourceSurveyId: sourceSurvey?.id || 'my-demo', surveyId: survey.id, title: survey.title, partner: survey.owner, people: mode === 'team' ? people : 1, ours: 0, theirs: 0, deadline: formatDeadline(survey.deadline), deadlineISO: survey.deadline }
+    setRequests((current) => [request, ...current])
     return { ok: true }
   }
 
