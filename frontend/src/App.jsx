@@ -273,41 +273,31 @@ function BottomNav({ active, navigate }) {
     ['exchange', '설문 교환', 'exchange'],
   ]
   const activeIndex = Math.max(0, items.findIndex(([id]) => id === active))
-  const [selectedIndex, setSelectedIndex] = useState(activeIndex)
-  const [isMoving, setIsMoving] = useState(false)
-
-  useEffect(() => {
-    setSelectedIndex(activeIndex)
-    setIsMoving(false)
-  }, [activeIndex])
-
-  const selectTab = (id, index) => {
-    if (id === active || isMoving) return
-    setSelectedIndex(index)
-    setIsMoving(true)
-    window.setTimeout(() => navigate(id), 440)
+  const selectTab = (id) => {
+    if (id === active) return
+    navigate(id)
   }
 
   return (
     <nav
-      className={`bottom-nav${isMoving ? ' is-moving' : ''}`}
+      className="bottom-nav"
       aria-label="주요 메뉴"
-      style={{ '--active-tab': selectedIndex }}
+      style={{ '--active-tab': activeIndex }}
     >
       <span className="bottom-nav__indicator" aria-hidden="true">
         <Icon
-          name={items[selectedIndex][2]}
-          size={items[selectedIndex][0] === 'aiCreate' ? 27 : 25}
+          name={items[activeIndex][2]}
+          size={items[activeIndex][0] === 'aiCreate' ? 27 : 25}
         />
       </span>
       {items.map(([id, label, icon], index) => (
         <button
           key={id}
           type="button"
-          className={`${selectedIndex === index ? 'is-active' : ''} ${id === 'aiCreate' ? 'nav-create' : ''}`}
+          className={`${activeIndex === index ? 'is-active' : ''} ${id === 'aiCreate' ? 'nav-create' : ''}`}
           aria-current={active === id ? 'page' : undefined}
           aria-label={label}
-          onClick={() => selectTab(id, index)}
+          onClick={() => selectTab(id)}
         >
           <span><Icon name={icon} size={id === 'aiCreate' ? 27 : 25} /></span>
         </button>

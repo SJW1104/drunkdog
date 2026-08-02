@@ -115,16 +115,16 @@
   filter: none;
 }
 
-.bottom-nav.is-moving .bottom-nav__indicator::before {
-  animation: nav-orb-pop 440ms cubic-bezier(.22, 1, .36, 1) both;
+.bottom-nav .bottom-nav__indicator::before {
+  animation: nav-orb-pop 260ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
-.bottom-nav.is-moving .bottom-nav__indicator::after {
-  animation: nav-union-rise 440ms cubic-bezier(.22, 1, .36, 1) both;
+.bottom-nav .bottom-nav__indicator::after {
+  animation: nav-union-rise 260ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
-.bottom-nav.is-moving .bottom-nav__indicator > svg {
-  animation: nav-icon-pop 440ms cubic-bezier(.22, 1, .36, 1) both;
+.bottom-nav .bottom-nav__indicator > svg {
+  animation: nav-icon-pop 260ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 @keyframes nav-union-rise {
@@ -1036,7 +1036,7 @@
 .bottom-nav__indicator {
   width: calc((100% - 16px) / 4);
   transform: translateX(calc(var(--active-tab) * 100%));
-  transition: transform 440ms cubic-bezier(.22, 1, .36, 1);
+  transition: transform 220ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .bottom-nav .nav-create > span {
