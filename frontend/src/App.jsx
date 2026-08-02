@@ -269,7 +269,7 @@ function BottomNav({ active, navigate }) {
   const items = [
     ['home', '홈', 'home'],
     ['community', '커뮤니티', 'users'],
-    ['aiCreate', 'AI 설문 만들기', 'spark'],
+    ['createHub', '설문 만들기', 'plus'],
     ['exchange', '설문 교환', 'exchange'],
   ]
   const activeIndex = Math.max(0, items.findIndex(([id]) => id === active))
@@ -287,19 +287,19 @@ function BottomNav({ active, navigate }) {
       <span className="bottom-nav__indicator" aria-hidden="true">
         <Icon
           name={items[activeIndex][2]}
-          size={items[activeIndex][0] === 'aiCreate' ? 27 : 25}
+          size={items[activeIndex][0] === 'createHub' ? 27 : 25}
         />
       </span>
       {items.map(([id, label, icon], index) => (
         <button
           key={id}
           type="button"
-          className={`${activeIndex === index ? 'is-active' : ''} ${id === 'aiCreate' ? 'nav-create' : ''}`}
+          className={`${activeIndex === index ? 'is-active' : ''} ${id === 'createHub' ? 'nav-create' : ''}`}
           aria-current={active === id ? 'page' : undefined}
           aria-label={label}
           onClick={() => selectTab(id)}
         >
-          <span><Icon name={icon} size={id === 'aiCreate' ? 27 : 25} /></span>
+          <span><Icon name={icon} size={id === 'createHub' ? 27 : 25} /></span>
         </button>
       ))}
     </nav>
@@ -441,9 +441,14 @@ function CommunityScreen({ navigate, surveys, completed }) {
   const [topic, setTopic] = useState('전체')
   const [query, setQuery] = useState('')
   const [liked, setLiked] = useStoredState('suniversity-community-likes', [])
-  const topics = ['전체', '대학생활', '진로·취업', '소비', 'IT·서비스']
-  const openSurveys = surveys.filter((survey) => !isSurveyClosed(survey))
-  const totalParticipants = openSurveys.reduce((sum, survey) => sum + survey.participants, 0)
+  const topics = [
+    { name: '전체', caption: '모든 주제', icon: 'grid' },
+    { name: '대학생활', caption: '캠퍼스', icon: 'users' },
+    { name: '진로·취업', caption: '커리어', icon: 'clipboard' },
+    { name: '소비', caption: '생활·소비', icon: 'heart' },
+    { name: 'IT·서비스', caption: '디지털', icon: 'spark' },
+    { name: '연구·논문', caption: '학술 조사', icon: 'chart' },
+  ]
   const visible = [...surveys]
     .filter((survey) => !isSurveyClosed(survey))
     .filter((survey) => topic === '전체' || survey.category === topic)
@@ -456,13 +461,21 @@ function CommunityScreen({ navigate, surveys, completed }) {
 
   return (
     <div className="screen has-nav community-screen">
-      <TopBar title="커뮤니티" right={<button className="round-icon" type="button" onClick={() => navigate('aiCreate')} aria-label="AI 설문 만들기"><Icon name="spark" /></button>} />
+      <TopBar title="커뮤니티" />
       <main className="page community-page">
-        <section className="community-hero">
-          <span><Icon name="users" size={15} /> UNIVERSITY COMMUNITY</span>
-          <h1>대학생의 생각이<br /><em>설문으로 이어지는 곳</em></h1>
-          <p>관심 있는 설문에 참여하고, 다른 대학생의 이야기도 만나보세요.</p>
-          <div><b>참여 가능한 설문 {openSurveys.length}개</b><i />지금까지 {totalParticipants}명이 참여했어요</div>
+        <section className="community-category-panel">
+          <span>관심 분야를 골라보세요</span>
+          <h1>어떤 이야기가<br /><em>궁금한가요?</em></h1>
+          <p>카테고리를 선택하면 관련 설문만 모아볼 수 있어요.</p>
+          <div className="community-category-grid" aria-label="설문 카테고리">
+            {topics.map((item) => (
+              <button type="button" key={item.name} className={topic === item.name ? 'is-active' : ''} aria-pressed={topic === item.name} onClick={() => setTopic(item.name)}>
+                <i><Icon name={item.icon} size={20} /></i>
+                <b>{item.name}</b>
+                <small>{item.caption}</small>
+              </button>
+            ))}
+          </div>
         </section>
 
         <div className="community-feed-tabs" role="tablist" aria-label="커뮤니티 설문 분류">
@@ -471,9 +484,6 @@ function CommunityScreen({ navigate, surveys, completed }) {
         </div>
 
         <label className="search-field community-search"><Icon name="search" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="커뮤니티 설문 검색" /></label>
-        <div className="community-topics" aria-label="설문 주제">
-          {topics.map((item) => <button type="button" key={item} className={topic === item ? 'is-active' : ''} onClick={() => setTopic(item)}>{item}</button>)}
-        </div>
 
         <section className="community-feed" aria-live="polite">
           <div className="community-feed-title"><span>{feed === 'hot' ? '🔥 HOT NOW' : '🆕 JUST POSTED'}</span><b>{visible.length}개의 설문</b></div>
@@ -495,7 +505,44 @@ function CommunityScreen({ navigate, surveys, completed }) {
           {!visible.length ? <div className="community-empty"><Icon name="search" /><b>조건에 맞는 설문이 없어요</b><p>다른 주제나 검색어로 다시 찾아보세요.</p><button type="button" onClick={() => { setTopic('전체'); setQuery('') }}>필터 초기화</button></div> : null}
         </section>
       </main>
+      <button className="community-create-fab" type="button" onClick={() => navigate('create')} aria-label="직접 설문 만들기"><Icon name="plus" size={25} /></button>
       <BottomNav active="community" navigate={navigate} />
+    </div>
+  )
+}
+
+function CreateHubScreen({ navigate }) {
+  const hasDraft = Boolean(localStorage.getItem('suniversity-new-draft'))
+
+  return (
+    <div className="screen has-nav create-hub-screen">
+      <TopBar title="설문 만들기" />
+      <main className="page create-hub-page">
+        <section className="create-hub-intro">
+          <span><Icon name="plus" size={14} /> CREATE SURVEY</span>
+          <h1>나에게 맞는 방식으로<br /><em>설문을 시작해요.</em></h1>
+          <p>AI와 대화하며 빠르게 만들거나, 원하는 문항을 직접 구성할 수 있어요.</p>
+        </section>
+
+        <section className="create-methods" aria-label="설문 제작 방식 선택">
+          <button className="create-method create-method--ai" type="button" onClick={() => navigate('aiCreate')}>
+            <span className="create-method-badge"><Icon name="spark" size={12} /> 첫 번째 추천</span>
+            <i><Icon name="spark" size={27} /></i>
+            <div><b>AI와 대화하며 만들기</b><p>목적과 대상만 알려주면 제목과 문항을 함께 완성해요.</p><small>약 1분 · 처음 만드는 분께 추천</small></div>
+            <Icon name="chevron" size={18} />
+          </button>
+          <button className="create-method create-method--manual" type="button" onClick={() => navigate('create')}>
+            <i><Icon name="edit" size={25} /></i>
+            <div><b>직접 설계하기</b><p>질문 유형과 세부 설정을 하나씩 자유롭게 구성해요.</p><small>세밀한 설정이 필요할 때</small></div>
+            <Icon name="chevron" size={18} />
+          </button>
+        </section>
+
+        {hasDraft ? <button type="button" className="create-hub-draft" onClick={() => navigate('create')}><i><Icon name="file" size={20} /></i><span><b>작성 중인 설문이 있어요</b><small>임시저장한 내용부터 이어서 작성하기</small></span><Icon name="chevron" size={17} /></button> : null}
+
+        <section className="create-hub-tip"><Icon name="spark" size={18} /><div><b>무엇을 고를지 고민되나요?</b><p>처음이라면 AI 제작을 선택해 보세요. 완성된 문항은 직접 수정할 수 있어요.</p></div></section>
+      </main>
+      <BottomNav active="createHub" navigate={navigate} />
     </div>
   )
 }
@@ -1885,6 +1932,7 @@ function App() {
   if (screen === 'exchange') return <ExchangeScreen {...common} />
   if (screen === 'surveyDetail') return <SurveyDetailScreen survey={selectedSurvey} onBack={back} navigate={navigate} profile={profile} onRequest={addRequest} completed={completed.includes(selectedSurvey.id)} favorite={favorites.includes(selectedSurvey.id)} onFavorite={(id) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} />
   if (screen === 'autoMatch') return <AutoMatchScreen onBack={back} profile={profile} surveys={surveys} navigate={navigate} onMatched={addRequest} />
+  if (screen === 'createHub') return <CreateHubScreen navigate={navigate} />
   if (screen === 'aiCreate') return <AISurveyChatScreen onBack={back} navigate={navigate} onGenerate={openGeneratedSurvey} />
   if (screen === 'create') return <CreateSurveyScreen onBack={back} profile={profile} onPublish={publishSurvey} />
   if (screen === 'participate') return <ParticipateScreen survey={selectedSurvey} onBack={back} onComplete={completeSurvey} isExchange={Boolean(screenMeta.exchangeId)} />
