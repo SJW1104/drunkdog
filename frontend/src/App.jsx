@@ -5,7 +5,6 @@ import DesignSelect from './components/ui/DesignSelect'
 import Icon from './components/ui/Icon'
 import aiHeroBackground from './assets/ai-hero-background.svg'
 import aiHeroButton from './assets/ai-hero-button.svg'
-import aiHeroPuzzle from './assets/ai-hero-puzzle.svg'
 import autoMatchPuzzleBlue from './assets/auto-match-puzzle-blue.svg'
 import autoMatchPuzzlesCombined from './assets/auto-match-puzzles-combined.svg'
 import respondentSimilarPuzzles from './assets/respondent-similar-puzzles.svg'
@@ -405,7 +404,7 @@ function HomeScreen({ navigate, surveys, completed, profile, unread, notificatio
             <p>대화로 목적과 대상을 정하고,<br />제목·문항을 한 번에 자동 생성해요.</p>
             <button type="button" onClick={() => navigate('aiCreate')}><img src={aiHeroButton} alt="" aria-hidden="true" /><span>AI와 대화 시작</span><Icon name="chevron" size={16} /></button>
           </div>
-          <img className="ai-hero__puzzle" src={aiHeroPuzzle} alt="" aria-hidden="true" />
+          <img className="ai-hero__puzzle ai-hero__official-logo" src={suniversityLogo} alt="" aria-hidden="true" />
         </section>
 
         <section className="exchange-snapshot">

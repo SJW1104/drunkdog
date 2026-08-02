@@ -345,6 +345,13 @@
   pointer-events: none;
 }
 
+.ai-hero__official-logo {
+  right: 18px;
+  bottom: 14px;
+  width: 166px;
+  height: auto;
+}
+
 .mini-mascots--svg {
   width: 62px;
   height: 58px;
@@ -996,6 +1003,13 @@
     right: 24px;
     width: 128px;
     height: 130px;
+  }
+
+  .ai-hero__official-logo {
+    right: 16px;
+    bottom: 16px;
+    width: 148px;
+    height: auto;
   }
 }
 
