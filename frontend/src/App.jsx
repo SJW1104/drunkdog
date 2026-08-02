@@ -13,6 +13,7 @@ import miniPuzzlePink from './assets/mini-puzzle-pink-flat.svg'
 import suniversityLogo from './assets/suniversity-logo.png'
 import './App.css'
 import './styles/interaction-polish.css'
+import { createSurveyOnBackend, loadBackendState, startAutoMatchOnBackend, submitSurveyOnBackend } from './services/backend.js'
 
 const QUESTION_TYPES = [
   ['short', '단답형'],
@@ -82,6 +83,8 @@ function isSurveyClosed(survey) {
   return Boolean(survey?.closed) || getDeadlineState(survey?.deadline).expired
 }
 
+// Kept as visual fixture documentation while runtime data comes from the backend.
+// eslint-disable-next-line no-unused-vars
 const initialSurveys = [
   {
     id: 'coffee',
@@ -139,6 +142,7 @@ const initialSurveys = [
   },
 ]
 
+// eslint-disable-next-line no-unused-vars
 const initialRequests = [
   {
     id: 'exchange-incoming',
@@ -181,6 +185,7 @@ const initialRequests = [
   },
 ]
 
+// eslint-disable-next-line no-unused-vars
 const initialNotifications = [
   { id: 1, type: 'exchange', title: '새로운 교환 신청이 도착했어요', body: 'UX리서치팀이 팀 교환을 신청했어요.', time: '방금 전', read: false },
   { id: 2, type: 'complete', title: '상대 팀이 응답을 완료했어요', body: '이제 우리 팀 응답만 완료하면 결과에 반영돼요.', time: '18분 전', read: false },
@@ -787,7 +792,7 @@ function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
             <h2>{match.title}</h2>
             <div><span>{match.band}</span><span>{mode === 'team' ? `${people}명 교환` : '1:1 교환'}</span><span>{match.minutes}분 예상</span></div>
           </article>
-          <div className="match-result-actions"><button type="button" className="secondary-button" onClick={() => { setMatchError(''); setPhase('setup') }}>다시 찾기</button><button type="button" className="primary-button" onClick={() => { const result = onMatched(match, mode, people); if (result?.ok === false) { setMatchError(result.message); setPhase('setup'); return } navigate('exchange') }}>이 팀과 교환하기</button></div>
+          <div className="match-result-actions"><button type="button" className="secondary-button" onClick={() => { setMatchError(''); setPhase('setup') }}>다시 찾기</button><button type="button" className="primary-button" onClick={async () => { try { const result = await onMatched(match, mode, people); if (result?.ok === false) { setMatchError(result.message); setPhase('setup'); return } navigate('exchange') } catch (error) { setMatchError(error.message); setPhase('setup') } }}>이 팀과 교환하기</button></div>
         </div> : null}
       </main>
     </div>
@@ -1016,6 +1021,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
   const [quizMode, setQuizMode] = useState(savedDraft?.quizMode || false)
   const [confirmationMessage, setConfirmationMessage] = useState(savedDraft?.confirmationMessage || '응답해 주셔서 감사합니다!')
   const [toast, setToast] = useState('')
+  const [publishing, setPublishing] = useState(false)
   const toastTimer = useRef(null)
   const [titleSuggestions, setTitleSuggestions] = useState(false)
   const draftDeadlineState = getDeadlineState(deadline)
@@ -1038,7 +1044,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
     showToast('임시저장했어요')
   }
   const addQuestion = (type = 'single') => setQuestions((current) => [...current, { ...emptyQuestion(), type }])
-  const publish = () => {
+  const publish = async () => {
     const survey = {
       id: `mine-${Date.now()}`,
       owner: profile.name,
@@ -1060,8 +1066,15 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
       mine: true,
       settings: { collectEmail, oneResponse, allowEdit, quizMode, confirmationMessage, publicResult },
     }
-    localStorage.removeItem('suniversity-new-draft')
-    onPublish(survey)
+    try {
+      setPublishing(true)
+      await onPublish(survey)
+      localStorage.removeItem('suniversity-new-draft')
+    } catch (error) {
+      showToast(error.message)
+    } finally {
+      setPublishing(false)
+    }
   }
   const nextDisabled = step === 1 && !title.trim()
   return (
@@ -1125,7 +1138,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) 
         </section> : null}
       </main>
       <footer className="create-footer">
-        {step < 4 ? <button type="button" className="primary-button" disabled={nextDisabled} onClick={() => setStep(step + 1)}>다음 단계 <span>{step}/4</span></button> : <button type="button" className="primary-button" onClick={publish}>무료로 설문 게시하기</button>}
+        {step < 4 ? <button type="button" className="primary-button" disabled={nextDisabled} onClick={() => setStep(step + 1)}>다음 단계 <span>{step}/4</span></button> : <button type="button" className="primary-button" disabled={publishing} onClick={publish}>{publishing ? '서버에 게시 중...' : '무료로 설문 게시하기'}</button>}
       </footer>
       {showGuide ? <Modal onClose={() => setShowGuide(false)} className="guide-modal">
         <button type="button" className="modal-close guide-close" onClick={() => setShowGuide(false)} aria-label="가이드 닫기"><Icon name="close" size={18} /></button>
@@ -1217,6 +1230,8 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const question = questions[index]
   const currentAnswer = answers[question?.id]
   const answered = question && (!question.required || (Array.isArray(currentAnswer) ? currentAnswer.length > 0 : currentAnswer !== undefined && currentAnswer !== ''))
@@ -1224,11 +1239,19 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
   useEffect(() => {
     document.querySelector('.question-page')?.scrollTo({ top: 0, behavior: 'instant' })
   }, [index])
-  const next = () => {
+  const next = async () => {
     if (index < questions.length - 1) setIndex(index + 1)
     else {
-      setSubmitted(true)
-      onComplete(survey.id, answers, isExchange)
+      try {
+        setSubmitting(true)
+        setSubmitError('')
+        await onComplete(survey.id, answers, isExchange)
+        setSubmitted(true)
+      } catch (error) {
+        setSubmitError(error.message)
+      } finally {
+        setSubmitting(false)
+      }
     }
   }
   if (closed) return (
@@ -1254,10 +1277,11 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
         {question.description ? <p>{question.description}</p> : <p>솔직한 생각을 편하게 골라주세요.</p>}
         <QuestionResponse question={question} value={currentAnswer} onChange={update} />
         {question.required && !answered ? <small className="required-hint">필수 질문이에요.</small> : null}
+        {submitError ? <small className="required-hint">{submitError}</small> : null}
       </main>
       <footer className="participate-footer">
         <button type="button" className="secondary-button" disabled={index === 0} onClick={() => setIndex(index - 1)}>이전</button>
-        <button type="button" className="primary-button" disabled={!answered} onClick={next}>{index === questions.length - 1 ? '응답 제출하기' : '다음'}</button>
+        <button type="button" className="primary-button" disabled={!answered || submitting} onClick={next}>{submitting ? '서버에 제출 중...' : index === questions.length - 1 ? '응답 제출하기' : '다음'}</button>
       </footer>
     </div>
   )
@@ -1882,10 +1906,10 @@ function App() {
   const [screen, setScreen] = useState('home')
   const [selectedId, setSelectedId] = useState(null)
   const [screenMeta, setScreenMeta] = useState({})
-  const [surveys, setSurveys] = useStoredState('suniversity-new-surveys', initialSurveys)
+  const [surveys, setSurveys] = useState([])
   const [completed, setCompleted] = useStoredState('suniversity-new-completed', [])
-  const [requests, setRequests] = useStoredState('suniversity-new-requests', initialRequests)
-  const [notifications, setNotifications] = useStoredState('suniversity-new-notifications', initialNotifications)
+  const [requests, setRequests] = useState([])
+  const [notifications, setNotifications] = useState([])
   const [profile, setProfile] = useStoredState('suniversity-new-profile', defaultProfile)
   const [favorites, setFavorites] = useStoredState('suniversity-new-favorites', [])
   const [, setAnswers] = useStoredState('suniversity-new-answers', {})
@@ -1893,6 +1917,20 @@ function App() {
   const selectedSurvey = screenMeta.survey || surveys.find((survey) => survey.id === selectedId) || surveys[0]
   const selectedRequest = requests.find((request) => request.id === selectedId)
   const unread = notifications.filter((notice) => !notice.read).length
+  useEffect(() => {
+    let active = true
+    loadBackendState()
+      .then((state) => {
+        if (!active) return
+        setSurveys(state.surveys)
+        setRequests(state.exchanges)
+        setNotifications(state.notifications)
+      })
+      .catch((error) => {
+        if (active) setNotifications([{ id: 'backend-error', type: 'deadline', title: '백엔드 연결 실패', body: error.message, time: '방금 전', read: false }])
+      })
+    return () => { active = false }
+  }, [])
   useEffect(() => {
     const syncDeadlines = () => setRequests((current) => current.map((request) => {
       if (!request.deadlineISO || TERMINAL_REQUEST_STATUSES.has(request.status)) return request
@@ -1944,22 +1982,27 @@ function App() {
     window.addEventListener('suniversity-navigate', handler)
     return () => window.removeEventListener('suniversity-navigate', handler)
   })
-  const publishSurvey = (survey) => {
-    setSurveys((current) => [survey, ...current.filter((item) => item.id !== survey.id)])
-    navigate('creatorResults', survey.id)
+  const publishSurvey = async (survey) => {
+    const published = await createSurveyOnBackend(survey)
+    setSurveys((current) => [published, ...current.filter((item) => item.id !== published.id)])
+    navigate('creatorResults', published.id)
   }
   const openGeneratedSurvey = (draft) => {
     localStorage.setItem('suniversity-new-draft', JSON.stringify(draft))
     navigate('create')
   }
-  const completeSurvey = (surveyId, response, isExchange) => {
+  const completeSurvey = async (surveyId, response, isExchange) => {
+    const survey = surveys.find((item) => item.id === surveyId)
+    await submitSurveyOnBackend(survey, response, isExchange ? screenMeta.exchangeId : null)
     setCompleted((current) => [...new Set([...current, surveyId])])
     setAnswers((current) => ({ ...current, [surveyId]: response }))
     if (isExchange && screenMeta.exchangeId) {
       setRequests((current) => current.map((request) => request.id === screenMeta.exchangeId ? { ...request, ours: request.people, status: 'waiting-partner' } : request))
     }
   }
-  const addRequest = (survey, mode, people) => {
+  const addRequest = async (survey, mode, people) => {
+    void mode
+    void people
     if (isSurveyClosed(survey)) return { ok: false, message: '이미 응답이 마감된 설문이에요.' }
     const deadlineState = getDeadlineState(survey.deadline)
     if (deadlineState.within24Hours) return { ok: false, message: `마감까지 ${deadlineState.hours}시간 남아 새 교환을 신청할 수 없어요.` }
@@ -1967,8 +2010,9 @@ function App() {
     if (activeRequests.filter((request) => request.surveyId === survey.id).length >= 10) return { ok: false, message: '이 설문은 미완료 교환 신청 10개가 모두 찼어요.' }
     if (activeRequests.some((request) => request.surveyId === survey.id && request.status !== 'incoming')) return { ok: false, message: '이미 진행 중인 교환 신청이 있어요.' }
     const sourceSurvey = surveys.find((item) => item.mine && !isSurveyClosed(item))
-    const request = { id: `exchange-${Date.now()}`, type: mode === 'team' ? '팀 교환' : '개인 교환', status: 'requested', sourceSurveyId: sourceSurvey?.id || 'my-demo', surveyId: survey.id, title: survey.title, partner: survey.owner, people: mode === 'team' ? people : 1, ours: 0, theirs: 0, deadline: formatDeadline(survey.deadline), deadlineISO: survey.deadline }
-    setRequests((current) => [request, ...current])
+    if (!sourceSurvey) return { ok: false, message: '먼저 교환에 사용할 내 설문을 게시해 주세요.' }
+    const request = await startAutoMatchOnBackend(sourceSurvey.id)
+    setRequests((current) => [request, ...current.filter((item) => item.id !== request.id)])
     return { ok: true }
   }
 

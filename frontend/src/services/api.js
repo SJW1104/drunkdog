@@ -72,8 +72,42 @@ export const surveyApi = {
     return data
   },
 
+  async publish(surveyId) {
+    const { data } = await apiClient.post(`/surveys/${surveyId}/publish`)
+    return data
+  },
+
   async submitResponse(surveyId, payload) {
     const { data } = await apiClient.post(`/surveys/${surveyId}/responses`, payload)
+    return data
+  },
+}
+
+export const exchangeApi = {
+  async getAll(params = {}) {
+    const { data } = await apiClient.get('/exchanges', { params })
+    return data
+  },
+
+  async getRecommendations(surveyId) {
+    const { data } = await apiClient.get('/exchanges/recommendations', {
+      params: { survey_id: surveyId },
+    })
+    return data
+  },
+
+  async createDirect(payload) {
+    const { data } = await apiClient.post('/exchanges/direct', payload)
+    return data
+  },
+
+  async enqueueAuto(surveyId) {
+    const { data } = await apiClient.post('/exchanges/auto/queue', { survey_id: surveyId })
+    return data
+  },
+
+  async submitResponse(exchangeId, payload) {
+    const { data } = await apiClient.post(`/exchanges/${exchangeId}/responses`, payload)
     return data
   },
 }
