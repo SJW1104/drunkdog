@@ -3095,21 +3095,28 @@ button:disabled {
 }
 
 .donut {
+  position: relative;
   display: grid;
   width: 124px;
   height: 124px;
+  overflow: hidden;
   place-items: center;
+  isolation: isolate;
   border-radius: 50%;
   background: conic-gradient(var(--blue-strong) 0 35%, var(--purple-strong) 35% 63%, var(--pink-strong) 63% 84%, #f4dfbd 84% 100%);
 }
 
 .donut::before {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
   width: 75px;
   height: 75px;
   border-radius: 50%;
   background: var(--white);
   content: "";
+  transform: translate(-50%, -50%);
 }
 
 .donut strong {
