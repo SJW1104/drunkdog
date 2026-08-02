@@ -505,7 +505,7 @@ function CommunityScreen({ navigate, surveys, completed }) {
           {!visible.length ? <div className="community-empty"><Icon name="search" /><b>조건에 맞는 설문이 없어요</b><p>다른 주제나 검색어로 다시 찾아보세요.</p><button type="button" onClick={() => { setTopic('전체'); setQuery('') }}>필터 초기화</button></div> : null}
         </section>
       </main>
-      <button className="community-create-fab" type="button" onClick={() => navigate('create')} aria-label="직접 설문 만들기"><Icon name="plus" size={25} /></button>
+      <button className="community-create-fab" type="button" onClick={() => navigate('create', null, { fresh: true })} aria-label="직접 설문 만들기"><Icon name="plus" size={25} /></button>
       <BottomNav active="community" navigate={navigate} />
     </div>
   )
@@ -531,7 +531,7 @@ function CreateHubScreen({ navigate }) {
             <div><b>AI와 대화하며 만들기</b><p>목적과 대상만 알려주면 제목과 문항을 함께 완성해요.</p><small>약 1분 · 처음 만드는 분께 추천</small></div>
             <Icon name="chevron" size={18} />
           </button>
-          <button className="create-method create-method--manual" type="button" onClick={() => navigate('create')}>
+          <button className="create-method create-method--manual" type="button" onClick={() => navigate('create', null, { fresh: true })}>
             <i><Icon name="edit" size={25} /></i>
             <div><b>직접 설계하기</b><p>질문 유형과 세부 설정을 하나씩 자유롭게 구성해요.</p><small>세밀한 설정이 필요할 때</small></div>
             <Icon name="chevron" size={18} />
@@ -933,7 +933,7 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
         {quickReplies.length ? <div className="ai-quick-replies">{quickReplies.map((reply) => <button type="button" key={reply} onClick={() => submitAnswer(reply)}>{reply}<Icon name="chevron" size={13} /></button>)}</div> : null}
       </main>
       <footer className="ai-chat-composer">
-        {stage === 'ready' ? <div className="ai-ready-actions"><button type="button" onClick={restartConversation}><Icon name="back" size={14} /> 조건 다시 정하기</button><button type="button" className="manual-create-link" onClick={() => navigate('create')}>직접 만들기 <Icon name="chevron" size={14} /></button></div> : <>
+        {stage === 'ready' ? <div className="ai-ready-actions"><button type="button" onClick={restartConversation}><Icon name="back" size={14} /> 조건 다시 정하기</button><button type="button" className="manual-create-link" onClick={() => navigate('create', null, { fresh: true })}>직접 만들기 <Icon name="chevron" size={14} /></button></div> : <>
           <input aria-label="AI 설문 도우미에게 메시지 보내기" value={input} disabled={stage === 'thinking'} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) submitAnswer(input) }} placeholder={stage === 'purpose' ? '설문 목적을 입력해 주세요' : stage === 'audience' ? '응답 대상을 입력해 주세요' : '3~10개 사이 문항 수를 입력해 주세요'} />
           <button type="button" disabled={!input.trim() || stage === 'thinking'} onClick={() => submitAnswer(input)} aria-label="메시지 보내기"><Icon name="chevron" /></button>
         </>}
@@ -942,9 +942,10 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
   )
 }
 
-function CreateSurveyScreen({ onBack, onPublish, profile }) {
+function CreateSurveyScreen({ onBack, onPublish, profile, resumeDraft = true }) {
   const emptyQuestion = () => ({ id: crypto.randomUUID(), type: 'single', text: '', description: '', options: ['선택지 1', '선택지 2'], rows: ['행 1', '행 2'], columns: ['열 1', '열 2'], required: true, shuffle: false, other: false, validation: 'none', min: 1, max: 5, branch: 'next' })
   const savedDraft = (() => {
+    if (!resumeDraft) return null
     try { return JSON.parse(localStorage.getItem('suniversity-new-draft')) } catch { return null }
   })()
   const [step, setStep] = useState(savedDraft?.step || 1)
@@ -1576,7 +1577,7 @@ function MySurveysScreen({ surveys, setSurveys, requests, setRequests, selectedS
   }
   return (
     <div className="screen">
-      <TopBar title="내 설문 관리" onBack={onBack} right={<button type="button" className="round-icon" onClick={() => navigate('create')}><Icon name="plus" /></button>} />
+      <TopBar title="내 설문 관리" onBack={onBack} right={<button type="button" className="round-icon" onClick={() => navigate('create', null, { fresh: true })}><Icon name="plus" /></button>} />
       <main className="page manage-page">
         <section className="manage-summary"><span><b>{list.length}</b><small>게시한 설문</small></span><span><b>{list.reduce((sum, survey) => sum + survey.participants, 0)}</b><small>모은 응답</small></span><span><b>{activeExchangeCount}</b><small>진행 교환</small></span></section>
         {hasDraft ? <button type="button" className="draft-banner" onClick={() => navigate('create')}><i><Icon name="edit" /></i><span><b>작성 중인 임시저장이 있어요</b><small>이어서 문항을 완성해 보세요.</small></span><Icon name="chevron" /></button> : null}
@@ -1934,7 +1935,7 @@ function App() {
   if (screen === 'autoMatch') return <AutoMatchScreen onBack={back} profile={profile} surveys={surveys} navigate={navigate} onMatched={addRequest} />
   if (screen === 'createHub') return <CreateHubScreen navigate={navigate} />
   if (screen === 'aiCreate') return <AISurveyChatScreen onBack={back} navigate={navigate} onGenerate={openGeneratedSurvey} />
-  if (screen === 'create') return <CreateSurveyScreen onBack={back} profile={profile} onPublish={publishSurvey} />
+  if (screen === 'create') return <CreateSurveyScreen onBack={back} profile={profile} onPublish={publishSurvey} resumeDraft={!screenMeta.fresh} />
   if (screen === 'participate') return <ParticipateScreen survey={selectedSurvey} onBack={back} onComplete={completeSurvey} isExchange={Boolean(screenMeta.exchangeId)} />
   if (screen === 'respondentResult') return <RespondentResultScreen survey={selectedSurvey} onBack={() => navigate('home')} navigate={navigate} />
   if (screen === 'creatorResults') return <CreatorResultsScreen survey={selectedSurvey} onBack={back} navigate={navigate} />
