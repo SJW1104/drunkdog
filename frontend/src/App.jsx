@@ -11,7 +11,7 @@ import autoMatchPuzzlesCombined from './assets/auto-match-puzzles-combined.svg'
 import respondentSimilarPuzzles from './assets/respondent-similar-puzzles.svg'
 import miniPuzzleBlue from './assets/mini-puzzle-blue-flat.svg'
 import miniPuzzlePink from './assets/mini-puzzle-pink-flat.svg'
-import puzzleMainComplete from './assets/puzzle-main-complete.svg'
+import suniversityLogo from './assets/suniversity-logo.png'
 import './App.css'
 import './styles/interaction-polish.css'
 
@@ -238,10 +238,7 @@ function useStoredState(key, initialValue) {
 function BrandMark({ compact = false }) {
   return (
     <div className={compact ? 'brand brand--compact' : 'brand'}>
-      <span className="brand-puzzle brand-puzzle--layers" aria-hidden="true">
-        <img className="puzzle-layer puzzle-layer--complete" src={puzzleMainComplete} alt="" />
-      </span>
-      <strong><b>SUNi</b>VERSiTY</strong>
+      <img className="brand-logo-image" src={suniversityLogo} alt="SUNiVERSiTY" />
     </div>
   )
 }

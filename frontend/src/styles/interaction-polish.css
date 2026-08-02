@@ -33,6 +33,17 @@
   height: 31px;
 }
 
+.brand-logo-image {
+  display: block;
+  width: 156px;
+  height: auto;
+  object-fit: contain;
+}
+
+.brand--compact .brand-logo-image {
+  width: 116px;
+}
+
 .bottom-nav {
   --nav-surface: #fff;
   position: absolute;
@@ -1014,6 +1025,7 @@
 }
 
 .topbar--brand {
+  min-height: 88px;
   padding-right: 13px;
   padding-left: 14px;
   grid-template-columns: 1fr auto;
