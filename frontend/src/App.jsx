@@ -234,10 +234,18 @@ function MiniPuzzlePair() {
 }
 
 function TopBar({ title, onBack, right, brand = false }) {
+  if (brand) {
+    return (
+      <header className="topbar topbar--brand">
+        <BrandMark compact />
+        {right || <span className="topbar-space" />}
+      </header>
+    )
+  }
   return (
     <header className="topbar">
       {onBack ? <button className="round-icon" type="button" onClick={onBack} aria-label="뒤로 가기"><Icon name="back" /></button> : <span className="topbar-space" />}
-      {brand ? <BrandMark compact /> : <strong>{title}</strong>}
+      <strong>{title}</strong>
       {right || <span className="topbar-space" />}
     </header>
   )
@@ -246,7 +254,8 @@ function TopBar({ title, onBack, right, brand = false }) {
 function BottomNav({ active, navigate }) {
   const items = [
     ['home', '홈', 'home'],
-    ['create', '설문 만들기', 'plus'],
+    ['community', '커뮤니티', 'users'],
+    ['aiCreate', 'AI 설문 만들기', 'spark'],
     ['exchange', '설문 교환', 'exchange'],
   ]
   const activeIndex = Math.max(0, items.findIndex(([id]) => id === active))
@@ -274,19 +283,19 @@ function BottomNav({ active, navigate }) {
       <span className="bottom-nav__indicator" aria-hidden="true">
         <Icon
           name={items[selectedIndex][2]}
-          size={items[selectedIndex][0] === 'create' ? 31 : 28}
+          size={items[selectedIndex][0] === 'aiCreate' ? 27 : 25}
         />
       </span>
       {items.map(([id, label, icon], index) => (
         <button
           key={id}
           type="button"
-          className={`${selectedIndex === index ? 'is-active' : ''} ${id === 'create' ? 'nav-create' : ''}`}
+          className={`${selectedIndex === index ? 'is-active' : ''} ${id === 'aiCreate' ? 'nav-create' : ''}`}
           aria-current={active === id ? 'page' : undefined}
           aria-label={label}
           onClick={() => selectTab(id, index)}
         >
-          <span><Icon name={icon} size={id === 'create' ? 31 : 28} /></span>
+          <span><Icon name={icon} size={id === 'aiCreate' ? 27 : 25} /></span>
         </button>
       ))}
     </nav>
@@ -380,10 +389,10 @@ function HomeScreen({ navigate, surveys, completed, profile, unread, notificatio
             <path vectorEffect="non-scaling-stroke" d="M8 1.8C26 1.1 39 2.5 55 1.7C70 1 86 1.3 92 2.4C96.4 3.4 98.3 7.1 98.1 13C97.7 31 98.8 47 98 64C97.3 80 98.1 89 95.1 94C92.4 98.2 87 98.4 80 98C61 97.2 45 98.8 28 98C16 97.5 8.2 98.7 4.3 94.4C1.1 90.8 1.8 84 1.9 76C2.2 58 1.1 42 2 25C2.4 14 1.2 7.5 4.7 4.2C5.6 3.3 6.7 2.5 8 1.8Z" />
           </svg>
           <div>
-            <span><Icon name="spark" size={16} /> AI 설문 제작</span>
-            <h2>아이디어만 알려주세요.<br />문항은 <em>AI</em>가<br />다듬어드릴게요.</h2>
-            <p>제목 추천부터 쉬운 대화체 문항,<br />예상 응답 시간까지 한 번에.</p>
-            <button type="button" onClick={() => navigate('create')}><img src={aiHeroButton} alt="" aria-hidden="true" /><span>AI와 설문 만들기</span><Icon name="chevron" size={16} /></button>
+            <span><Icon name="spark" size={16} /> AI 자동 설문 제작</span>
+            <h2>아이디어만 말하면<br /><em>AI</em>가 설문을<br />완성해드려요.</h2>
+            <p>대화로 목적과 대상을 정하고,<br />제목·문항을 한 번에 자동 생성해요.</p>
+            <button type="button" onClick={() => navigate('aiCreate')}><img src={aiHeroButton} alt="" aria-hidden="true" /><span>AI와 대화 시작</span><Icon name="chevron" size={16} /></button>
           </div>
           <img className="ai-hero__puzzle" src={aiHeroPuzzle} alt="" aria-hidden="true" />
         </section>
@@ -417,6 +426,68 @@ function HomeScreen({ navigate, surveys, completed, profile, unread, notificatio
         </section>
       </main>
       <BottomNav active="home" navigate={navigate} unread={unread} />
+    </div>
+  )
+}
+
+function CommunityScreen({ navigate, surveys, completed }) {
+  const [feed, setFeed] = useState('hot')
+  const [topic, setTopic] = useState('전체')
+  const [query, setQuery] = useState('')
+  const [liked, setLiked] = useState([])
+  const topics = ['전체', '대학생활', '진로·취업', '소비', 'IT·서비스']
+  const visible = [...surveys]
+    .filter((survey) => !isSurveyClosed(survey))
+    .filter((survey) => topic === '전체' || survey.category === topic)
+    .filter((survey) => `${survey.title} ${survey.description} ${survey.category}`.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => feed === 'hot'
+      ? Number(b.hot) - Number(a.hot) || (b.participants / b.target) - (a.participants / a.target)
+      : Number(b.mine) - Number(a.mine) || b.id.localeCompare(a.id))
+
+  const toggleLike = (id) => setLiked((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+
+  return (
+    <div className="screen has-nav community-screen">
+      <TopBar title="커뮤니티" right={<button className="round-icon" type="button" onClick={() => navigate('aiCreate')} aria-label="AI 설문 만들기"><Icon name="spark" /></button>} />
+      <main className="page community-page">
+        <section className="community-hero">
+          <span><Icon name="users" size={15} /> UNIVERSITY COMMUNITY</span>
+          <h1>대학생의 생각이<br /><em>설문으로 이어지는 곳</em></h1>
+          <p>관심 있는 설문에 참여하고, 다른 대학생의 이야기도 만나보세요.</p>
+          <div><b>오늘 새 설문 12개</b><i />지금 286명이 참여 중</div>
+        </section>
+
+        <div className="community-feed-tabs" role="tablist" aria-label="커뮤니티 설문 분류">
+          <button type="button" role="tab" aria-selected={feed === 'hot'} className={feed === 'hot' ? 'is-active' : ''} onClick={() => setFeed('hot')}><Icon name="spark" size={18} /><span><b>핫한 설문</b><small>지금 반응이 많아요</small></span></button>
+          <button type="button" role="tab" aria-selected={feed === 'recent'} className={feed === 'recent' ? 'is-active' : ''} onClick={() => setFeed('recent')}><Icon name="clock" size={18} /><span><b>최근 등록</b><small>새로운 설문이에요</small></span></button>
+        </div>
+
+        <label className="search-field community-search"><Icon name="search" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="커뮤니티 설문 검색" /></label>
+        <div className="community-topics" aria-label="설문 주제">
+          {topics.map((item) => <button type="button" key={item} className={topic === item ? 'is-active' : ''} onClick={() => setTopic(item)}>{item}</button>)}
+        </div>
+
+        <section className="community-feed" aria-live="polite">
+          <div className="community-feed-title"><span>{feed === 'hot' ? '🔥 HOT NOW' : '🆕 JUST POSTED'}</span><b>{visible.length}개의 설문</b></div>
+          {visible.map((survey, index) => (
+            <article className="community-post" key={survey.id}>
+              <header>
+                <span className="community-avatar">{survey.owner.slice(0, 1)}</span>
+                <div><b>{survey.owner}</b><small>{survey.mine ? '방금 전' : `${index + 1}시간 전`} · {survey.category}</small></div>
+                <span className="community-ai-badge"><Icon name="spark" size={12} /> AI 추천</span>
+              </header>
+              <SurveyCard survey={survey} completed={completed.includes(survey.id)} onOpen={() => navigate('surveyDetail', survey.id)} />
+              <footer>
+                <button type="button" className={liked.includes(survey.id) ? 'is-liked' : ''} onClick={() => toggleLike(survey.id)}><Icon name="heart" size={16} /> 공감 {12 + index * 7 + Number(liked.includes(survey.id))}</button>
+                <button type="button" onClick={() => navigate('discussion', survey.id)}><Icon name="message" size={16} /> 이야기 {5 + index * 3}</button>
+                <button type="button" onClick={() => navigate('surveyDetail', survey.id)}>설문 보기 <Icon name="chevron" size={14} /></button>
+              </footer>
+            </article>
+          ))}
+          {!visible.length ? <div className="community-empty"><Icon name="search" /><b>조건에 맞는 설문이 없어요</b><p>다른 주제나 검색어로 다시 찾아보세요.</p></div> : null}
+        </section>
+      </main>
+      <BottomNav active="community" navigate={navigate} />
     </div>
   )
 }
@@ -637,6 +708,148 @@ function AutoMatchScreen({ onBack, profile, surveys, onMatched, navigate }) {
           <div className="match-result-actions"><button type="button" className="secondary-button" onClick={() => setPhase('setup')}>다시 찾기</button><button type="button" className="primary-button" onClick={() => { onMatched(match, mode, people); navigate('exchange') }}>이 팀과 교환하기</button></div>
         </div> : null}
       </main>
+    </div>
+  )
+}
+
+function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
+  const [messages, setMessages] = useState([
+    { id: 'welcome', role: 'ai', text: '안녕하세요! 저는 설문 메이트 수니예요. 어떤 목적으로 설문을 만들고 싶나요?' },
+  ])
+  const [stage, setStage] = useState('purpose')
+  const [input, setInput] = useState('')
+  const [purpose, setPurpose] = useState('')
+  const [audience, setAudience] = useState('')
+  const [questionCount, setQuestionCount] = useState(5)
+  const chatEnd = useRef(null)
+  const replyTimer = useRef(null)
+
+  useEffect(() => {
+    chatEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages, stage])
+  useEffect(() => () => window.clearTimeout(replyTimer.current), [])
+
+  const addAiReply = (text, nextStage) => {
+    setStage('thinking')
+    window.clearTimeout(replyTimer.current)
+    replyTimer.current = window.setTimeout(() => {
+      setMessages((current) => [...current, { id: `ai-${Date.now()}`, role: 'ai', text }])
+      setStage(nextStage)
+    }, 480)
+  }
+
+  const submitAnswer = (answer) => {
+    const value = answer.trim()
+    if (!value || stage === 'thinking' || stage === 'ready') return
+    setMessages((current) => [...current, { id: `user-${Date.now()}`, role: 'user', text: value }])
+    setInput('')
+    if (stage === 'purpose') {
+      setPurpose(value)
+      addAiReply(`좋아요. “${value}”에 맞춰볼게요. 이 설문은 누구의 답변이 가장 필요한가요?`, 'audience')
+      return
+    }
+    if (stage === 'audience') {
+      setAudience(value)
+      addAiReply(`${value}이 편하게 답할 수 있는 말투로 만들게요. 설문 길이는 어느 정도가 좋을까요?`, 'count')
+      return
+    }
+    const count = Number(value.replace(/[^0-9]/g, '')) || 5
+    setQuestionCount(count)
+    addAiReply(`${count}문항으로 핵심만 정리했어요. 제목과 질문을 미리 확인한 뒤 바로 편집할 수 있어요.`, 'ready')
+  }
+
+  const subject = purpose.replace(/\s*(에 대한|관련)?\s*조사\s*$/u, '').trim() || '대학생의 일상'
+  const generatedTitle = `${subject}, 우리는 어떻게 생각할까요?`
+  const questionTemplates = [
+    ['single', `${subject}에 얼마나 관심이 있나요?`, ['매우 관심 있어요', '조금 관심 있어요', '보통이에요', '별로 관심 없어요']],
+    ['single', `${subject} 관련 경험은 얼마나 자주 있나요?`, ['거의 매일', '주 3~4회', '주 1~2회', '거의 없어요']],
+    ['multiple', `${subject}에서 중요하게 보는 점을 모두 골라주세요.`, ['편리함', '가격', '경험의 질', '주변의 추천']],
+    ['scale', `지금 느끼는 ${subject} 만족도는 어느 정도인가요?`, []],
+    ['single', `${subject} 관련 선택에서 가장 큰 영향을 주는 건 무엇인가요?`, ['내 필요', '친구 추천', '온라인 후기', '가격']],
+    ['multiple', `${subject}과 관련해 불편했던 점이 있다면 골라주세요.`, ['정보가 부족해요', '비용이 부담돼요', '시간이 부족해요', '딱히 없어요']],
+    ['single', `앞으로 ${subject} 관련 활동을 더 자주 할 생각이 있나요?`, ['매우 있어요', '조금 있어요', '잘 모르겠어요', '별로 없어요']],
+    ['long', `${subject}이 더 좋아지려면 무엇이 바뀌면 좋을까요?`, []],
+    ['single', `${subject}, 친구에게 추천하고 싶나요?`, ['꼭 추천하고 싶어요', '상황에 따라 추천해요', '잘 모르겠어요', '추천하지 않을 것 같아요']],
+    ['long', `${subject}에 대해 마지막으로 들려주고 싶은 이야기가 있나요?`, []],
+  ]
+  const generatedQuestions = questionTemplates.slice(0, questionCount).map(([type, text, options], index) => ({
+    id: `ai-q-${Date.now()}-${index}`,
+    type,
+    text,
+    description: '',
+    options: options.length ? options : ['선택지 1', '선택지 2'],
+    rows: ['행 1', '행 2'],
+    columns: ['열 1', '열 2'],
+    required: index < Math.max(1, questionCount - 1),
+    shuffle: false,
+    other: false,
+    validation: 'none',
+    min: 1,
+    max: 5,
+    branch: 'next',
+  }))
+
+  const useGeneratedSurvey = () => onGenerate({
+    step: 3,
+    title: generatedTitle,
+    description: `${audience || '대학생'}의 ${subject} 경험과 생각을 알아보기 위한 설문입니다. 편하게 답해주세요.`,
+    category: subject.includes('취업') ? '진로·취업' : subject.includes('소비') ? '소비' : '대학생활',
+    deadline: DEFAULT_DEADLINE,
+    basicFields: ['학년', '성별', '재학 여부'],
+    questions: generatedQuestions,
+    teamSurvey: false,
+    publicResult: true,
+    collectEmail: false,
+    oneResponse: true,
+    allowEdit: false,
+    quizMode: false,
+    confirmationMessage: '응답해 주셔서 감사합니다!',
+  })
+
+  const quickReplies = stage === 'purpose'
+    ? ['대학생 소비 습관 조사', '취업 준비 경험', '학교생활 만족도']
+    : stage === 'audience'
+      ? ['전체 대학생', '재학생', '취업 준비생']
+      : stage === 'count'
+        ? ['5문항', '7문항', '10문항']
+        : []
+  const progress = stage === 'purpose' ? 25 : stage === 'audience' ? 50 : stage === 'count' || stage === 'thinking' ? 75 : 100
+
+  return (
+    <div className="screen ai-chat-screen">
+      <TopBar title="AI 설문 만들기" onBack={onBack} right={<span className="ai-top-badge"><Icon name="spark" size={12} /> AI BETA</span>} />
+      <div className="ai-chat-progress"><i style={{ width: `${progress}%` }} /></div>
+      <main className="page ai-chat-page">
+        <section className="ai-chat-intro">
+          <div className="ai-orb"><img src={miniPuzzleBlue} alt="" /><Icon name="message" size={18} /></div>
+          <div><span>AI SURVEY MATE</span><h1>대화하면서<br />설문을 완성해요.</h1><p>목적과 대상만 알려주면 제목부터 문항까지 자동으로 구성해 드려요.</p></div>
+        </section>
+
+        <section className="ai-conversation" aria-live="polite">
+          {messages.map((message) => <article className={`chat-message chat-message--${message.role}`} key={message.id}>
+            {message.role === 'ai' ? <span className="chat-avatar"><img src={miniPuzzleBlue} alt="" /></span> : null}
+            <div>{message.role === 'ai' ? <small><Icon name="spark" size={11} /> 수니 AI</small> : null}<p>{message.text}</p></div>
+          </article>)}
+          {stage === 'thinking' ? <article className="chat-message chat-message--ai"><span className="chat-avatar"><img src={miniPuzzleBlue} alt="" /></span><div className="typing-bubble" aria-label="AI가 답변을 작성 중"><i /><i /><i /></div></article> : null}
+          {stage === 'ready' ? <article className="ai-generated-preview">
+            <header><span><Icon name="spark" size={14} /> AI 자동 생성 완료</span><b>{generatedQuestions.length}문항 · 약 {Math.max(1, Math.ceil(generatedQuestions.length * .45))}분</b></header>
+            <h2>{generatedTitle}</h2>
+            <p>{audience || '대학생'}을 대상으로 쉬운 대화체 문항을 구성했어요.</p>
+            <ol>{generatedQuestions.slice(0, 3).map((question) => <li key={question.id}>{question.text}</li>)}</ol>
+            {generatedQuestions.length > 3 ? <small>외 {generatedQuestions.length - 3}개 문항이 더 있어요.</small> : null}
+            <button type="button" className="primary-button" onClick={useGeneratedSurvey}><Icon name="spark" size={17} /> 자동 생성 설문 편집하기</button>
+          </article> : null}
+          <div ref={chatEnd} />
+        </section>
+
+        {quickReplies.length ? <div className="ai-quick-replies">{quickReplies.map((reply) => <button type="button" key={reply} onClick={() => submitAnswer(reply)}>{reply}<Icon name="chevron" size={13} /></button>)}</div> : null}
+      </main>
+      <footer className="ai-chat-composer">
+        {stage === 'ready' ? <button type="button" className="manual-create-link" onClick={() => navigate('create')}>직접 문항을 추가해서 만들기 <Icon name="chevron" size={14} /></button> : <>
+          <input value={input} disabled={stage === 'thinking'} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') submitAnswer(input) }} placeholder={stage === 'purpose' ? '설문 목적을 입력해 주세요' : stage === 'audience' ? '응답 대상을 입력해 주세요' : '원하는 문항 수를 입력해 주세요'} />
+          <button type="button" disabled={!input.trim() || stage === 'thinking'} onClick={() => submitAnswer(input)} aria-label="메시지 보내기"><Icon name="chevron" /></button>
+        </>}
+      </footer>
     </div>
   )
 }
@@ -962,7 +1175,8 @@ function RespondentResultScreen({ survey, onBack, navigate }) {
         <span className="tag tag--blue">{survey.category}</span>
         <h1>{survey.title}</h1>
         <p>{survey.participants + 1}명의 답변을 바탕으로 분석했어요.</p>
-        <div className="result-tabs"><button className={tab === 'summary' ? 'is-active' : ''} onClick={() => setTab('summary')}>요약</button><button className={tab === 'compare' ? 'is-active' : ''} onClick={() => setTab('compare')}>비교</button><button className={tab === 'insight' ? 'is-active' : ''} onClick={() => setTab('insight')}>인사이트</button></div>
+        <div className="respondent-ai-note"><Icon name="spark" size={15} /><span><b>AI 비교 분석 준비 완료</b><small>나와 비슷한 응답자와 그룹별 차이를 찾았어요.</small></span></div>
+        <div className="result-tabs"><button className={tab === 'summary' ? 'is-active' : ''} onClick={() => setTab('summary')}>요약</button><button className={tab === 'compare' ? 'is-active' : ''} onClick={() => setTab('compare')}>비교</button><button className={tab === 'insight' ? 'is-active' : ''} onClick={() => setTab('insight')}><Icon name="spark" size={12} /> AI 인사이트</button></div>
         {tab === 'summary' ? <>
           <section className="answer-highlight"><span>나와 같은 답을 고른 사람</span><strong>35<small>%</small></strong><p>응답자 3명 중 1명은 나와 비슷하게 생각해요.</p></section>
           <section className="chart-card">
@@ -983,6 +1197,7 @@ function RespondentResultScreen({ survey, onBack, navigate }) {
 
 function CreatorResultsScreen({ survey, onBack, navigate }) {
   const [tab, setTab] = useState('summary')
+  const [aiTool, setAiTool] = useState('deep')
   const responses = [
     ['2026-07-30 14:32', '주 3~4회', '좌석과 분위기', '4', '1~2시간'],
     ['2026-07-30 14:29', '주 1~2회', '가격', '3', '30분~1시간'],
@@ -998,11 +1213,17 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
     anchor.click()
     URL.revokeObjectURL(url)
   }
+  const aiTools = {
+    deep: { label: 'AI 심층 분석', icon: 'chart', title: '응답의 이유까지 한 번에 분석해요', body: '학년·성별·생활 환경별 차이를 찾아 핵심 원인과 다음 조사 방향을 정리합니다.', action: '심층 분석 시작 · 2,000원' },
+    insight: { label: 'AI 인사이트', icon: 'spark', title: '발표에 바로 쓸 핵심 문장을 만들어요', body: '응답에서 의미 있는 변화와 예상 밖의 패턴을 찾아 근거와 함께 제안합니다.', action: '인사이트 생성 · 1,000원' },
+    ppt: { label: 'PPT 자동 생성', icon: 'file', title: '분석 결과를 발표 자료로 완성해요', body: '표지·조사 개요·핵심 차트·결론으로 구성된 발표용 PPT 초안을 자동 생성합니다.', action: 'PPT 8장 만들기 · 4,000원' },
+  }
+  const selectedAiTool = aiTools[aiTool]
   return (
     <div className="screen creator-results-screen">
       <TopBar title="작성자 결과" onBack={onBack} right={<button className="round-icon" type="button" onClick={downloadCsv}><Icon name="download" /></button>} />
       <main className="page result-page">
-        <span className="eyebrow">FREE RESULT</span>
+        <div className="result-tier-head result-tier-head--free"><span><Icon name="check" size={13} /> FREE RESULT</span><small>작성자 기본 결과 · 무료</small></div>
         <h1>{survey.title}</h1>
         <div className="creator-summary"><span><b>{survey.participants || 53}</b><small>전체 응답</small></span><span><b>72%</b><small>목표 달성</small></span><span><b>{survey.minutes}:12</b><small>평균 시간</small></span></div>
         <div className="result-tabs"><button className={tab === 'summary' ? 'is-active' : ''} onClick={() => setTab('summary')}>요약</button><button className={tab === 'individual' ? 'is-active' : ''} onClick={() => setTab('individual')}>개별 응답</button><button className={tab === 'table' ? 'is-active' : ''} onClick={() => setTab('table')}>데이터 표</button></div>
@@ -1013,7 +1234,20 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
         {tab === 'individual' ? <section className="individual-response"><header><button type="button"><Icon name="back" size={17} /></button><b>응답 1 / {responses.length}</b><button type="button"><Icon name="chevron" size={17} /></button></header>{responses[0].slice(1).map((value, index) => <div key={value}><small>Q{index + 1}</small><b>{value}</b></div>)}</section> : null}
         {tab === 'table' ? <section className="data-table-wrap"><table><thead><tr>{['응답 시간', '카페 빈도', '선택 기준', '선호도', '체류 시간'].map((head) => <th key={head}>{head}</th>)}</tr></thead><tbody>{responses.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell) => <td key={cell}>{cell}</td>)}</tr>)}</tbody></table><button type="button" className="download-button" onClick={downloadCsv}><Icon name="download" /> CSV로 다운로드</button></section> : null}
         <button type="button" className="share-result-card" onClick={() => navigate('shareSurvey', survey.id)}><i><Icon name="share" /></i><span><b>설문 배포 및 공유</b><small>링크·QR 코드·외부 커뮤니티 공유</small></span><Icon name="chevron" /></button>
-        <section className="premium-analysis"><Icon name="spark" /><div><b>AI로 더 깊게 분석해 보세요</b><p>핵심 인사이트부터 발표용 PPT까지 자동으로 만들 수 있어요.</p></div><button type="button">2,000원부터</button></section>
+        <section className="ai-result-suite">
+          <header className="result-tier-head result-tier-head--ai"><span><Icon name="spark" size={13} /> AI RESULT</span><small>AI가 응답을 더 깊게 해석해요</small></header>
+          <div className="ai-result-intro"><i><Icon name="spark" size={24} /></i><div><b>결과를 이해하는 데서 끝내지 마세요</b><p>AI가 인사이트를 찾고, 발표 자료까지 이어서 완성해 드려요.</p></div></div>
+          <div className="ai-tool-tabs">
+            {Object.entries(aiTools).map(([key, tool]) => <button type="button" key={key} className={aiTool === key ? 'is-active' : ''} onClick={() => setAiTool(key)}><Icon name={tool.icon} size={17} /><span>{tool.label}</span></button>)}
+          </div>
+          <article className="ai-tool-preview">
+            <span><Icon name={selectedAiTool.icon} size={20} /> {selectedAiTool.label}</span>
+            <h2>{selectedAiTool.title}</h2>
+            <p>{selectedAiTool.body}</p>
+            <div><em><Icon name="check" size={12} /> 응답 데이터 자동 반영</em><em><Icon name="check" size={12} /> 수정 가능한 초안 제공</em></div>
+            <button type="button">{selectedAiTool.action}<Icon name="chevron" size={15} /></button>
+          </article>
+        </section>
       </main>
     </div>
   )
@@ -1519,6 +1753,10 @@ function App() {
     setSurveys((current) => [survey, ...current.filter((item) => item.id !== survey.id)])
     navigate('creatorResults', survey.id)
   }
+  const openGeneratedSurvey = (draft) => {
+    localStorage.setItem('suniversity-new-draft', JSON.stringify(draft))
+    navigate('create')
+  }
   const completeSurvey = (surveyId, response, isExchange) => {
     setCompleted((current) => [...new Set([...current, surveyId])])
     setAnswers((current) => ({ ...current, [surveyId]: response }))
@@ -1535,9 +1773,11 @@ function App() {
 
   const common = { navigate, surveys, requests, setRequests, profile, unread, notifications, setNotifications }
   if (screen === 'home') return <HomeScreen {...common} completed={completed} />
+  if (screen === 'community') return <CommunityScreen navigate={navigate} surveys={surveys} completed={completed} />
   if (screen === 'exchange') return <ExchangeScreen {...common} />
   if (screen === 'surveyDetail') return <SurveyDetailScreen survey={selectedSurvey} onBack={back} navigate={navigate} profile={profile} onRequest={addRequest} completed={completed.includes(selectedSurvey.id)} favorite={favorites.includes(selectedSurvey.id)} onFavorite={(id) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} />
   if (screen === 'autoMatch') return <AutoMatchScreen onBack={back} profile={profile} surveys={surveys} navigate={navigate} onMatched={addRequest} />
+  if (screen === 'aiCreate') return <AISurveyChatScreen onBack={back} navigate={navigate} onGenerate={openGeneratedSurvey} />
   if (screen === 'create') return <CreateSurveyScreen onBack={back} profile={profile} onPublish={publishSurvey} />
   if (screen === 'participate') return <ParticipateScreen survey={selectedSurvey} onBack={back} onComplete={completeSurvey} isExchange={Boolean(screenMeta.exchangeId)} />
   if (screen === 'respondentResult') return <RespondentResultScreen survey={selectedSurvey} onBack={() => navigate('home')} navigate={navigate} />
