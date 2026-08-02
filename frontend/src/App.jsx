@@ -78,6 +78,7 @@ function isSurveyClosed(survey) {
 const initialSurveys = [
   {
     id: 'coffee',
+    createdAt: '2026-08-02T09:30:00+09:00',
     owner: '디자인씽킹 3팀',
     trust: 96,
     title: '대학생, 카페에서 얼마나 오래 머무르나요?',
@@ -95,6 +96,7 @@ const initialSurveys = [
   },
   {
     id: 'career',
+    createdAt: '2026-08-01T18:10:00+09:00',
     owner: '커리어메이트',
     trust: 92,
     title: '취업 준비, 다들 언제부터 시작했어요?',
@@ -112,6 +114,7 @@ const initialSurveys = [
   },
   {
     id: 'subscription',
+    createdAt: '2026-07-31T14:20:00+09:00',
     owner: '소비자행동 연구팀',
     trust: 89,
     title: '구독 서비스, 한 달에 얼마까지 괜찮나요?',
@@ -447,15 +450,17 @@ function CommunityScreen({ navigate, surveys, completed }) {
   const [feed, setFeed] = useState('hot')
   const [topic, setTopic] = useState('전체')
   const [query, setQuery] = useState('')
-  const [liked, setLiked] = useState([])
+  const [liked, setLiked] = useStoredState('suniversity-community-likes', [])
   const topics = ['전체', '대학생활', '진로·취업', '소비', 'IT·서비스']
+  const openSurveys = surveys.filter((survey) => !isSurveyClosed(survey))
+  const totalParticipants = openSurveys.reduce((sum, survey) => sum + survey.participants, 0)
   const visible = [...surveys]
     .filter((survey) => !isSurveyClosed(survey))
     .filter((survey) => topic === '전체' || survey.category === topic)
     .filter((survey) => `${survey.title} ${survey.description} ${survey.category}`.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => feed === 'hot'
       ? Number(b.hot) - Number(a.hot) || (b.participants / b.target) - (a.participants / a.target)
-      : Number(b.mine) - Number(a.mine) || b.id.localeCompare(a.id))
+      : new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
 
   const toggleLike = (id) => setLiked((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
 
@@ -467,7 +472,7 @@ function CommunityScreen({ navigate, surveys, completed }) {
           <span><Icon name="users" size={15} /> UNIVERSITY COMMUNITY</span>
           <h1>대학생의 생각이<br /><em>설문으로 이어지는 곳</em></h1>
           <p>관심 있는 설문에 참여하고, 다른 대학생의 이야기도 만나보세요.</p>
-          <div><b>오늘 새 설문 12개</b><i />지금 286명이 참여 중</div>
+          <div><b>참여 가능한 설문 {openSurveys.length}개</b><i />지금까지 {totalParticipants}명이 참여했어요</div>
         </section>
 
         <div className="community-feed-tabs" role="tablist" aria-label="커뮤니티 설문 분류">
@@ -487,7 +492,7 @@ function CommunityScreen({ navigate, surveys, completed }) {
               <header>
                 <span className="community-avatar">{survey.owner.slice(0, 1)}</span>
                 <div><b>{survey.owner}</b><small>{survey.mine ? '방금 전' : `${index + 1}시간 전`} · {survey.category}</small></div>
-                <span className="community-ai-badge"><Icon name="spark" size={12} /> AI 추천</span>
+                {survey.matchScore >= 90 ? <span className="community-ai-badge"><Icon name="spark" size={12} /> AI 추천</span> : null}
               </header>
               <SurveyCard survey={survey} completed={completed.includes(survey.id)} onOpen={() => navigate('surveyDetail', survey.id)} />
               <footer>
@@ -497,7 +502,7 @@ function CommunityScreen({ navigate, surveys, completed }) {
               </footer>
             </article>
           ))}
-          {!visible.length ? <div className="community-empty"><Icon name="search" /><b>조건에 맞는 설문이 없어요</b><p>다른 주제나 검색어로 다시 찾아보세요.</p></div> : null}
+          {!visible.length ? <div className="community-empty"><Icon name="search" /><b>조건에 맞는 설문이 없어요</b><p>다른 주제나 검색어로 다시 찾아보세요.</p><button type="button" onClick={() => { setTopic('전체'); setQuery('') }}>필터 초기화</button></div> : null}
         </section>
       </main>
       <BottomNav active="community" navigate={navigate} />
@@ -789,9 +794,19 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
       addAiReply(`${value}이 편하게 답할 수 있는 말투로 만들게요. 설문 길이는 어느 정도가 좋을까요?`, 'count')
       return
     }
-    const count = Number(value.replace(/[^0-9]/g, '')) || 5
+    const count = Math.min(10, Math.max(3, Number(value.replace(/[^0-9]/g, '')) || 5))
     setQuestionCount(count)
     addAiReply(`${count}문항으로 핵심만 정리했어요. 제목과 질문을 미리 확인한 뒤 바로 편집할 수 있어요.`, 'ready')
+  }
+
+  const restartConversation = () => {
+    window.clearTimeout(replyTimer.current)
+    setMessages([{ id: `welcome-${Date.now()}`, role: 'ai', text: '좋아요. 처음부터 다시 맞춰볼게요. 어떤 목적으로 설문을 만들고 싶나요?' }])
+    setStage('purpose')
+    setInput('')
+    setPurpose('')
+    setAudience('')
+    setQuestionCount(5)
   }
 
   const subject = purpose.replace(/\s*(에 대한|관련)?\s*조사\s*$/u, '').trim() || '대학생의 일상'
@@ -881,8 +896,8 @@ function AISurveyChatScreen({ onBack, onGenerate, navigate }) {
         {quickReplies.length ? <div className="ai-quick-replies">{quickReplies.map((reply) => <button type="button" key={reply} onClick={() => submitAnswer(reply)}>{reply}<Icon name="chevron" size={13} /></button>)}</div> : null}
       </main>
       <footer className="ai-chat-composer">
-        {stage === 'ready' ? <button type="button" className="manual-create-link" onClick={() => navigate('create')}>직접 문항을 추가해서 만들기 <Icon name="chevron" size={14} /></button> : <>
-          <input value={input} disabled={stage === 'thinking'} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') submitAnswer(input) }} placeholder={stage === 'purpose' ? '설문 목적을 입력해 주세요' : stage === 'audience' ? '응답 대상을 입력해 주세요' : '원하는 문항 수를 입력해 주세요'} />
+        {stage === 'ready' ? <div className="ai-ready-actions"><button type="button" onClick={restartConversation}><Icon name="back" size={14} /> 조건 다시 정하기</button><button type="button" className="manual-create-link" onClick={() => navigate('create')}>직접 만들기 <Icon name="chevron" size={14} /></button></div> : <>
+          <input aria-label="AI 설문 도우미에게 메시지 보내기" value={input} disabled={stage === 'thinking'} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) submitAnswer(input) }} placeholder={stage === 'purpose' ? '설문 목적을 입력해 주세요' : stage === 'audience' ? '응답 대상을 입력해 주세요' : '3~10개 사이 문항 수를 입력해 주세요'} />
           <button type="button" disabled={!input.trim() || stage === 'thinking'} onClick={() => submitAnswer(input)} aria-label="메시지 보내기"><Icon name="chevron" /></button>
         </>}
       </footer>
@@ -945,6 +960,7 @@ function CreateSurveyScreen({ onBack, onPublish, profile }) {
       band: getBand(questions.length),
       minutes: Math.max(1, Math.ceil(questions.length * 0.45)),
       deadline,
+      createdAt: new Date().toISOString(),
       participants: 0,
       target: 100,
       matchScore: 91,
@@ -1147,7 +1163,7 @@ function ParticipateScreen({ survey, onBack, onComplete, isExchange }) {
   if (submitted) return <SurveySubmitted survey={survey} isExchange={isExchange} />
   return (
     <div className="screen participate-screen">
-      <TopBar title="설문 참여" onBack={onBack} right={<button className="round-icon" type="button" aria-label="더보기"><Icon name="more" /></button>} />
+      <TopBar title="설문 참여" onBack={onBack} />
       <div className="participate-progress"><span><b>{index + 1}</b> / {questions.length}</span><em>{Math.round((index + 1) / questions.length * 100)}%</em><Progress value={(index + 1) / questions.length * 100} /></div>
       <main className="page question-page">
         <span className="question-kicker">{survey.category} · 약 {survey.minutes}분</span>
@@ -1191,7 +1207,7 @@ function SurveySubmitted({ survey, isExchange }) {
         <h1>{isExchange && !ready ? '응답을 안전하게 저장했어요' : '설문 참여를 완료했어요!'}</h1>
         <p>{isExchange && !ready ? '상대도 응답을 완료하면 교환이 확정되고 결과에 반영돼요.' : '다른 대학생들의 생각과 내 답변을 비교해 보세요.'}</p>
         {isExchange && !ready ? <section className="pending-exchange"><Icon name="clock" /><div><b>상대 응답을 기다리는 중</b><span>교환 완료 전에는 그래프와 통계에 포함되지 않아요.</span><Progress value={50} tone="purple" /></div></section> : null}
-        {isExchange && !ready ? <button type="button" className="demo-button" onClick={() => setReady(true)}>프로토타입: 상대 응답 완료 처리</button> : null}
+        {isExchange && !ready && import.meta.env.DEV ? <button type="button" className="preview-state-button" onClick={() => setReady(true)}><Icon name="spark" size={15} /> 개발 미리보기 · 완료 상태 보기</button> : null}
         {ready ? <button type="button" className="primary-button" onClick={() => window.dispatchEvent(new CustomEvent('suniversity-navigate', { detail: { screen: 'respondentResult', id: survey.id } }))}>비교 결과 보기</button> : <button type="button" className="secondary-button" onClick={() => window.dispatchEvent(new CustomEvent('suniversity-navigate', { detail: { screen: 'exchange' } }))}>교환 대기함으로</button>}
       </main>
     </div>
@@ -1200,6 +1216,16 @@ function SurveySubmitted({ survey, isExchange }) {
 
 function RespondentResultScreen({ survey, onBack, navigate }) {
   const [tab, setTab] = useState('summary')
+  const [deepOpen, setDeepOpen] = useState(false)
+  const [toast, setToast] = useState('')
+  const toastTimer = useRef(null)
+  useEffect(() => () => window.clearTimeout(toastTimer.current), [])
+  const copyResultLink = () => {
+    navigator.clipboard?.writeText(`https://suniversity.kr/result/${survey.id}`)
+    window.clearTimeout(toastTimer.current)
+    setToast('결과 링크를 복사했어요')
+    toastTimer.current = window.setTimeout(() => setToast(''), 1800)
+  }
   const groups = {
     gender: [['여성', 58], ['남성', 42]],
     mbti: [['ENFP', 31], ['INFP', 26], ['ENTJ', 18], ['기타', 25]],
@@ -1207,7 +1233,7 @@ function RespondentResultScreen({ survey, onBack, navigate }) {
   }
   return (
     <div className="screen">
-      <TopBar title="설문 결과" onBack={onBack} right={<button className="round-icon" type="button"><Icon name="share" /></button>} />
+      <TopBar title="설문 결과" onBack={onBack} right={<button className="round-icon" type="button" onClick={copyResultLink} aria-label="결과 링크 복사"><Icon name="share" /></button>} />
       <main className="page result-page">
         <span className="tag tag--blue">{survey.category}</span>
         <h1>{survey.title}</h1>
@@ -1225,9 +1251,10 @@ function RespondentResultScreen({ survey, onBack, navigate }) {
         {tab === 'compare' ? <section className="compare-results">
           {Object.entries(groups).map(([key, values]) => <article key={key}><h3>{key === 'gender' ? '성별 비교' : key === 'mbti' ? 'MBTI 비교' : '학교별 비교'}</h3>{values.map(([label, value], index) => <span key={label}><small>{label}</small><Progress value={value} tone={index % 2 ? 'pink' : 'blue'} /><b>{value}%</b></span>)}</article>)}
         </section> : null}
-        {tab === 'insight' ? <section className="insight-card"><Icon name="spark" size={25} /><span>AI 한 줄 인사이트</span><h2>카페는 음료를 마시는 곳보다<br />공부하고 머무는 공간에 가까워요.</h2><p>특히 3~4학년과 자취생 그룹에서 체류 시간이 길게 나타났어요.</p><button type="button">AI 심층 분석 보기 · 2,000원</button></section> : null}
+        {tab === 'insight' ? <><section className="insight-card"><Icon name="spark" size={25} /><span>AI 한 줄 인사이트</span><h2>카페는 음료를 마시는 곳보다<br />공부하고 머무는 공간에 가까워요.</h2><p>특히 3~4학년과 자취생 그룹에서 체류 시간이 길게 나타났어요.</p><button type="button" aria-expanded={deepOpen} onClick={() => setDeepOpen((open) => !open)}>{deepOpen ? '심층 분석 접기' : 'AI 심층 분석 보기 · 2,000원'}</button></section>{deepOpen ? <section className="respondent-deep-analysis" aria-live="polite"><span><Icon name="spark" size={15} /> AI DEEP INSIGHT</span><h3>응답 차이가 가장 큰 그룹이에요</h3><ul><li><b>3~4학년</b><small>과제와 취업 준비로 2시간 이상 머무는 비율이 평균보다 18% 높아요.</small></li><li><b>자취생</b><small>가격보다 콘센트·좌석 환경을 더 중요하게 선택했어요.</small></li><li><b>다음 질문 추천</b><small>카페 선택 시 이동 거리와 혼잡도가 미치는 영향을 추가로 물어보세요.</small></li></ul></section> : null}</> : null}
         <button type="button" className="discussion-entry" onClick={() => navigate('discussion', survey.id)}><i><Icon name="users" /></i><span><b>응답자들과 이야기해 보세요</b><small>댓글 18개 · 익명 또는 닉네임으로 참여</small></span><Icon name="chevron" /></button>
       </main>
+      {toast ? <div className="toast" role="status"><Icon name="check" size={17} /><span>{toast}</span></div> : null}
     </div>
   )
 }
@@ -1235,6 +1262,10 @@ function RespondentResultScreen({ survey, onBack, navigate }) {
 function CreatorResultsScreen({ survey, onBack, navigate }) {
   const [tab, setTab] = useState('summary')
   const [aiTool, setAiTool] = useState('deep')
+  const [responseIndex, setResponseIndex] = useState(0)
+  const [aiRun, setAiRun] = useState({ key: '', status: 'idle' })
+  const aiTimer = useRef(null)
+  useEffect(() => () => window.clearTimeout(aiTimer.current), [])
   const responses = [
     ['2026-07-30 14:32', '주 3~4회', '좌석과 분위기', '4', '1~2시간'],
     ['2026-07-30 14:29', '주 1~2회', '가격', '3', '30분~1시간'],
@@ -1256,9 +1287,15 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
     ppt: { label: 'PPT 자동 생성', icon: 'file', title: '분석 결과를 발표 자료로 완성해요', body: '표지·조사 개요·핵심 차트·결론으로 구성된 발표용 PPT 초안을 자동 생성합니다.', action: 'PPT 8장 만들기 · 4,000원' },
   }
   const selectedAiTool = aiTools[aiTool]
+  const selectedResponse = responses[responseIndex]
+  const runAiTool = () => {
+    window.clearTimeout(aiTimer.current)
+    setAiRun({ key: aiTool, status: 'loading' })
+    aiTimer.current = window.setTimeout(() => setAiRun({ key: aiTool, status: 'done' }), 700)
+  }
   return (
     <div className="screen creator-results-screen">
-      <TopBar title="작성자 결과" onBack={onBack} right={<button className="round-icon" type="button" onClick={downloadCsv}><Icon name="download" /></button>} />
+      <TopBar title="작성자 결과" onBack={onBack} right={<button className="round-icon" type="button" onClick={downloadCsv} aria-label="응답 CSV 다운로드"><Icon name="download" /></button>} />
       <main className="page result-page">
         <div className="result-tier-head result-tier-head--free"><span><Icon name="check" size={13} /> FREE RESULT</span><small>작성자 기본 결과 · 무료</small></div>
         <h1>{survey.title}</h1>
@@ -1268,9 +1305,9 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
           <section className="chart-card"><div className="section-title"><div><span>질문 1</span><h2>카페 이용 빈도</h2></div></div><div className="donut-wrap"><div className="donut"><strong>53<small>명</small></strong></div><ul><li><i className="c1" />주 3~4회 <b>35%</b></li><li><i className="c2" />주 1~2회 <b>28%</b></li><li><i className="c3" />주 5회 이상 <b>21%</b></li><li><i className="c4" />기타 <b>16%</b></li></ul></div></section>
           <section className="bar-chart-card"><h3>질문별 응답 분포</h3><div className="vertical-bars">{[44, 68, 83, 61, 72].map((height, index) => <span key={height}><i style={{ height: `${height}%` }} /><small>Q{index + 1}</small></span>)}</div></section>
         </> : null}
-        {tab === 'individual' ? <section className="individual-response"><header><button type="button"><Icon name="back" size={17} /></button><b>응답 1 / {responses.length}</b><button type="button"><Icon name="chevron" size={17} /></button></header>{responses[0].slice(1).map((value, index) => <div key={value}><small>Q{index + 1}</small><b>{value}</b></div>)}</section> : null}
+        {tab === 'individual' ? <section className="individual-response"><header><button type="button" disabled={responseIndex === 0} onClick={() => setResponseIndex((index) => Math.max(0, index - 1))} aria-label="이전 응답"><Icon name="back" size={17} /></button><b>응답 {responseIndex + 1} / {responses.length}</b><button type="button" disabled={responseIndex === responses.length - 1} onClick={() => setResponseIndex((index) => Math.min(responses.length - 1, index + 1))} aria-label="다음 응답"><Icon name="chevron" size={17} /></button></header><small className="response-submitted-at">제출 {selectedResponse[0]}</small>{selectedResponse.slice(1).map((value, index) => <div key={`${responseIndex}-${index}`}><small>Q{index + 1}</small><b>{value}</b></div>)}</section> : null}
         {tab === 'table' ? <section className="data-table-wrap"><table><thead><tr>{['응답 시간', '카페 빈도', '선택 기준', '선호도', '체류 시간'].map((head) => <th key={head}>{head}</th>)}</tr></thead><tbody>{responses.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell) => <td key={cell}>{cell}</td>)}</tr>)}</tbody></table><button type="button" className="download-button" onClick={downloadCsv}><Icon name="download" /> CSV로 다운로드</button></section> : null}
-        <button type="button" className="share-result-card" onClick={() => navigate('shareSurvey', survey.id)}><i><Icon name="share" /></i><span><b>설문 배포 및 공유</b><small>링크·QR 코드·외부 커뮤니티 공유</small></span><Icon name="chevron" /></button>
+        <button type="button" className="share-result-card" onClick={() => navigate('shareSurvey', survey.id, { survey })}><i><Icon name="share" /></i><span><b>설문 배포 및 공유</b><small>링크·QR 코드·외부 커뮤니티 공유</small></span><Icon name="chevron" /></button>
         <section className="ai-result-suite">
           <header className="result-tier-head result-tier-head--ai"><span><Icon name="spark" size={13} /> AI RESULT</span><small>AI가 응답을 더 깊게 해석해요</small></header>
           <div className="ai-result-intro"><i><Icon name="spark" size={24} /></i><div><b>결과를 이해하는 데서 끝내지 마세요</b><p>AI가 인사이트를 찾고, 발표 자료까지 이어서 완성해 드려요.</p></div></div>
@@ -1282,8 +1319,9 @@ function CreatorResultsScreen({ survey, onBack, navigate }) {
             <h2>{selectedAiTool.title}</h2>
             <p>{selectedAiTool.body}</p>
             <div><em><Icon name="check" size={12} /> 응답 데이터 자동 반영</em><em><Icon name="check" size={12} /> 수정 가능한 초안 제공</em></div>
-            <button type="button">{selectedAiTool.action}<Icon name="chevron" size={15} /></button>
+            <button type="button" disabled={aiRun.status === 'loading'} onClick={runAiTool}>{aiRun.status === 'loading' && aiRun.key === aiTool ? 'AI가 분석 중이에요…' : selectedAiTool.action}<Icon name="chevron" size={15} /></button>
           </article>
+          {aiRun.status === 'done' ? <section className="ai-run-result" aria-live="polite"><span><Icon name="check" size={14} /> {aiTools[aiRun.key].label} 초안 생성 완료</span><h3>{aiRun.key === 'ppt' ? '8장 발표 자료 구성을 만들었어요' : aiRun.key === 'insight' ? '발표에 쓸 핵심 인사이트 3개를 찾았어요' : '응답 차이의 원인과 다음 조사 방향을 정리했어요'}</h3><p>백엔드 연결 전에는 샘플 데이터로 미리 보여드려요. 실제 연결 후 응답 데이터에 맞춰 자동 생성됩니다.</p><button type="button" onClick={() => setAiRun({ key: '', status: 'idle' })}>확인</button></section> : null}
         </section>
       </main>
     </div>
@@ -1299,6 +1337,23 @@ function ShareSurveyScreen({ survey, onBack }) {
     window.setTimeout(() => setCopied(''), 1400)
   }
   const qrCells = Array.from({ length: 81 }, (_, index) => ((index * 7 + survey.id.length * 3) % 11) < 5)
+  const downloadQr = () => {
+    const cellSize = 12
+    const padding = 12
+    const size = cellSize * 9 + padding * 2
+    const blocks = qrCells.map((filled, index) => filled
+      ? `<rect x="${padding + (index % 9) * cellSize}" y="${padding + Math.floor(index / 9) * cellSize}" width="${cellSize}" height="${cellSize}" rx="1"/>`
+      : '').join('')
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="100%" height="100%" rx="14" fill="#ffffff"/><g fill="#183d73">${blocks}</g></svg>`
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `suniversity-${survey.id}-qr.svg`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setCopied('QR 이미지')
+    window.setTimeout(() => setCopied(''), 1400)
+  }
   return (
     <div className="screen">
       <TopBar title="설문 공유" onBack={onBack} />
@@ -1308,35 +1363,11 @@ function ShareSurveyScreen({ survey, onBack }) {
         <p>링크와 QR 코드는 모바일과 PC에서 모두 열려요.</p>
         <section className="share-survey-preview"><span className="tag tag--blue">{survey.category}</span><h2>{survey.title}</h2><small>{survey.questionCount}문항 · 약 {survey.minutes}분 · {formatDeadline(survey.deadline)} 마감</small></section>
         <section className="link-copy"><label>공유 링크</label><div><input readOnly value={link} /><button type="button" onClick={() => copy(link, '링크')}>{copied === '링크' ? <Icon name="check" /> : <Icon name="copy" />}</button></div></section>
-        <section className="qr-card"><div className="qr-code">{qrCells.map((filled, index) => <i className={filled ? 'filled' : ''} key={index} />)}</div><div><b>QR 코드로 바로 참여</b><p>이미지로 저장해 포스터나 발표 자료에 넣어보세요.</p><button type="button">QR 이미지 저장</button></div></section>
+        <section className="qr-card"><div className="qr-code">{qrCells.map((filled, index) => <i className={filled ? 'filled' : ''} key={index} />)}</div><div><b>QR 코드로 바로 참여</b><p>이미지로 저장해 포스터나 발표 자료에 넣어보세요.</p><button type="button" onClick={downloadQr}>QR 이미지 저장</button></div></section>
         <section className="share-channels"><h3>외부로 공유하기</h3><div><button type="button" onClick={() => copy(link, '카카오톡')}><i className="kakao">K</i><span>카카오톡</span></button><button type="button" onClick={() => copy(link, '에브리타임')}><i className="every">E</i><span>에브리타임</span></button><button type="button" onClick={() => copy(link, '인스타그램')}><i className="insta">◎</i><span>인스타그램</span></button><button type="button" onClick={() => copy(link, '이메일')}><i className="mail">@</i><span>이메일</span></button></div></section>
         <section className="embed-card"><Icon name="copy" /><div><b>웹사이트에 설문 넣기</b><p>임베드 코드를 복사해 블로그나 팀 페이지에 붙여넣을 수 있어요.</p></div><button type="button" onClick={() => copy(`<iframe src="${link}"></iframe>`, '코드')}>{copied === '코드' ? '복사됨' : '코드 복사'}</button></section>
       </main>
       {copied ? <div className="toast"><Icon name="check" size={17} />{copied}를 복사했어요</div> : null}
-    </div>
-  )
-}
-
-function TeamScreen({ onBack }) {
-  const [copied, setCopied] = useState(false)
-  const members = [
-    ['나경', '설문 관리자', 4, 4],
-    ['서빈', '공동 편집자', 3, 4],
-    ['지민', '응답 참여자', 4, 4],
-    ['도윤', '응답 참여자', 2, 4],
-  ]
-  return (
-    <div className="screen">
-      <TopBar title="팀 워크스페이스" onBack={onBack} right={<button className="round-icon" type="button"><Icon name="more" /></button>} />
-      <main className="page team-page">
-        <section className="team-hero"><span className="team-big-avatar">C</span><div><span className="tag tag--purple">4명 참여 중</span><h1>캡스톤 A팀</h1><p>대학생 AI 활용 실태 조사</p></div></section>
-        <section className="team-progress-card"><div><span>팀 응답 진행률</span><strong>81<small>%</small></strong></div><Progress value={81} tone="purple" /><p>교환 중인 설문 2개 · 남은 응답 3개</p></section>
-        <section>
-          <div className="section-title"><div><span>MEMBERS</span><h2>팀원별 진행 현황</h2></div><button type="button" onClick={() => { navigator.clipboard?.writeText('SUNI-TEAM-4A2'); setCopied(true) }}>{copied ? '초대 코드 복사됨' : '팀원 초대'}</button></div>
-          <div className="member-list">{members.map(([name, role, done, total], index) => <article key={name}><span className={`member-avatar m${index}`}>{name.slice(0, 1)}</span><div><b>{name}{index === 0 ? ' (나)' : ''}</b><small>{role}</small></div><em>{done}/{total} 완료</em><Progress value={done / total * 100} tone={index % 2 ? 'pink' : 'blue'} /></article>)}</div>
-        </section>
-        <section className="team-permissions"><h3>팀 권한</h3><button type="button"><Icon name="edit" /><span><b>공동 설문 편집</b><small>관리자와 편집자 2명</small></span><Icon name="chevron" /></button><button type="button"><Icon name="exchange" /><span><b>팀 교환 신청</b><small>관리자만 신청 가능</small></span><Icon name="chevron" /></button></section>
-      </main>
     </div>
   )
 }
@@ -1422,23 +1453,24 @@ function NotificationsScreen({ navigate, notifications, setNotifications }) {
 
 function ProfileScreen({ navigate, profile, surveys, favoriteIds, requests }) {
   const mySurvey = surveys.find((survey) => survey.mine) || { ...surveys[0], id: 'my-demo', title: '대학생의 AI 활용과 취업 준비', participants: 53, mine: true }
+  const activeRequestCount = requests.filter((request) => !TERMINAL_REQUEST_STATUSES.has(request.status)).length
   return (
     <div className="screen has-nav">
       <TopBar title="마이페이지" right={<button className="round-icon" type="button" onClick={() => navigate('profileEdit')}><Icon name="edit" /></button>} />
       <main className="page profile-page">
         <section className="profile-head"><div className="profile-avatar">나</div><div><h1>{profile.name}</h1><p><Icon name="shield" size={14} /> {profile.university} · 인증 완료</p><span>{profile.major}</span></div></section>
         <section className="trust-card"><div><span>나의 신뢰도</span><strong>{profile.trust}<small>%</small></strong><em>★★★★★</em></div><Progress value={profile.trust} tone="purple" /><p>성실한 교환 12회 · 받은 후기 8개</p></section>
-        <section className="profile-stats"><span><b>{surveys.filter((survey) => survey.mine).length || 1}</b><small>만든 설문</small></span><span><b>27</b><small>참여 설문</small></span><span><b>{requests.length}</b><small>진행 교환</small></span></section>
+        <section className="profile-stats"><span><b>{surveys.filter((survey) => survey.mine).length || 1}</b><small>만든 설문</small></span><span><b>27</b><small>참여 설문</small></span><span><b>{activeRequestCount}</b><small>진행 교환</small></span></section>
         <section className="profile-menu">
-          <button type="button" onClick={() => navigate('mySurveys', mySurvey.id)}><i className="blue"><Icon name="clipboard" /></i><span><b>내 설문 관리</b><small>결과·공유·편집·응답 마감</small></span><Icon name="chevron" /></button>
+          <button type="button" onClick={() => navigate('mySurveys', mySurvey.id, { survey: mySurvey })}><i className="blue"><Icon name="clipboard" /></i><span><b>내 설문 관리</b><small>결과·공유·편집·응답 마감</small></span><Icon name="chevron" /></button>
           <button type="button" onClick={() => navigate('team')}><i className="purple"><Icon name="team" /></i><span><b>팀 워크스페이스</b><small>팀원 {profile.teamSize}명 · 공동 관리</small></span><Icon name="chevron" /></button>
-          <button type="button" onClick={() => navigate('exchangeHistory')}><i className="pink"><Icon name="exchange" /></i><span><b>교환 기록</b><small>완료 12회 · 진행 {requests.length}회</small></span><Icon name="chevron" /></button>
+          <button type="button" onClick={() => navigate('exchangeHistory')}><i className="pink"><Icon name="exchange" /></i><span><b>교환 기록</b><small>완료 12회 · 진행 {activeRequestCount}회</small></span><Icon name="chevron" /></button>
           <button type="button" onClick={() => navigate('favorites')}><i className="cream"><Icon name="heart" /></i><span><b>즐겨찾기 유저</b><small>{favoriteIds.length || 2}명 · 원클릭 교환 가능</small></span><Icon name="chevron" /></button>
         </section>
         <section className="profile-menu compact">
           <button type="button" onClick={() => navigate('profileEdit')}><span><b>기본 정보 관리</b><small>자동 매칭과 설문 응답에 활용</small></span><Icon name="chevron" /></button>
           <button type="button" onClick={() => navigate('schoolVerification')}><span><b>학교 인증 정보</b><small>{profile.university}</small></span><Icon name="chevron" /></button>
-          <button type="button"><span><b>신고 및 이용 정책</b><small>건강한 설문 교환을 위한 기준</small></span><Icon name="chevron" /></button>
+          <button type="button" onClick={() => navigate('policy')}><span><b>신고 및 이용 정책</b><small>건강한 설문 교환을 위한 기준</small></span><Icon name="chevron" /></button>
         </section>
       </main>
       <BottomNav active="profile" navigate={navigate} />
@@ -1529,7 +1561,7 @@ function MySurveysScreen({ surveys, setSurveys, requests, setRequests, selectedS
                 <small>{deadlineState.within24Hours ? '새 교환 신청은 종료됐고, 성사된 교환은 마감 전까지 완료해야 해요.' : '수동 마감하면 완료되지 않은 교환도 함께 종료돼요.'}</small>
               </span>
             </div> : null}
-            <div className="manage-actions"><button type="button" onClick={() => navigate('creatorResults', survey.id)}><Icon name="chart" /> 결과</button><button type="button" onClick={() => navigate('shareSurvey', survey.id)}><Icon name="share" /> 공유</button><button type="button" disabled={timedOut || closed} onClick={() => navigate('create')}><Icon name="edit" /> 수정</button><button type="button" disabled={timedOut} className={closed ? '' : 'danger'} onClick={() => closed ? reopenSurvey(survey.id) : setPendingClose(survey)}>{timedOut ? '기한 만료' : closed ? '다시 받기' : '응답 마감'}</button></div>
+            <div className="manage-actions"><button type="button" onClick={() => navigate('creatorResults', survey.id, { survey })}><Icon name="chart" /> 결과</button><button type="button" onClick={() => navigate('shareSurvey', survey.id, { survey })}><Icon name="share" /> 공유</button><button type="button" disabled={timedOut || closed} onClick={() => navigate('create')}><Icon name="edit" /> 수정</button><button type="button" disabled={timedOut} className={closed ? '' : 'danger'} onClick={() => closed ? reopenSurvey(survey.id) : setPendingClose(survey)}>{timedOut ? '기한 만료' : closed ? '다시 받기' : '응답 마감'}</button></div>
           </article>
         })}</div>
       </main>
@@ -1666,14 +1698,14 @@ function DiscussionScreen({ survey, onBack }) {
   }
   return (
     <div className="screen discussion-screen">
-      <TopBar title="설문 이야기" onBack={onBack} right={<button className="round-icon" type="button"><Icon name="more" /></button>} />
+      <TopBar title="설문 이야기" onBack={onBack} />
       <main className="page discussion-page">
         <section className="discussion-topic"><span className="tag tag--blue">{survey.category}</span><h1>{survey.title}</h1><p>서로 다른 답을 존중하며 자유롭게 이야기해 보세요.</p></section>
         <div className="identity-selector"><span>댓글 작성 이름</span><button type="button" className={identity === 'anonymous' ? 'is-active' : ''} onClick={() => setIdentity('anonymous')}>익명 퍼즐</button><button type="button" className={identity === 'nickname' ? 'is-active' : ''} onClick={() => setIdentity('nickname')}>나경 · 고려대</button></div>
         <section className="comment-composer"><textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="이 설문에 대한 생각을 남겨보세요." /><button type="button" disabled={!comment.trim()} onClick={addComment}>등록</button></section>
         <div className="discussion-head"><b>댓글 {comments.length + comments.reduce((sum, item) => sum + item.replies.length, 0)}개</b><span>공감순</span></div>
         <div className="comment-list">{comments.map((item) => <article key={item.id} className={`team-${item.team}`}>
-          <header><span className="comment-avatar">{item.author.slice(0, 1)}</span><div><b>{item.author}</b><small>방금 전</small></div><button type="button"><Icon name="more" size={17} /></button></header>
+          <header><span className="comment-avatar">{item.author.slice(0, 1)}</span><div><b>{item.author}</b><small>방금 전</small></div></header>
           <p>{item.text}</p>
           <footer><button type="button" className={item.liked ? 'is-liked' : ''} onClick={() => toggleLike(item.id)}><Icon name="heart" size={15} /> 공감 {item.likes}</button><button type="button" className={replyTo?.targetId === item.id ? 'is-replying' : ''} onClick={() => startReply(item.id, item.id, item.author)}><Icon name="message" size={15} /> 답글 {item.replies.length}</button></footer>
           <div className="comment-replies">{item.replies.map((nested) => <div className="comment-reply" key={nested.id}>
@@ -1728,7 +1760,7 @@ function ExchangeStatusScreen({ request, onBack, setRequests }) {
         <h1>{request.title}</h1>
         <p>{request.partner}와 {request.type} · {request.people}명 참여</p>
         <section className="status-timeline"><span className="done"><i><Icon name="check" /></i><div><b>교환 성사</b><small>양측이 교환 조건을 확인했어요.</small></div></span><span className={request.ours === request.people ? 'done' : ''}><i>{request.ours === request.people ? <Icon name="check" /> : '2'}</i><div><b>우리 팀 응답</b><small>{request.ours}/{request.people}명 완료</small><Progress value={request.ours / request.people * 100} /></div></span><span className={request.theirs === request.people ? 'done' : ''}><i>{request.theirs === request.people ? <Icon name="check" /> : '3'}</i><div><b>상대 팀 응답</b><small>{request.theirs}/{request.people}명 완료</small><Progress value={request.theirs / request.people * 100} tone="pink" /></div></span><span className={complete ? 'done' : ''}><i>{complete ? <Icon name="check" /> : '4'}</i><div><b>결과 반영</b><small>{complete ? '응답과 통계에 반영됐어요.' : '양측 완료 후 자동으로 반영돼요.'}</small></div></span></section>
-        {!complete ? <button type="button" className="demo-button" onClick={simulate}>프로토타입: 양측 응답 완료 처리</button> : <section className="rating-card"><h3>이번 교환은 어땠나요?</h3><p>평가는 상대 팀의 신뢰도에 반영돼요.</p><div>{[1, 2, 3, 4, 5].map((star) => <button type="button" className={rated >= star ? 'is-active' : ''} onClick={() => setRated(star)} key={star}><Icon name="star" /></button>)}</div>{rated ? <small>평가를 저장했어요. 간단한 후기는 마이페이지에서 남길 수 있어요.</small> : null}</section>}
+        {!complete && import.meta.env.DEV ? <button type="button" className="preview-state-button" onClick={simulate}><Icon name="spark" size={15} /> 개발 미리보기 · 교환 완료 상태 보기</button> : complete ? <section className="rating-card"><h3>이번 교환은 어땠나요?</h3><p>평가는 상대 팀의 신뢰도에 반영돼요.</p><div>{[1, 2, 3, 4, 5].map((star) => <button type="button" className={rated >= star ? 'is-active' : ''} onClick={() => setRated(star)} key={star}><Icon name="star" /></button>)}</div>{rated ? <small>평가를 저장했어요. 간단한 후기는 마이페이지에서 남길 수 있어요.</small> : null}</section> : null}
       </main>
     </div>
   )
@@ -1748,6 +1780,21 @@ function ExchangeHelpScreen({ onBack }) {
   )
 }
 
+function PolicyScreen({ onBack }) {
+  return (
+    <div className="screen">
+      <TopBar title="신고 및 이용 정책" onBack={onBack} />
+      <main className="page help-page policy-page">
+        <span className="eyebrow">SAFE COMMUNITY</span>
+        <h1>서로의 시간을 존중하는<br />설문 커뮤니티를 만들어요.</h1>
+        <p className="policy-intro">신뢰할 수 있는 교환과 편안한 대화를 위해 아래 기준을 적용하고 있어요.</p>
+        <section className="help-flow">{[['1', '설문 내용', '개인정보 요구·허위 정보·불쾌감을 주는 문항은 등록할 수 없어요.'], ['2', '교환 약속', '성사된 교환은 마감 전에 성실하게 응답해 주세요. 반복 미완료는 신뢰도에 반영돼요.'], ['3', '댓글과 답글', '비방·차별·광고성 댓글은 신고 후 숨김 또는 이용 제한될 수 있어요.']].map(([number, title, text]) => <span key={number}><i>{number}</i><p><b>{title}</b><small>{text}</small></p></span>)}</section>
+        <section className="policy-report-card"><Icon name="shield" size={22} /><div><b>문제가 있는 콘텐츠를 발견했나요?</b><p>설문이나 댓글의 신고 기능으로 접수하면 운영 기준에 따라 확인해요. 신고자의 정보는 상대에게 공개되지 않습니다.</p></div></section>
+      </main>
+    </div>
+  )
+}
+
 function App() {
   const [screen, setScreen] = useState('home')
   const [selectedId, setSelectedId] = useState(null)
@@ -1760,7 +1807,7 @@ function App() {
   const [favorites, setFavorites] = useStoredState('suniversity-new-favorites', [])
   const [, setAnswers] = useStoredState('suniversity-new-answers', {})
   const navigationHistory = useRef([])
-  const selectedSurvey = surveys.find((survey) => survey.id === selectedId) || surveys[0]
+  const selectedSurvey = screenMeta.survey || surveys.find((survey) => survey.id === selectedId) || surveys[0]
   const selectedRequest = requests.find((request) => request.id === selectedId)
   const unread = notifications.filter((notice) => !notice.read).length
   useEffect(() => {
@@ -1855,7 +1902,6 @@ function App() {
   if (screen === 'creatorResults') return <CreatorResultsScreen survey={selectedSurvey} onBack={back} navigate={navigate} />
   if (screen === 'shareSurvey') return <ShareSurveyScreen survey={selectedSurvey} onBack={back} />
   if (screen === 'team') return <EnhancedTeamScreen onBack={back} />
-  if (screen === '__legacyTeam') return <TeamScreen onBack={back} />
   if (screen === 'notifications') return <NotificationsScreen navigate={navigate} notifications={notifications} setNotifications={setNotifications} />
   if (screen === 'profile') return <ProfileScreen {...common} favoriteIds={favorites} />
   if (screen === 'profileEdit') return <ProfileEditScreen profile={profile} setProfile={setProfile} onBack={back} />
@@ -1866,6 +1912,7 @@ function App() {
   if (screen === 'discussion') return <DiscussionScreen survey={selectedSurvey} onBack={back} />
   if (screen === 'exchangeStatus') return <ExchangeStatusScreen request={selectedRequest} onBack={back} setRequests={setRequests} />
   if (screen === 'exchangeHelp') return <ExchangeHelpScreen onBack={back} />
+  if (screen === 'policy') return <PolicyScreen onBack={back} />
   return <HomeScreen {...common} completed={completed} />
 }
 
