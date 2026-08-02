@@ -22,7 +22,7 @@ SUNIVERSITY는 대학생이 설문을 만들고 서로의 설문에 참여하며
 ## 프로젝트 구조
 
 ```text
-drunkdog/
+s-univ/
 ├─ frontend/            # React + Vite 모바일 웹
 ├─ backend/             # FastAPI 서버와 테스트
 │  ├─ app/
@@ -69,8 +69,8 @@ brew install git node@20 python@3.11
 저장소를 복제합니다.
 
 ```bash
-git clone https://github.com/SJW1104/drunkdog.git
-cd drunkdog
+git clone https://github.com/SJW1104/s-univ.git
+cd s-univ
 ```
 
 백엔드와 프론트엔드는 각각 별도 터미널에서 실행합니다. 백엔드를 먼저 실행하는 것을 권장합니다.
